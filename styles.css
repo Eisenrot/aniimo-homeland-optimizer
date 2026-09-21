@@ -19,3 +19,53 @@
 .nav-icon{width:36px;height:36px;padding:0;justify-content:center}
 .nav-icon svg{width:18px;height:18px}
 @media(max-width:680px){.top-actions .nav-icon{display:inline-flex!important}}
+/* --- item / ability visual language --- */
+.metric-value{display:inline-flex;align-items:center;gap:8px;vertical-align:middle}
+.metric-value img{width:24px;height:24px;object-fit:contain;filter:drop-shadow(0 2px 5px rgba(0,0,0,.25))}
+.metric-value>span{font-size:25px!important;font-weight:800;color:var(--text)!important;line-height:1}
+.coin-head{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.coin-head img{width:13px;height:13px;object-fit:contain}
+.coin-value{display:inline-flex;align-items:center;justify-content:flex-end;gap:4px}
+.coin-value img{width:16px;height:16px;object-fit:contain}
+.coin-value>span{font-weight:800;color:#e9edf1}
+.recipe-items{display:grid;gap:3px}
+.recipe-items>b,.from-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.item-inline{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.item-inline img{width:18px;height:18px;object-fit:contain}
+.from-line .item-inline img{width:15px;height:15px}
+.item-sep{color:#4e5863}
+.nothing{color:#68727d;font-style:italic}
+.flow-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.flow-badge{display:inline-flex;align-items:center;gap:4px;border:1px solid #3a424c;border-radius:999px;padding:2px 6px 2px 3px;font-size:7px;background:#11151a}
+.flow-badge img{width:13px;height:13px;object-fit:contain}
+.flow-badge b{font-size:7px;letter-spacing:.02em}
+.flow-badge.surplus{border-color:#346747;background:rgba(53,127,76,.1);color:#9be6b2}
+.flow-badge.balanced{border-color:#6c592c;background:rgba(185,139,45,.09);color:#f0d17a}
+.flow-badge.deficit{border-color:#7a3949;background:rgba(181,54,78,.1);color:#ff92a5}
+.output-info{display:flex;align-items:center;gap:8px;min-width:0}
+.output-info>img{width:25px;height:25px;object-fit:contain;flex:0 0 25px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.2))}
+.output-info>div{min-width:0}
+.ability-card{border-color:color-mix(in srgb,var(--ability,#7f8994) 52%,#272e36);background:linear-gradient(135deg,color-mix(in srgb,var(--ability,#7f8994) 7%,#0c0f13),#0c0f13 54%);box-shadow:inset 0 0 18px color-mix(in srgb,var(--ability,#7f8994) 5%,transparent)}
+.ability-head{align-items:center}
+.ability-head>div{min-width:0}
+.ability-head>span{white-space:nowrap}
+.ability-pill{display:inline-flex;align-items:center;gap:5px;width:max-content;max-width:100%;padding:4px 8px;border-radius:999px;background:var(--ability,#7f8994);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),0 2px 7px rgba(0,0,0,.16);font-size:9px;line-height:1;white-space:nowrap}
+.ability-pill img{width:14px;height:14px;object-fit:contain;flex:0 0 14px}
+.ability-pill span{color:#fff!important;font-size:9px!important}
+.ability-pill b{font-size:9px!important;font-weight:900!important;color:#fff!important}
+.ability-pill.mini{gap:3px;padding:2px 5px;font-size:7px}
+.ability-pill.mini img{width:10px;height:10px;flex-basis:10px}
+.ability-pill.mini span,.ability-pill.mini b{font-size:7px!important}
+.pal-ability-list{gap:5px}
+.pal-ability-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid color-mix(in srgb,var(--pal-a,#59636e) 52%,#343b44);background:linear-gradient(135deg,color-mix(in srgb,var(--pal-a,#59636e) 17%,#11151a),color-mix(in srgb,var(--pal-b,#303741) 13%,#11151a));padding:3px 7px 3px 3px;font-size:8px;color:#dce2e8;box-shadow:inset 0 0 10px rgba(255,255,255,.015)}
+.pal-ability-chip>img{width:18px;height:18px;border-radius:50%;object-fit:cover;flex:0 0 18px;background:#20252a}
+.pal-ability-chip b{font-size:8px;color:#fff}
+.pal-row{grid-template-columns:17px 30px minmax(0,1fr) 42px!important;gap:7px!important;padding:6px!important}
+.pal-row>img{width:30px!important;height:30px!important}
+.pal-info{min-width:0;display:grid;gap:4px}
+.pal-info>b{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pal-abilities{display:flex;gap:3px;flex-wrap:wrap}
+@media(max-width:680px){
+  .metric-value>span{font-size:21px!important}
+  .flow-badges{margin-top:5px}
+}
