@@ -1,0 +1,10 @@
+import {GAME_DATA as DATA} from './src/data.js';
+import {DEFAULT_STATE} from './src/defaults.js';
+import {optimizePlan,buildTeamModel,findBestTeams,optimizePersonalities} from './src/optimizer.js';
+const state=structuredClone(DEFAULT_STATE);
+state.owned={}; for(const p of DATA.pals)state.owned[String(p.id)]={enabled:true,count:1};
+const plan=optimizePlan(state,DATA);
+console.log('rate',plan.ratePerHour,'rows',plan.rows.length);
+for(const r of [...plan.rows].sort((a,b)=>b.perHour-a.perHour)) console.log(r.facility,r.recipe.id,r.units,r.perHour);
+const model=buildTeamModel(plan,state,DATA);
+console.log('tasks',model.tasks.length,'baseline',model.baselineRate);
