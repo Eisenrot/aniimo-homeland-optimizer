@@ -1,1 +1,32 @@
-export const DEFAULT_STATE = {"homelandLevel":8,"workerSlots":9,"abilityLevel":3,"facilities":{"blazing-stove":{"count":1,"level":1},"bouncy-brew-keg":{"count":1,"level":1},"carousel-mill":{"count":1,"level":2},"chimney-kiln":{"count":1,"level":1},"claw-game-cooker":{"count":1,"level":3},"crafting-table":{"count":1,"level":3},"joy-wheel-loom":{"count":1,"level":1},"jukebox-dryer":{"count":1,"level":3},"phonolfactory-table":{"count":1,"level":2},"pickling-jar":{"count":1,"level":1},"simmering-pot":{"count":1,"level":2},"woodworking-bench":{"count":1,"level":1},"dewy-house":{"count":1,"level":1},"farmland":{"count":18,"level":4},"mine":{"count":4,"level":2},"tidewhisper-sandcastle":{"count":1,"level":2},"well":{"count":2,"level":2},"woodland":{"count":9,"level":3}},"modules":{"crafting-module":1,"ecological-module":3,"kitchen-module":2,"resource-detector":1},"speeds":{"aniipod-maker":300,"dance-pad-polisher":300,"blazing-stove":300,"bouncy-brew-keg":300,"carousel-mill":300,"chimney-kiln":300,"claw-game-cooker":300,"crafting-table":300,"joy-wheel-loom":300,"jukebox-dryer":300,"phonolfactory-table":300,"pickling-jar":300,"simmering-pot":300,"woodworking-bench":300,"dewy-house":300,"farmland":300,"mine":300,"tidewhisper-sandcastle":300,"well":300,"woodland":300},"climate":{"enabled":false,"temperature":"Adequate"},"allNotes":false,"owned":{}};
+export const DEFAULT_STATE = {
+  homelandLevel: 8,
+  workerSlots: 9,
+  teamSlots: 9,
+  abilityLevel: 3,
+  collectHours: 0,
+  oneRecipePerFacility: false,
+  generatorAvailable: false,
+  hungry: false,
+  climateOptions: { cooling:false, heat:false, sunlamp:false },
+  target: 'coin',
+  guarantees: [],
+  goal: '',
+  facilities: {
+    'blazing-stove':{count:1,level:1},'bouncy-brew-keg':{count:1,level:1},'carousel-mill':{count:1,level:2},
+    'chimney-kiln':{count:1,level:1},'claw-game-cooker':{count:1,level:3},'crafting-table':{count:1,level:3},
+    'joy-wheel-loom':{count:1,level:1},'jukebox-dryer':{count:1,level:3},'phonolfactory-table':{count:1,level:2},
+    'pickling-jar':{count:1,level:1},'simmering-pot':{count:1,level:2},'woodworking-bench':{count:1,level:1},
+    'dewy-house':{count:1,level:1},'farmland':{count:18,level:4},'mine':{count:4,level:2},
+    'tidewhisper-sandcastle':{count:1,level:2},'well':{count:2,level:2},'woodland':{count:9,level:3}
+  },
+  modules:{'crafting-module':1,'ecological-module':3,'kitchen-module':2,'resource-detector':1},
+  speeds:{
+    'aniipod-maker':300,'dance-pad-polisher':300,'blazing-stove':300,'bouncy-brew-keg':300,'carousel-mill':300,
+    'chimney-kiln':300,'claw-game-cooker':300,'crafting-table':300,'joy-wheel-loom':300,'jukebox-dryer':300,
+    'phonolfactory-table':300,'pickling-jar':300,'simmering-pot':300,'woodworking-bench':300,'dewy-house':300,
+    'farmland':300,'floral-windmill':300,'mine':300,'nimbus-bed':300,'starfall-hammock':300,
+    'tidewhisper-sandcastle':300,'well':300,'woodland':300
+  },
+  recipeNotes:{},
+  owned:{}
+};

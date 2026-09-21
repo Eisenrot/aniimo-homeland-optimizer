@@ -6,42 +6,20 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0b0d10">
   <title>Aniimo Homeland Optimizer</title>
-  <meta name="description" content="Aniimo Homeland, minus the guesswork. Real staffing, personality-aware optimization, anti-stall planning, and production math that respects the workers doing the job.">
+  <meta name="description" content="Aniimo Homeland production and real-team optimizer: recipes, climate options, material targets, worker rosters, personalities and anti-stall staffing in one place.">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark">A</div>
-      <div>
-        <h1>Aniimo Homeland Optimizer</h1>
-        <p>production math that remembers the workers exist</p>
-      </div>
-    </div>
-    <nav class="top-actions">
-      <button id="copy-link" class="ghost">Copy share link</button>
-      <a class="ghost link" href="https://github.com/Eisenrot/aniimo-homeland-optimizer" target="_blank" rel="noreferrer">GitHub ↗</a>
-    </nav>
+    <div class="brand"><div class="brand-mark">A</div><div><h1>Aniimo Homeland Optimizer</h1><p>production · staffing · personalities</p></div></div>
+    <nav class="top-actions"><button id="copy-link" class="ghost">Copy share link</button><a class="ghost link" href="https://github.com/Eisenrot/aniimo-homeland-optimizer" target="_blank" rel="noreferrer">GitHub ↗</a></nav>
   </header>
 
   <main class="shell">
-    <section class="hero">
-      <div>
-        <span class="eyebrow">HOMELAND / OPTIMIZER</span>
-        <h2>Build the economy. Then staff it like you mean it.</h2>
-        <p>The base optimizer solves production, recipes and worker-hours. The second pass uses your actual Aniimo copies, then tests ideal personality rolls and an anti-stall reserve for synchronized basic-material jobs.</p>
-      </div>
-      <div class="hero-badge"><span id="data-version">DATA</span><b>client-side</b><small>nothing leaves your browser</small></div>
-    </section>
-
     <section class="panel import-panel">
-      <div class="section-title"><span></span><h3>Import / share</h3><i></i></div>
-      <div class="import-row">
-        <input id="import-url" type="text" placeholder="Paste a Hideout share link or this site's share link…">
-        <button id="import-btn" class="primary">Import</button>
-        <button id="reset-btn" class="ghost">Reset</button>
-      </div>
-      <p class="micro">Hideout-compatible parameters are understood: <code>f</code>, <code>m</code>, <code>y</code>, <code>a</code>, <code>h</code>, <code>w</code>, <code>p</code>. This site adds <code>c</code> for copy counts.</p>
+      <div class="section-title"><span></span><h3>Import / share</h3><i></i><em id="data-version" class="micro"></em></div>
+      <div class="import-row"><input id="import-url" type="text" placeholder="Paste a Hideout link or this optimizer's share link…"><button id="import-btn" class="primary">Import</button><button id="reset-btn" class="ghost">Reset</button></div>
+      <p class="micro">Hideout-style facility, module, speed, worker and ownership parameters are understood. This optimizer keeps the actual plan, roster simulation and personality pass in the same page.</p>
     </section>
 
     <div class="workspace">
@@ -49,22 +27,22 @@
         <section class="panel" id="general-panel"></section>
         <section class="panel" id="facilities-panel"></section>
         <section class="panel" id="modules-panel"></section>
+        <section class="panel" id="notes-panel"></section>
+        <section class="panel" id="living-panel"></section>
         <section class="panel" id="ownership-panel"></section>
+        <section class="panel" id="objective-panel"></section>
       </aside>
 
       <section class="results-stack">
         <section class="panel" id="plan-panel"></section>
+        <section class="panel" id="outputs-panel"></section>
         <section class="panel" id="abilities-panel"></section>
         <section class="panel" id="team-panel"></section>
       </section>
     </div>
   </main>
 
-  <footer>
-    <span>Unofficial community tool. Game names and assets belong to their respective owners.</span>
-    <span>Built as a clean-room browser implementation from publicly observable optimizer behavior and game data.</span>
-  </footer>
-
+  <footer><span>Unofficial community tool. Game names and assets belong to their respective owners.</span><span>Solver and staffing logic run entirely in your browser.</span></footer>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>

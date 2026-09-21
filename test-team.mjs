@@ -1,8 +1,11 @@
 import {GAME_DATA as DATA} from './src/data.js';
 import {DEFAULT_STATE} from './src/defaults.js';
 import {optimizePlan,buildTeamModel,findBestTeams,optimizePersonalities} from './src/optimizer.js';
-const state=structuredClone(DEFAULT_STATE);state.owned={};for(const p of DATA.pals)state.owned[String(p.id)]={enabled:true,count:1};
+const state=structuredClone(DEFAULT_STATE);state.owned={};for(const p of DATA.pals)state.owned[String(p.id)]={enabled:true,count:1};state.teamSlots=9;
 const plan=optimizePlan(state,DATA),model=buildTeamModel(plan,state,DATA);
-const teams=await findBestTeams(model,state,DATA,{limit:2,onProgress:()=>{}});
-for(const t of teams)console.log(t.eval.rate,t.team.map(x=>x.pal.name).join(','));
-const special=await optimizePersonalities(model,teams[0].team,()=>{});console.log('special',special.rate,special.profiles.join(','));
+const teams=await findBestTeams(model,state,DATA,{limit:1,onProgress:()=>{}});
+if(!teams.length)throw new Error('real team search returned no team');
+if(!(teams[0].eval.objectiveRate>=0))throw new Error('real team evaluation failed');
+const special=await optimizePersonalities(model,teams[0].team,()=>{},teams[0].eval,teams[0].burst);
+if(!special.traitHints?.length)throw new Error('personality hints missing');
+console.log('generic',plan.ratePerHour.toFixed(2),'real',teams[0].eval.rate.toFixed(2),'special',special.rate.toFixed(2));
