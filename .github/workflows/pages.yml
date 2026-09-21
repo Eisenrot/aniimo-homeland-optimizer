@@ -22,15 +22,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Expand standalone site
+
+      - name: Reconstruct and verify standalone site
         run: |
-          rm -rf _site
+          rm -rf _site /tmp/source.zip
           mkdir _site
-          unzip -q source.zip -d _site
+          cat .source/chunk* | base64 -d > /tmp/source.zip
+          echo "dcc42854418cc40e9ed3261b06f6a1ce17dd936aad8e6e2b504bea35363f4c80  /tmp/source.zip" | sha256sum -c -
+          unzip -q /tmp/source.zip -d _site
+          test -f _site/index.html
+          test -f _site/styles.css
+          test -f _site/src/app.js
+          test -f _site/src/optimizer.js
+
       - uses: actions/configure-pages@v5
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
