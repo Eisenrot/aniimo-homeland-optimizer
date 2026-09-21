@@ -117,3 +117,17 @@
   color:#68727d;
   font-size:9px;
 }
+
+
+/* --- real-team result polish --- */
+.team-chip-grid{gap:6px}
+.team-pal-chip{min-height:28px;padding:4px 7px 4px 4px}
+.team-pal-chip>img{width:22px;height:22px;flex-basis:22px}
+.team-pal-copy{display:flex;align-items:center;gap:6px;min-width:0}
+.team-pal-copy>b{white-space:nowrap}
+.team-pal-copy .traits{margin-left:2px}
+.coverage{gap:6px}
+.coverage-chip{display:inline-flex!important;align-items:center;gap:5px!important;padding:4px 7px 4px 4px!important}
+.coverage-chip img{width:18px;height:18px;object-fit:contain}
+.coverage-chip b{font-size:8px;color:#cbd2d9}
+.coverage-chip.full b{color:var(--green)}

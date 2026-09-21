@@ -281,13 +281,13 @@ function workerFacilityWeights(model,team,concreteEval,burst){
 function chooseProfileHints(model,team,concreteEval,burst){
   const {weights,primary,rows}=workerFacilityWeights(model,team,concreteEval,burst),hints=[];
   for(let w=0;w<team.length;w++){
-    const primaryLetters=new Map(),secondaryLetters=new Map();
-    for(const[f,v]of primary[w]){const l=FACILITY_PERSONALITY[f];if(l)primaryLetters.set(l,(primaryLetters.get(l)||0)+v);}
-    for(const row of rows){const l=FACILITY_PERSONALITY[row.facility];if(!l)continue;const tasks=taskObjects(row);if(tasks.some(t=>palCanDo(team[w].pal,t)))secondaryLetters.set(l,(secondaryLetters.get(l)||0)+Number(row.batchesPerHour||0)*Math.max(1,row.cycleSeconds));}
+    const primaryLetters=new Map(),secondaryLetters=new Map(),primaryFacilities=new Map(),secondaryFacilities=new Map();
+    for(const[f,v]of primary[w]){const l=FACILITY_PERSONALITY[f];if(!l)continue;primaryLetters.set(l,(primaryLetters.get(l)||0)+v);if(!primaryFacilities.has(l))primaryFacilities.set(l,new Set());primaryFacilities.get(l).add(f);}
+    for(const row of rows){const l=FACILITY_PERSONALITY[row.facility];if(!l)continue;const tasks=taskObjects(row);if(tasks.some(t=>palCanDo(team[w].pal,t))){secondaryLetters.set(l,(secondaryLetters.get(l)||0)+Number(row.batchesPerHour||0)*Math.max(1,row.cycleSeconds));if(!secondaryFacilities.has(l))secondaryFacilities.set(l,new Set());secondaryFacilities.get(l).add(row.facility);}}
     const must=new Map();for(const pair of PERSONALITY_PAIRS){const choices=pair.filter(l=>primaryLetters.has(l));if(choices.length)must.set(pair.join(''),choices.sort((a,b)=>(primaryLetters.get(b)||0)-(primaryLetters.get(a)||0))[0]);}
     const candidates=PERSONALITY_PROFILES.filter(p=>[...must.entries()].every(([pair,l])=>p.includes(l))),score=p=>{let s=0;for(const l of p){s+=(primaryLetters.get(l)||0)*100+(secondaryLetters.get(l)||0);}return s;};
-    let profile=candidates[0]||PERSONALITY_PROFILES[0],best=-Infinity;for(const p of candidates){const s=score(p);if(s>best+1e-8||(Math.abs(s-best)<=1e-8&&p<profile)){best=s;profile=p;}}
-    const display=[];for(const pair of PERSONALITY_PAIRS){const key=pair.join(''),required=must.get(key);if(required)display.push({char:required,status:'must'});else{const picked=pair.find(l=>profile.includes(l));if(picked&&(secondaryLetters.get(picked)||0)>0)display.push({char:picked,status:'nice'});else display.push({char:'o',status:'none'});}}
+    let profile=candidates[0]||PERSONALITY_PROFILES[0],best=-Infinity;for(const p of candidates){const sc=score(p);if(sc>best+1e-8||(Math.abs(sc-best)<=1e-8&&p<profile)){best=sc;profile=p;}}
+    const display=[];for(const pair of PERSONALITY_PAIRS){const key=pair.join(''),required=must.get(key);if(required)display.push({char:required,status:'must',facilities:[...(primaryFacilities.get(required)||[])]});else{const picked=pair.find(l=>profile.includes(l));if(picked&&(secondaryLetters.get(picked)||0)>0)display.push({char:picked,status:'nice',facilities:[...(secondaryFacilities.get(picked)||[])]});else display.push({char:'o',status:'none',facilities:[]});}}
     hints.push({profile,display,primaryLetters:[...primaryLetters.keys()],secondaryLetters:[...secondaryLetters.keys()]});
   }
   return hints;
