@@ -1,5 +1,5 @@
 import {GAME_DATA as DATA} from './data.js';
-import {optimizePlan,buildTeamModel,findBestTeams,planItemRates} from './optimizer.js';
+import {optimizePlan,buildTeamModel,findBestTeams,findEssentialCore,evaluateConcreteTeam,planItemRates} from './optimizer.js';
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -42,7 +42,7 @@ function ensureUi(){
           <li>Re-solves the complete recipe economy, including climate and generator possibilities.</li>
           <li>Respects the current Objective, every hard <b>Also make at least</b> value and every enabled <b>MAX</b> co-objective.</li>
           <li>Tests every theoretical Aniimo count from 1 to the maximum allowed by your Homeland level.</li>
-          <li>Then tests every feasible real-team size up to the same cap and your enabled copy count.</li>
+          <li>For every theoretical count, tests the largest concrete roster you can field, then shrinks it to the smallest core that preserves that result.</li>
           <li>Real-team passes use actual abilities, copies, resident-family gates and the full runnable recipe pool.</li>
           <li>Nothing is changed while it scans. The winning counts are applied once at the end; equal scores prefer fewer occupied slots.</li>
         </ul>
@@ -87,48 +87,51 @@ async function run(){
       ? referencePlan.objectiveWeights
       : [{item:base.target==='coin'?'coin':String(base.target),scale:1}];
 
-    let bestGeneric=null;
+    const theoretical=[];
     for(let n=1;n<=cap;n++){
       spinner(`Theoretical pass · ${n}/${cap} Aniimo`);
-      const trial=api.normalizeState({...base,workerSlots:n,teamSlots:Math.min(base.teamSlots,n)});
+      const trial=api.normalizeState({...base,workerSlots:n,teamSlots:Math.min(maxReal,Math.max(1,base.teamSlots))});
       const plan=optimizePlan(trial,DATA);
       if(!plan.infeasible){
-        const score=scoreRows(plan.rows,plan.ratePerHour,weights);
-        if(!bestGeneric||score>bestGeneric.score+1e-8||(Math.abs(score-bestGeneric.score)<=1e-8&&n<bestGeneric.n)){
-          bestGeneric={n,score,plan,state:trial};
-        }
+        const genericScore=scoreRows(plan.rows,plan.ratePerHour,weights);
+        theoretical.push({n,plan,genericScore});
       }
       if(n%3===0)await tick();
     }
-    if(!bestGeneric)throw new Error('No feasible theoretical setup was found.');
+    if(!theoretical.length)throw new Error('No feasible theoretical setup was found.');
 
-    let bestReal=null;
-    for(let n=1;n<=maxReal;n++){
-      spinner(`Real-team pass · ${n}/${maxReal} Aniimo`);
-      const trial=api.normalizeState({...base,workerSlots:bestGeneric.n,teamSlots:n});
-      const model=buildTeamModel(bestGeneric.plan,trial,DATA);
+    let winner=null;
+    for(let i=0;i<theoretical.length;i++){
+      const entry=theoretical[i];
+      spinner(`Concrete pass · theoretical ${entry.n}/${cap} · ${i+1}/${theoretical.length}`);
+      const trial=api.normalizeState({...base,workerSlots:entry.n,teamSlots:maxReal});
+      const teamPlan={...entry.plan,objectiveWeights:weights};
+      const model=buildTeamModel(teamPlan,trial,DATA);
       try{
         const teams=await findBestTeams(model,trial,DATA,{
           limit:1,
-          onProgress:t=>spinner(`${t} · team size ${n}/${maxReal}`)
+          onProgress:t=>spinner(`${t} · theoretical ${entry.n}/${cap}`)
         });
         const candidate=teams[0];
         if(candidate){
-          const score=scoreRows(candidate.eval.rows,candidate.eval.rate,weights);
-          if(!bestReal||score>bestReal.score+1e-8||(Math.abs(score-bestReal.score)<=1e-8&&n<bestReal.n)){
-            bestReal={n,score,candidate};
-          }
+          const core=findEssentialCore(model,candidate.team,candidate.eval.objectiveRate);
+          const coreEval=evaluateConcreteTeam(model,core);
+          const score=scoreRows(coreEval.rows,coreEval.rate,weights);
+          const realN=core.length;
+          const better=!winner||score>winner.score+1e-8||
+            (Math.abs(score-winner.score)<=1e-8&&(realN<winner.realN||
+              (realN===winner.realN&&entry.n<winner.theoreticalN)));
+          if(better)winner={score,realN,theoreticalN:entry.n,plan:entry.plan,team:core,eval:coreEval};
         }
       }catch{}
       await tick();
     }
-    if(!bestReal)throw new Error('No concrete team could satisfy the current requirements.');
-
+    if(!winner)throw new Error('No concrete team could satisfy the current requirements.');
     spinner('Applying the winner as one atomic change…');
-    const next={...base,workerSlots:bestGeneric.n,teamSlots:bestReal.n};
+    const next={...base,workerSlots:winner.theoreticalN,teamSlots:winner.realN};
     api.applyAtomicState(next,before);
 
-    summary.innerHTML=`<b>Winner applied.</b><span>${bestGeneric.n}/${cap} theoretical · ${bestReal.n}/${maxReal} real team · ${fmt1(base.target==='coin'?bestReal.candidate.eval.rate:bestReal.candidate.eval.targetRate)} ${esc(objectiveName(base))}/h</span>`;
+    summary.innerHTML=`<b>Winner applied.</b><span>${winner.theoreticalN}/${cap} theoretical · ${winner.realN}/${maxReal} real team · ${fmt1(base.target==='coin'?winner.eval.rate:winner.eval.targetRate)} ${esc(objectiveName(base))}/h</span>`;
     spinner('Rebuilding the detailed real-team analyzer for the winning setup…');
     await api.analyzeTeam();
     setProgress('Complete. The winning settings were applied together, and the detailed roster analysis is now below.');
