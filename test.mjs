@@ -1,6 +1,6 @@
 import {GAME_DATA as DATA} from './src/data.js';
 import {DEFAULT_STATE} from './src/defaults.js';
-import {optimizePlan,livingFacilityGroups} from './src/optimizer.js';
+import {optimizePlan,livingFacilityGroups,planItemRates} from './src/optimizer.js';
 
 const clone=x=>structuredClone(x);
 const state=clone(DEFAULT_STATE);
@@ -24,6 +24,12 @@ if(walkPlan.objectiveRate>mixed.objectiveRate+1e-6)throw new Error('one-recipe m
 const material=clone(state);material.target='4010174';material.guarantees=[];
 const materialPlan=optimizePlan(material,DATA);
 if(!(materialPlan.targetRate>0))throw new Error('material target did not produce Coarse-Sifted Ore');
+
+const joint=clone(state);joint.guarantees=[{item:'4010169',perHour:0,maximize:true}];
+const jointPlan=optimizePlan(joint,DATA);
+if((jointPlan.objectiveWeights||[]).length<2)throw new Error('co-max requirement did not become a second objective');
+const rough=planItemRates(jointPlan,DATA).find(x=>x.item===4010169)?.rate||0;
+if(!(rough>0))throw new Error('co-max Rough Lumber objective produced no Rough Lumber');
 
 const living=livingFacilityGroups(state,DATA);
 if(living.length!==7)throw new Error(`expected 7 resident families, got ${living.length}`);
