@@ -6,10 +6,17 @@ import {
 } from './optimizer.js';
 
 const STORE='aniimoHomelandOptimizerStateV1',HIDEOUT='https://www.hideoutgacha.com';
+const MAX_ANIIMO_BY_HOMELAND=[0,5,8,11,14,17,20,22,24,26,28,30,32,34,36,38,40,42,43,44,45];
+const maxAniimoForLevel=level=>MAX_ANIIMO_BY_HOMELAND[Math.min(20,Math.max(1,Number(level)||1))]||5;
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const asset=path=>path?.startsWith('http')?path:`${HIDEOUT}${path||''}`,fmt=n=>Math.round(Number(n||0)).toLocaleString(),fmt1=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:1}),pct=n=>`${(Number(n||0)*100).toFixed(2)}%`,clone=x=>JSON.parse(JSON.stringify(x));
 const facilityMap=new Map(DATA.facilities.map(x=>[x.slug,x]));
-let state=loadState(),currentPlan=null,currentModel=null,recomputeTimer=null;
+let state=loadState(),currentPlan=null,currentModel=null,recomputeTimer=null,undoSnapshot=null,undoTimer=null;
+function diffCount(a,b){if(a===b)return 0;if(a==null||b==null||typeof a!=='object'||typeof b!=='object')return 1;const keys=new Set([...Object.keys(a),...Object.keys(b)]);let n=0;for(const k of keys){n+=diffCount(a[k],b[k]);if(n>=2)return n;}return n;}
+function ensureUndoBar(){if($('#change-undo'))return;document.body.insertAdjacentHTML('beforeend',`<div id="change-undo" class="change-undo"><span><b>Detected a change.</b> Revert?</span><div><button id="undo-change" class="undo-action">REVERT</button><button id="close-undo" class="undo-action muted">CLOSE</button></div></div>`);$('#undo-change').onclick=()=>{if(!undoSnapshot)return;state=normalizeState(undoSnapshot);undoSnapshot=null;saveState();hideUndo();renderAll();history.replaceState(null,'',shareUrl());};$('#close-undo').onclick=hideUndo;}
+function hideUndo(){clearTimeout(undoTimer);$('#change-undo')?.classList.remove('show');}
+function offerUndo(before){if(diffCount(before,state)<2)return;ensureUndoBar();undoSnapshot=clone(before);$('#change-undo').classList.add('show');clearTimeout(undoTimer);undoTimer=setTimeout(hideUndo,12000);}
+function applyAtomicState(next,before=clone(state)){state=normalizeState(next);saveState();renderAll();offerUndo(before);history.replaceState(null,'',shareUrl());}
 
 function defaultOwned(){const out={};for(const p of DATA.pals)out[String(p.id)]={enabled:true,count:1};return out;}
 function normalizeState(s){
@@ -17,7 +24,7 @@ function normalizeState(s){
   x.facilities={...clone(DEFAULT_STATE.facilities),...(s?.facilities||{})};x.modules={...clone(DEFAULT_STATE.modules),...(s?.modules||{})};x.speeds={...clone(DEFAULT_STATE.speeds),...(s?.speeds||{})};
   x.climateOptions={...clone(DEFAULT_STATE.climateOptions),...(s?.climateOptions||{})};
   if(s?.climate?.enabled&&!s?.climateOptions){const t=s.climate.temperature;if(t==='Cool'||t==='Freeze')x.climateOptions.cooling=true;else if(t==='Warm'||t==='Scorching')x.climateOptions.heat=true;else if(t==='Adequate')x.climateOptions.sunlamp=true;}
-  x.teamSlots=Math.max(1,Number(s?.teamSlots??s?.workerSlots??x.teamSlots)||1);x.collectHours=Math.max(0,Number(x.collectHours||0));x.oneRecipePerFacility=!!x.oneRecipePerFacility;x.generatorAvailable=!!x.generatorAvailable;x.hungry=!!x.hungry;
+  x.homelandLevel=Math.min(20,Math.max(1,Number(x.homelandLevel)||1));const maxSlots=maxAniimoForLevel(x.homelandLevel);x.workerSlots=Math.min(maxSlots,Math.max(1,Number(x.workerSlots)||1));x.teamSlots=Math.min(maxSlots,Math.max(1,Number(s?.teamSlots??s?.workerSlots??x.teamSlots)||1));x.collectHours=Math.max(0,Number(x.collectHours||0));x.oneRecipePerFacility=!!x.oneRecipePerFacility;x.generatorAvailable=!!x.generatorAvailable;x.hungry=!!x.hungry;
   x.recipeNotes={...(s?.recipeNotes||{})};x.guarantees=Array.isArray(s?.guarantees)?s.guarantees.map(g=>({item:String(g.item||''),perHour:Math.max(0,Number(g.perHour||0)),maximize:!!g.maximize})):[];x.target=String(x.target||'coin');
   if(!x.owned||!Object.keys(x.owned).length)x.owned=defaultOwned();for(const p of DATA.pals)if(!x.owned[String(p.id)])x.owned[String(p.id)]={enabled:true,count:1};
   return x;
@@ -28,7 +35,7 @@ function saveState(){localStorage.setItem(STORE,JSON.stringify(state));}
 function parseFacilities(raw){const out={};for(const tok of String(raw||'').split('_')){if(!tok.includes(':'))continue;const[slug,val]=tok.split(':',2),dot=val.lastIndexOf('.'),count=Number(dot>=0?val.slice(0,dot):val),level=Number(dot>=0?val.slice(dot+1):1);if(slug&&Number.isFinite(count)&&Number.isFinite(level))out[slug]={count,level};}return out;}
 function parseSimple(raw){const out={};for(const tok of String(raw||'').split('_')){if(!tok.includes(':'))continue;const[k,v]=tok.split(':',2),n=Number(v);if(k&&Number.isFinite(n))out[k]=n;}return out;}
 function applyUrl(input){
-  let u;try{u=new URL(input,location.href);}catch{throw new Error('That does not look like a URL.');}const q=u.searchParams;
+  const before=clone(state);let u;try{u=new URL(input,location.href);}catch{throw new Error('That does not look like a URL.');}const q=u.searchParams;
   if(q.has('f'))state.facilities=parseFacilities(q.get('f'));if(q.has('m'))state.modules=parseSimple(q.get('m'));if(q.has('y'))state.speeds=parseSimple(q.get('y'));
   if(q.has('h'))state.homelandLevel=Math.max(1,Number(q.get('h'))||1);if(q.has('w'))state.workerSlots=Math.max(1,Number(q.get('w'))||1);if(q.has('tw'))state.teamSlots=Math.max(1,Number(q.get('tw'))||1);
   if(q.has('a'))state.abilityLevel=q.get('a')==='auto'?'auto':Math.max(1,Number(q.get('a'))||1);if(q.has('collect'))state.collectHours=Math.max(0,Number(q.get('collect'))||0);if(q.has('one'))state.oneRecipePerFacility=q.get('one')==='1';
@@ -37,7 +44,7 @@ function applyUrl(input){
   if(q.has('g'))state.guarantees=q.get('g').split('.').map(x=>{const[id,n]=x.split('-');return{item:id,perHour:Number(n)||0,maximize:false};}).filter(x=>x.item);if(q.has('mx')){const maxItems=new Set(q.get('mx').split('.'));for(const g of state.guarantees)g.maximize=maxItems.has(String(g.item));}
   if(q.has('p')){const ids=new Set(q.get('p').split('.').map(String));for(const p of DATA.pals)state.owned[String(p.id)]={enabled:ids.has(String(p.id)),count:state.owned?.[String(p.id)]?.count||1};}
   if(q.has('c'))for(const token of q.get('c').split('.')){const[id,n]=token.split('-');if(state.owned[id])state.owned[id].count=Math.max(1,Number(n)||1);}
-  saveState();renderAll();
+  state=normalizeState(state);saveState();renderAll();offerUndo(before);
 }
 function shareUrl(){
   const u=new URL(location.href);u.search='';const f=Object.entries(state.facilities).filter(([,x])=>Number(x.count)>0).map(([k,x])=>`${k}:${x.count}.${x.level}`).join('_'),m=Object.entries(state.modules).filter(([,v])=>Number(v)>0).map(([k,v])=>`${k}:${v}`).join('_'),y=Object.entries(state.speeds).filter(([,v])=>Number(v)>0).map(([k,v])=>`${k}:${v}`).join('_');
@@ -49,11 +56,11 @@ function title(text,aside=''){return`<div class="section-title"><span></span><h3
 function update(mut,{rerender=null,plan=true}={}){mut(state);saveState();if(rerender)rerender();if(plan)scheduleCompute();}
 function climateCard(key,name,desc){const f=facilityMap.get(key==='cooling'?'cooling-unit':key==='heat'?'heat-furnace':'sunlamp'),on=!!state.climateOptions[key];return`<label class="climate-card ${on?'enabled':''}"><input class="climate-option" data-key="${key}" type="checkbox" ${on?'checked':''}><div class="climate-main"><img src="${asset(f?.icon)}" alt=""><b>${esc(name)}</b></div><small>${esc(desc)}</small></label>`;}
 function renderGeneral(){
-  $('#general-panel').innerHTML=title('Plan settings')+`
+  const cap=maxAniimoForLevel(state.homelandLevel);$('#general-panel').innerHTML=title('Plan settings')+`
     <div class="grid2">
-      <div class="field"><label>Homeland level</label><input id="homeland-level" type="number" min="1" max="20" value="${state.homelandLevel}"></div>
-      <div class="field"><label>Theoretical plan Aniimo</label><input id="worker-slots" type="number" min="1" max="45" value="${state.workerSlots}"></div>
-      <div class="field"><label>Real team Aniimo</label><input id="team-slots" type="number" min="1" max="45" value="${state.teamSlots}"></div>
+      <div class="field"><label>Homeland level</label><div class="number-with-max"><input id="homeland-level" type="number" min="1" max="20" value="${state.homelandLevel}"><span>/ 20</span></div></div>
+      <div class="field"><label>Theoretical plan Aniimo</label><div class="number-with-max"><input id="worker-slots" type="number" min="1" max="${cap}" value="${state.workerSlots}"><span>/ ${cap}</span></div></div>
+      <div class="field"><label>Real team Aniimo</label><div class="number-with-max"><input id="team-slots" type="number" min="1" max="${cap}" value="${state.teamSlots}"><span>/ ${cap}</span></div></div>
       <div class="field"><label>Planning ability ceiling</label><select id="ability-level"><option value="auto" ${String(state.abilityLevel)==='auto'?'selected':''}>Auto from enabled roster</option>${[1,2,3,4].map(n=>`<option value="${n}" ${Number(state.abilityLevel)===n?'selected':''}>Lv.${n}</option>`).join('')}</select></div>
       <div class="field"><label>I empty facilities every</label><select id="collect-hours">${[[0,'As often as it takes'],[1,'1 hour'],[2,'2 hours'],[4,'4 hours'],[8,'8 hours'],[12,'12 hours'],[24,'1 day'],[48,'2 days']].map(([v,n])=>`<option value="${v}" ${Number(state.collectHours)===v?'selected':''}>${n}</option>`).join('')}</select></div>
       <div class="field"><label>Global speed</label><div class="quick-row" style="margin:0"><button class="ghost speed-all" data-speed="100">100%</button><button class="ghost speed-all" data-speed="300">300%</button><button class="ghost speed-all" data-speed="400">400%</button></div></div>
@@ -66,7 +73,7 @@ function renderGeneral(){
     <div class="micro-label" style="margin-top:11px">Climate buildings available to the solver</div>
     <div class="climate-grid">${climateCard('cooling','Cooling Unit','May be unused, Cool, or Freeze. The solver tests all three.')}${climateCard('heat','Heat Furnace','May be unused, Warm, or Scorching. The solver chooses.')}${climateCard('sunlamp','Sunlamp','May be unused or provide Adequate recipes.')}</div>
     <p class="micro">Checked means “I could place this if it improves the answer.” It does not mean the building is already committed. Utility buildings only consume a worker when the winning solution actually uses them.</p>`;
-  $('#homeland-level').oninput=e=>update(x=>x.homelandLevel=Math.max(1,Number(e.target.value)||1));$('#worker-slots').oninput=e=>update(x=>x.workerSlots=Math.max(1,Number(e.target.value)||1));$('#team-slots').oninput=e=>update(x=>x.teamSlots=Math.max(1,Number(e.target.value)||1));$('#ability-level').onchange=e=>update(x=>x.abilityLevel=e.target.value==='auto'?'auto':Number(e.target.value));$('#collect-hours').onchange=e=>update(x=>x.collectHours=Number(e.target.value));
+  $('#homeland-level').onchange=e=>{state.homelandLevel=Math.min(20,Math.max(1,Number(e.target.value)||1));const m=maxAniimoForLevel(state.homelandLevel);state.workerSlots=Math.min(m,state.workerSlots);state.teamSlots=Math.min(m,state.teamSlots);saveState();renderGeneral();scheduleCompute();};$('#worker-slots').oninput=e=>update(x=>x.workerSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));$('#team-slots').oninput=e=>update(x=>x.teamSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));$('#ability-level').onchange=e=>update(x=>x.abilityLevel=e.target.value==='auto'?'auto':Number(e.target.value));$('#collect-hours').onchange=e=>update(x=>x.collectHours=Number(e.target.value));
   $('#one-recipe').onchange=e=>update(x=>x.oneRecipePerFacility=e.target.checked);$('#generator').onchange=e=>update(x=>x.generatorAvailable=e.target.checked);$('#hungry').onchange=e=>update(x=>x.hungry=e.target.checked);
   document.querySelectorAll('.climate-option').forEach(i=>i.onchange=e=>update(x=>x.climateOptions[e.target.dataset.key]=e.target.checked,{rerender:renderGeneral}));document.querySelectorAll('.speed-all').forEach(b=>b.onclick=()=>{const n=Number(b.dataset.speed);for(const f of DATA.facilities)if(f.kind!=='utility')state.speeds[f.slug]=n;saveState();renderFacilities();scheduleCompute();});
 }
@@ -182,6 +189,7 @@ function renderSpecial(s){const base=state.target==='coin'?currentPlan.ratePerHo
 function renderTeamCard(x,index,staff){const base=state.target==='coin'?currentPlan.ratePerHour:currentPlan.targetRate,actual=state.target==='coin'?x.eval.rate:x.eval.targetRate,ratio=base?actual/base:0,delta=actual-base;let extra='';if(staff){const{core,anti}=staff;extra+=`<div class="subhead">Essential core · ${core.length}</div><div class="chips team-chip-grid">${core.map(teamPalChip).join('')}</div>`;if(anti.reserves.length)extra+=`<div class="subhead">Anti-stall / spare coverage · ${anti.reserves.length}</div><div class="chips team-chip-grid">${anti.reserves.map(teamPalChip).join('')}</div>`;extra+=`<div class="subhead">Basic-material burst coverage</div><div class="coverage">${[...anti.byFacility].map(([f,v])=>coverageChip(f,v)).join('')}</div>`;}return`<div class="result-card ${index===0?'best':''}"><div class="result-label">${index===0?'Best actual roster plan':`Alternative ${index+1}`}</div><div class="result-rate">${fmt1(actual)} ${esc(objectiveName())}/h</div><div class="result-delta">${pct(ratio)} of theoretical · ${delta>=0?'+':''}${fmt1(delta)}/h · ${fmt(x.eval.rate)} coin/h</div><div class="chips team-chip-grid">${x.team.map(teamPalChip).join('')}</div><div class="subhead">Plan rebalanced for this team · ${x.eval.rows.length} assignments</div>${extra}</div>`;}
 
 function renderAll(){renderObjectives();renderGeneral();renderFacilities();renderModules();renderNotes();renderLiving();renderOwnership();computePlan();}
+window.__aniimoOptimizerBridge={getState:()=>clone(state),normalizeState,applyAtomicState,maxAniimoForLevel,shareUrl,analyzeTeam:()=>analyzeTeam()};
 function setOwnershipOpen(open){const overlay=$('#ownership-overlay'),toggle=$('#ownership-toggle');overlay.classList.toggle('open',open);overlay.setAttribute('aria-hidden',open?'false':'true');toggle.setAttribute('aria-expanded',open?'true':'false');if(open)setTimeout(()=>$('#pal-search')?.focus(),0);}
 $('#ownership-toggle').onclick=()=>setOwnershipOpen(!$('#ownership-overlay').classList.contains('open'));
 $('#ownership-close').onclick=()=>setOwnershipOpen(false);

@@ -131,3 +131,16 @@
 .coverage-chip img{width:18px;height:18px;object-fit:contain}
 .coverage-chip b{font-size:8px;color:#cbd2d9}
 .coverage-chip.full b{color:var(--green)}
+
+
+/* --- capacity + atomic undo --- */
+.number-with-max{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid #303741;background:#090b0e}
+.number-with-max:focus-within{border-color:#a62a3f}
+.number-with-max input{border:0!important;background:transparent!important;min-width:0}
+.number-with-max span{padding:0 9px;color:#68727d;font-size:9px;white-space:nowrap}
+.change-undo{position:fixed;left:50%;bottom:18px;z-index:95;transform:translate(-50%,18px);opacity:0;pointer-events:none;display:flex;align-items:center;gap:14px;border:1px solid #414a54;background:rgba(13,16,20,.97);box-shadow:0 16px 50px rgba(0,0,0,.5);padding:8px 9px 8px 11px;color:#b9c1c9;font-size:9px;transition:.16s}
+.change-undo.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+.change-undo>div{display:flex;gap:4px}
+.undo-action{height:26px;border:1px solid #5a6570;background:#171c22;color:#fff;font-size:8px;font-weight:800;letter-spacing:.08em;padding:0 9px;cursor:pointer}
+.undo-action.muted{color:#7d8791;border-color:#303741;background:#101419}
+@media(max-width:680px){.change-undo{bottom:10px;width:calc(100% - 20px);justify-content:space-between}}
