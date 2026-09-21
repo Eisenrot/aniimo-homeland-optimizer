@@ -69,3 +69,51 @@
   .metric-value>span{font-size:21px!important}
   .flow-badges{margin-top:5px}
 }
+/* --- tiny alignment / pill cleanup --- */
+.top-actions>.ghost,.top-actions>.link{
+  height:36px;
+  min-height:36px;
+  box-sizing:border-box;
+  padding:0 10px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.top-actions>.nav-icon{
+  width:36px;
+  min-width:36px;
+  padding:0;
+}
+.pal-row .ability-pill img{
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.needs-list{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  flex-wrap:wrap;
+}
+.needs-list .ability-pill{
+  padding:3px 6px;
+}
+.needs-list .ability-pill img{
+  width:12px;
+  height:12px;
+  flex-basis:12px;
+}
+.needs-list .ability-pill span,
+.needs-list .ability-pill b{
+  font-size:8px!important;
+}
+.need-extra{
+  margin-top:4px;
+  color:#727d88;
+  font-size:8px;
+  line-height:1.35;
+}
+.no-manual{
+  color:#68727d;
+  font-size:9px;
+}
