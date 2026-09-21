@@ -18,22 +18,27 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct and verify standalone site
+      - name: Verify source
         run: |
-          rm -rf _site /tmp/source.zip
+          set -euo pipefail
+          test -f index.html
+          test -f styles.css
+          test -f src/app.js
+          test -f src/optimizer.js
+          node test.mjs
+          node test-team.mjs
+
+      - name: Stage site
+        run: |
+          set -euo pipefail
+          rm -rf _site
           mkdir _site
-          cat .source/chunk* | base64 -d > /tmp/source.zip
-          echo "dcc42854418cc40e9ed3261b06f6a1ce17dd936aad8e6e2b504bea35363f4c80  /tmp/source.zip" | sha256sum -c -
-          unzip -q /tmp/source.zip -d _site
-          test -f _site/index.html
-          test -f _site/styles.css
-          test -f _site/src/app.js
-          test -f _site/src/optimizer.js
+          cp index.html styles.css .nojekyll _site/
+          cp -a src _site/
 
       - uses: actions/configure-pages@v5
 
