@@ -2,26 +2,33 @@
 
 > Aniimo Homeland, minus the guesswork. Real staffing, personality-aware optimization, anti-stall planning, and production math that actually respects the workers doing the job.
 
-A standalone, client-side Homeland optimizer for **Aniimo**. It rebuilds the production solver as a normal web app, then adds the layer generic optimizers tend to politely ignore: the concrete Aniimo actually doing the work.
+A standalone, client-side Homeland optimizer for **Aniimo**. It does the production planning itself, then goes further by asking whether the concrete Aniimo you actually own can sustain or improve that plan.
 
 ## What it does
 
-- Solves the best Home Coin production chain across your facilities, levels, modules, speed percentages and worker cap.
-- Keeps Hideout-style share parameters (`f`, `m`, `y`, `a`, `h`, `w`, `p`) so existing setup links can be imported directly.
-- Lets ownership include **copy counts**, stored locally and encoded in this site's optional `c` share parameter.
-- Re-solves the chosen plan against a **real team**, with one hour of labor per stationed Aniimo, actual ability levels, and family-gated jobs such as Dewy / Susuta facilities.
-- Finds an **ideal-personality ceiling** using the legal E/I · N/S · F/T · J/P personality pairs and the +20% matching-building work bonus.
-- Adds a second, deliberately subordinate objective for **anti-stall basic-material coverage** after Home Coin is already maximized: Mine and Well lanes plus separate Farmland/Woodland restart jobs.
+- Solves the best production chain across your facilities, levels, modules, speed percentages and theoretical worker cap.
+- Optimizes either **Home Coin or a specific material**, including progression materials that do not sell.
+- Supports hard **“also make at least”** constraints, so progression output can be protected while the remaining economy is optimized.
+- Treats **Cooling Unit, Heat Furnace, Sunlamp and Crackle Generator as optional possibilities**: enabling one means the solver may use it, not that it is forced into the winning setup.
+- Tests climate / temperature scenarios and only pays their station-slot cost when the winning solution actually uses them.
+- Supports **collection intervals** so finite facility output storage can cap unattended production.
+- Supports **One recipe per facility** for walk-away setups, while mixed mode remains the unconstrained mathematical maximum.
+- Infers **resident-family production automatically** from the Aniimo roster. There is no second ownership checklist for Dewy, Susuta, Celestis, Iris, Nimbi, Shelly, Flutternym, or future equivalents present in the data.
+- Keeps separate **Theoretical plan Aniimo** and **Real team Aniimo** counts.
+- Re-optimizes the full runnable recipe space around a **real team**, using actual enabled copies, ability levels, family restrictions and utility jobs instead of merely checking whether the roster can imitate the generic plan.
+- Finds legal personality recommendations using E/I · N/S · F/T · J/P. Primary-role traits are marked as required, useful secondary traits as optional, and irrelevant pairs as `o` rather than inventing a fake complete personality.
+- Adds a subordinate **anti-stall basic-material objective** after the economic target is sustained: Mine / Well coverage plus separate Farmland and Woodland restart jobs.
+- Shows **Abilities needed** against the enabled roster and copy counts.
+- Imports Hideout-style setup parameters for convenience, but **does not depend on Hideout to produce the plan**.
 - Runs completely in the browser. No account, API key, backend, or upload is required.
 
-## Accuracy target
+## Solver model
 
-The clean-room production model was validated against the captured September 2026 Homeland optimizer dataset. With the reference setup used during development it reproduces the displayed **34,940 Home Coin/h** result as **34,939.86/h** before display rounding, including the same recipe mix and fractional facility usage.
+The production optimizer evaluates the current recipe dataset, facility capacity, material balance, worker-hours, resident jobs, modules, recipe-note gates, climate requirements, electric variants, collection storage limits, selected objective and minimum-output constraints.
 
-The real-team and anti-stall layers are intentionally separate concepts:
+The real-team pass is deliberately separate from the generic production pass. The first answers “what is theoretically best with N generic station slots?” The second answers “what can these exact Aniimo copies actually run?” and may rebalance the recipes around the concrete roster.
 
-- **Economic optimum** answers whether the total labor-hours fit over time.
-- **Operational / anti-stall coverage** is a scheduling heuristic for synchronized facilities finishing together. It is not a claim that Animo internally reserves workers in exactly those lanes.
+The anti-stall layer is an operational heuristic rather than a claim about Aniimo's hidden dispatcher. Its purpose is to prefer spare ability coverage for synchronized basic-material facilities once the economic target is already sustained.
 
 ## Running locally
 
@@ -35,12 +42,14 @@ Then open `http://localhost:8765`.
 
 ## GitHub Pages
 
-Everything needed for Pages lives in the repository root. The included workflow deploys the static site from `main`; select **GitHub Actions** as the Pages source in repository settings if GitHub has not already enabled it.
+Everything needed for Pages lives visibly in the repository root. The included workflow verifies the JavaScript and optimizer tests, stages the static site, and deploys it from `main`.
 
 ## Current boundaries
 
-The initial standalone release focuses on the normal worker-powered Homeland economy used by the reference setup. Electric/generator mode is intentionally not enabled yet rather than pretending an incomplete model is exact. Climate recipes are supported with the observed temperature-distance penalties, but deserve more live-game validation as new content lands. Variant/Nova worker abilities are present in the captured data but the ownership UI currently selects the base species record; explicit form selection is on the roadmap.
+“One recipe per facility” is currently a facility-type restriction rather than a full integer assignment solver for individual copies of the same building. Climate optimization models the economic cost and recipe access of utility buildings, but does not yet solve physical Homeland-map coverage geometry for their influence radius.
+
+Those are explicit boundaries rather than guessed mechanics.
 
 ## Data / attribution
 
-This is an unofficial community tool. Animo names, game data and game imagery belong to their respective owners. The implementation and additional optimization layers in this repository are independent community work. Facility / character images are currently referenced from public web asset paths and gracefully degrade if unavailable.
+This is an unofficial community tool. Aniimo names, game data and game imagery belong to their respective owners. The implementation and additional optimization layers in this repository are independent community work. Facility and character images are currently referenced from public web asset paths and gracefully degrade if unavailable.
