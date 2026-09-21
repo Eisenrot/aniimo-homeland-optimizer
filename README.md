@@ -8,7 +8,7 @@ A standalone, client-side Homeland optimizer for **Aniimo**. It does the product
 
 - Solves the best production chain across your facilities, levels, modules, speed percentages and theoretical worker cap.
 - Optimizes either **Home Coin or a specific material**, including progression materials that do not sell.
-- Supports hard **“also make at least”** constraints, so progression output can be protected while the remaining economy is optimized.
+- Supports hard **“also make at least”** constraints, with per-hour values and optional **MAX** toggles that turn requirements into normalized co-objectives alongside the main target.
 - Treats **Cooling Unit, Heat Furnace, Sunlamp and Crackle Generator as optional possibilities**: enabling one means the solver may use it, not that it is forced into the winning setup.
 - Tests climate / temperature scenarios and only pays their station-slot cost when the winning solution actually uses them.
 - Supports **collection intervals** so finite facility output storage can cap unattended production.
