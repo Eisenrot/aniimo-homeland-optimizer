@@ -27,8 +27,13 @@ jobs:
           set -euo pipefail
           test -f index.html
           test -f styles.css
+          test -f super.css
           test -f src/app.js
           test -f src/optimizer.js
+          test -f src/super.js
+          node --check src/app.js
+          node --check src/optimizer.js
+          node --check src/super.js
           node test.mjs
           node test-team.mjs
 
@@ -37,7 +42,7 @@ jobs:
           set -euo pipefail
           rm -rf _site
           mkdir _site
-          cp index.html styles.css .nojekyll _site/
+          cp index.html styles.css super.css .nojekyll _site/
           cp -a src _site/
 
       - uses: actions/configure-pages@v5
