@@ -1,0 +1,60 @@
+name: Expand packaged source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/expand-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  expand:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct validated package
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/aniimo-site /tmp/source.zip
+          mkdir -p /tmp/aniimo-site
+          cat .source/chunk* | base64 -d > /tmp/source.zip
+          echo "dcc42854418cc40e9ed3261b06f6a1ce17dd936aad8e6e2b504bea35363f4c80  /tmp/source.zip" | sha256sum -c -
+          unzip -q /tmp/source.zip -d /tmp/aniimo-site
+          test -f /tmp/aniimo-site/index.html
+          test -f /tmp/aniimo-site/styles.css
+          test -f /tmp/aniimo-site/src/app.js
+          test -f /tmp/aniimo-site/src/optimizer.js
+
+      - name: Put the real source in the repository
+        run: |
+          set -euo pipefail
+          cp -a /tmp/aniimo-site/. .
+          rm -rf .source
+          rm -f source.zip
+
+      - name: Verify the expanded source
+        run: |
+          set -euo pipefail
+          test -f index.html
+          test -f styles.css
+          test -f src/app.js
+          test -f src/optimizer.js
+          node test.mjs
+          node test-team.mjs
+
+      - name: Commit expanded source
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to migrate."
+            exit 0
+          fi
+          git commit -m "Expose standalone source files"
+          git push origin HEAD:main
