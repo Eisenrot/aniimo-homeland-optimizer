@@ -530,3 +530,19 @@
   .compact-rule{min-height:0}
   .utility-card{min-height:66px}
 }
+
+/* --- grouped plan rows, utility icons, tighter controls --- */
+.compact-rule b{line-height:1.02}
+.collection-toggle{align-items:center}
+.collection-rule{align-content:center}
+.collection-rule select{margin-top:6px}
+.utility-choice{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px}
+.utility-choice-item{display:inline-flex;align-items:center;gap:4px;color:#d9b4c0;white-space:nowrap}
+.utility-choice-item img{width:18px;height:18px;object-fit:contain;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
+.utility-choice-sep{color:#59636e;font-size:9px}
+.utility-choice-none{color:#7b8590}
+.plan-table tr.facility-continuation td{background:rgba(255,255,255,.008)}
+.plan-table tr.facility-continuation:hover td{background:rgba(212,45,70,.035)}
+.facility-continuation .prod{padding-left:12px}
+.facility-group-arrow{width:12px;flex:0 0 12px;color:#78838e;font-size:13px;line-height:1;text-align:center;margin-right:-3px}
+.facility-continuation .prod img{opacity:.86}
