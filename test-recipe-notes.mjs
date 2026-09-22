@@ -11,6 +11,7 @@ const base=fillHomelandForRV({...clone(DEFAULT_STATE),homelandLevel:9},DATA);
 base.workerSlots=28;
 base.teamSlots=28;
 base.target='coin';
+base.climateOptions={cooling:true,heat:true,sunlamp:true};
 base.recipeNotes={'4040115':true};
 base.guarantees=[{item:'4010006',perHour:0,maximize:true,enabled:true}];
 
