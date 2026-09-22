@@ -33,4 +33,20 @@ if(disabledRate>1e-8)throw new Error('disabled Potato Kvass note still produced 
 if(!weight||!(Number(weight.max)>0))throw new Error('Potato Kvass MAX objective never found a positive theoretical maximum');
 if(!(enabledRate>1e-8))throw new Error('Potato Kvass MAX objective is present and runnable but optimizer still chooses zero Potato Kvass');
 
+const joint=fillHomelandForRV({...clone(DEFAULT_STATE),homelandLevel:9},DATA);
+joint.workerSlots=13;
+joint.teamSlots=13;
+joint.target='coin';
+joint.climateOptions={cooling:true,heat:true,sunlamp:true};
+joint.recipeNotes={'4040115':true};
+joint.guarantees=[
+  {item:'4010169',perHour:0,maximize:true,enabled:true},
+  {item:'4010174',perHour:0,maximize:true,enabled:true},
+  {item:'4010006',perHour:0,maximize:true,enabled:true}
+];
+const jointPlan=optimizePlan(joint,DATA),jointRates=new Map(planItemRates(jointPlan,DATA).map(x=>[Number(x.item),x.rate]));
+for(const id of [4010169,4010174,4010006])if(!((jointRates.get(id)||0)>1e-8))throw new Error(`joint MAX starved ${id}: ${jointRates.get(id)||0}/h`);
+if(jointPlan.scenario?.heat!=='Scorching')throw new Error(`joint Potato Kvass MAX did not choose Scorching: ${jointPlan.scenarioLabel}`);
+if(!(Number(jointPlan.jointMinShare)>1e-8))throw new Error(`joint MAX fairness share is not positive: ${jointPlan.jointMinShare}`);
+console.log('joint MAX rates',Object.fromEntries([...jointRates].filter(([id])=>[4010169,4010174,4010006].includes(id))),'share',jointPlan.jointMinShare,'scenario',jointPlan.scenarioLabel);
 console.log('recipe-note MAX gating works');

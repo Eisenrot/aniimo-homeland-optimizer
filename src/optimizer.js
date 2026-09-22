@@ -132,7 +132,29 @@ function buildObjectiveWeights(recipes,state,data,A,b){
   const out=[];for(const spec of specs){const c=recipes.map(r=>objectivePartCoef(r,spec,data)),solved=solveLp(c,A,b);let max=0;if(solved)for(let i=0;i<c.length;i++)max+=c[i]*Number(solved.x[i]||0);if(spec.key==='primary'||max>1e-8){const normalizer=Math.max(1e-8,Math.abs(max));out.push({...spec,scale:1/normalizer,normalizer,max});}}
   return out.length?out:[{...specs[0],scale:1,normalizer:1,max:null}];
 }
-function combinedObjectiveCoef(recipe,state,data,weights=null){const ws=weights?.length?weights:[{...objectiveSpecs(state,data)[0],scale:1}];return ws.reduce((sum,w)=>sum+objectivePartCoef(recipe,w,data)*Number(w.scale||0),0);}
+function activeObjectiveWeights(weights){return(weights||[]).filter(w=>w.key==='primary'||w.max==null||Number(w.max)>1e-8);}
+function combinedObjectiveCoef(recipe,state,data,weights=null){const source=weights?.length?weights:[{...objectiveSpecs(state,data)[0],scale:1}],ws=activeObjectiveWeights(source);return ws.reduce((sum,w)=>sum+objectivePartCoef(recipe,w,data)*Number(w.scale||0),0);}
+function objectiveVector(recipes,weight,data){return recipes.map(r=>objectivePartCoef(r,weight,data)*Number(weight.scale||0));}
+function solveJointObjective(vectors,A,b){
+  if(!vectors.length)return null;
+  if(vectors.length===1)return{solved:solveLp(vectors[0],A,b),jointMinShare:null};
+  const n=vectors[0].length,A1=A.map(row=>[...row,0]),b1=[...b];
+  for(const c of vectors){A1.push([...c.map(v=>-Number(v||0)),1]);b1.push(0);}
+  const fair=solveLp([...Array(n).fill(0),1],A1,b1);if(!fair)return null;
+  const jointMinShare=Math.max(0,Number(fair.x[n]||0)),floor=Math.max(0,jointMinShare-1e-7),A2=A.map(row=>[...row]),b2=[...b];
+  for(const c of vectors){A2.push(c.map(v=>-Number(v||0)));b2.push(-floor);}
+  const sum=Array(n).fill(0);for(const c of vectors)for(let i=0;i<n;i++)sum[i]+=Number(c[i]||0);
+  const solved=solveLp(sum,A2,b2);
+  return{solved:solved||{x:fair.x.slice(0,n),duals:[]},jointMinShare};
+}
+function planBeats(a,b){
+  if(!b)return true;
+  const aj=Number.isFinite(Number(a?.jointMinShare))?Number(a.jointMinShare):null,bj=Number.isFinite(Number(b?.jointMinShare))?Number(b.jointMinShare):null;
+  if(aj!=null||bj!=null){const av=aj??0,bv=bj??0;if(av>bv+1e-8)return true;if(bv>av+1e-8)return false;}
+  if(Number(a?.objectiveRate||0)>Number(b?.objectiveRate||0)+1e-8)return true;
+  if(Number(b?.objectiveRate||0)>Number(a?.objectiveRate||0)+1e-8)return false;
+  return Number(a?.utilityWorkers||0)<Number(b?.utilityWorkers||0);
+}
 function utilityWorkerCount(scenario){return Number(!!scenario.cooling)+Number(!!scenario.heat)+Number(!!scenario.sunlamp)+Number(!!scenario.generator);}
 function scenarioKey(s){return `${s.cooling||'-'}|${s.heat||'-'}|${s.sunlamp?'sun':'-'}|${s.generator?'gen':'-'}`;}
 function scenarioLabel(s){const out=[];if(s.cooling)out.push(`Cooling: ${s.cooling}`);if(s.heat)out.push(`Heat: ${s.heat}`);if(s.sunlamp)out.push('Sunlamp: Adequate');if(s.generator)out.push('Crackle Generator');return out.length?out.join(' · '):'No utility building used';}
@@ -171,11 +193,11 @@ function rawOptimize(state,data,scenario,allowRecipes=null,forcedWeights=null){
   addFacilityConstraints(A,b,recipes,state,data,scenario);
   const workerLimit=Number(state.workerSlots||0);if(workerLimit>0){A.push(recipes.map(r=>r.electric?0:recipeLaborSeconds(r,state,scenario)/3600));b.push(Math.max(0,workerLimit-utilityWorkerCount(scenario)));}
   addMaterialBalance(A,b,recipes,data);addGuarantees(A,b,recipes,state);
-  const objectiveWeights=forcedWeights?.length?forcedWeights:buildObjectiveWeights(recipes,state,data,A,b),objective=recipes.map(r=>combinedObjectiveCoef(r,state,data,objectiveWeights));
-  const solved=solveLp(objective,A,b);if(!solved)return{ratePerHour:0,targetRate:0,objectiveRate:-Infinity,rows:[],runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:true,objectiveWeights};
+  const objectiveWeights=forcedWeights?.length?forcedWeights:buildObjectiveWeights(recipes,state,data,A,b),activeWeights=activeObjectiveWeights(objectiveWeights),vectors=activeWeights.map(w=>objectiveVector(recipes,w,data)),objective=recipes.map(r=>combinedObjectiveCoef(r,state,data,objectiveWeights)),joint=solveJointObjective(vectors,A,b),solved=joint?.solved;
+  if(!solved)return{ratePerHour:0,targetRate:0,objectiveRate:-Infinity,rows:[],runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:true,objectiveWeights,jointMinShare:joint?.jointMinShare??null};
   const rows=[];let coin=0,target=0,obj=0;
   recipes.forEach((recipe,i)=>{const batches=Math.max(0,Number(solved.x[i]||0));if(batches<=1e-8)return;const parts=cycleParts(recipe,state,scenario),units=batches*parts.cycle/3600,coinPart=recipeNetValue(recipe,data)*batches,targetPart=state.target&&state.target!=='coin'?recipeNetItem(recipe,state.target)*batches:coinPart;coin+=coinPart;target+=targetPart;obj+=objective[i]*batches;rows.push({facility:recipe.facility,recipe,batchesPerHour:batches,units,perHour:coinPart,targetPerHour:targetPart,cycleSeconds:parts.cycle,manualSeconds:parts.manual,netValue:recipeNetValue(recipe,data)});});
-  return{ratePerHour:coin,targetRate:target,objectiveRate:obj,rows,runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:false,objectiveWeights};
+  return{ratePerHour:coin,targetRate:target,objectiveRate:obj,rows,runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:false,objectiveWeights,jointMinShare:joint?.jointMinShare??null};
 }
 function oneRecipeOptimize(state,data,scenario,mixed){
   const runnableSet=new Set(mixed.runnableRecipes.map(r=>r.id)),byFacility=new Map();
@@ -184,10 +206,10 @@ function oneRecipeOptimize(state,data,scenario,mixed){
   if(!options.size)return mixed;
   const fixed=[...byFacility].filter(([,rs])=>rs.length===1).map(([,rs])=>rs[0].id);
   const solveSelected=sel=>rawOptimize(state,data,scenario,new Set([...fixed,...sel.values()]),mixed.objectiveWeights);
-  function localSearch(seed,budget=450){const sel=new Map(seed);let best=solveSelected(sel),left=budget;for(let pass=0;pass<4;pass++){let improved=false;for(const [facility,ids] of options){let current=sel.get(facility);for(const id of ids){if(id===current||left--<=0)continue;sel.set(facility,id);const test=solveSelected(sel);if(test.objectiveRate>best.objectiveRate+1e-9){best=test;improved=true;current=id;}else sel.set(facility,current);}}if(!improved||left<=0)break;}return best;}
+  function localSearch(seed,budget=450){const sel=new Map(seed);let best=solveSelected(sel),left=budget;for(let pass=0;pass<4;pass++){let improved=false;for(const [facility,ids] of options){let current=sel.get(facility);for(const id of ids){if(id===current||left--<=0)continue;sel.set(facility,id);const test=solveSelected(sel);if(planBeats(test,best)){best=test;improved=true;current=id;}else sel.set(facility,current);}}if(!improved||left<=0)break;}return best;}
   const seeds=[];const activeByFacility=new Map();for(const row of mixed.rows){const arr=activeByFacility.get(row.facility)||[];arr.push(row);activeByFacility.set(row.facility,arr);}const seedFrom=(pick)=>new Map([...options].map(([f,ids])=>{const active=activeByFacility.get(f)||[];if(active.length)return[f,pick(active).recipe.id];const rs=data.recipes.filter(r=>r.facility===f&&ids.includes(r.id));return[f,rs.sort((a,b)=>recipeGrossValue(b,data)-recipeGrossValue(a,data))[0]?.id];}));
   seeds.push(seedFrom(rows=>[...rows].sort((a,b)=>b.targetPerHour-a.targetPerHour)[0]));seeds.push(seedFrom(rows=>[...rows].sort((a,b)=>b.units-a.units)[0]));seeds.push(new Map([...options].map(([f,ids])=>{const rs=data.recipes.filter(r=>r.facility===f&&ids.includes(r.id));rs.sort((a,b)=>recipeGrossValue(b,data)-recipeGrossValue(a,data));return[f,rs[0]?.id];})));
-  let best=null;for(const seed of seeds){const test=localSearch(seed);if(!best||test.objectiveRate>best.objectiveRate+1e-9)best=test;}return best||mixed;
+  let best=null;for(const seed of seeds){const test=localSearch(seed);if(planBeats(test,best))best=test;}return best||mixed;
 }
 
 function scenarios(state){
@@ -205,7 +227,7 @@ export function optimizePlan(state,data){
   for(const scenario of scenarioList){
     let plan=rawOptimize(state,data,scenario,null,sharedWeights);if(state.oneRecipePerFacility&&!plan.infeasible)plan=oneRecipeOptimize(state,data,scenario,plan);tested.push(plan);
     if(plan.infeasible)continue;
-    if(!best||plan.objectiveRate>best.objectiveRate+1e-8||(Math.abs(plan.objectiveRate-best.objectiveRate)<=1e-8&&plan.utilityWorkers<best.utilityWorkers))best=plan;
+    if(planBeats(plan,best))best=plan;
   }
   if(!best)return{ratePerHour:0,targetRate:0,objectiveRate:0,rows:[],runnableRecipes:[],scenario:{},scenarioLabel:'No feasible plan',utilityWorkers:0,infeasible:true,tested,objectiveWeights:sharedWeights||[]};
   best.testedScenarios=tested.length;return best;
