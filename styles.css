@@ -172,13 +172,17 @@
 .objective-row{
   grid-template-columns:26px minmax(0,1fr) 90px 62px 32px;
 }
-.objective-row.disabled{
-  opacity:.48;
+.objective-row.disabled>:not(.guarantee-enabled-toggle){
+  opacity:.46;
 }
 .objective-row.disabled .item-picker-button,
 .objective-row.disabled .rate-field,
 .objective-row.disabled .maximize-toggle{
   filter:saturate(.45);
+}
+.objective-row.disabled .guarantee-enabled-toggle{
+  border-color:#59636e;
+  background:#151a20;
 }
 .guarantee-enabled-toggle{
   width:26px;
