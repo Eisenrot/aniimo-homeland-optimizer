@@ -59,9 +59,9 @@ const walkKvass=diagnoseObjective(walkPlan,walk,DATA,'4010006',{maximize:true});
 if(!walkKvass.ok)throw new Error('walk-away diagnostics still think Potato Kvass is missing: '+walkKvass.detail);
 console.log('walk-away MAX rates',Object.fromEntries([...walkRates].filter(([id])=>[4010169,4010174,4010006].includes(id))),'scenario',walkPlan.scenarioLabel);
 
-const noHeat=clone(joint);noHeat.climateOptions.heat=false;
-const noHeatPlan=optimizePlan(noHeat,DATA),noHeatDiag=diagnoseObjective(noHeatPlan,noHeat,DATA,'4010006',{maximize:true});
-if(noHeatDiag.ok)throw new Error('Potato Kvass unexpectedly remained reachable with Heat Furnace disabled');
-if(!/Scorching|Heat Furnace/i.test(noHeatDiag.detail))throw new Error('objective diagnostics failed to identify climate chain: '+noHeatDiag.detail);
+const blocked=clone(joint);blocked.facilities['bouncy-brew-keg']={count:1,level:1};
+const blockedPlan=optimizePlan(blocked,DATA),blockedDiag=diagnoseObjective(blockedPlan,blocked,DATA,'4010006',{maximize:true});
+if(blockedDiag.ok)throw new Error('Potato Kvass unexpectedly remained reachable with Bouncy Brew Keg Lv.1');
+if(!/Bouncy Brew Keg needs Lv\.2/i.test(blockedDiag.detail))throw new Error('objective diagnostics failed to identify blocked recipe chain: '+blockedDiag.detail);
 
 console.log('recipe-note MAX gating works');
