@@ -7,6 +7,7 @@ export const DEFAULT_STATE = {
   oneRecipePerFacility: false,
   generatorAvailable: false,
   hungry: false,
+  manualSpeeds: false,
   climateOptions: { cooling:false, heat:false, sunlamp:false },
   target: 'coin',
   guarantees: [],
