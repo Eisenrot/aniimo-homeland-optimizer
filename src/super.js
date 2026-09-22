@@ -1,5 +1,6 @@
 import {GAME_DATA as DATA} from './data.js';
 import {optimizePlan,buildTeamModel,findBestTeams,findEssentialCore,evaluateConcreteTeam,planItemRates} from './optimizer.js';
+import {fillHomelandForRV,progressionSummary} from './progression.js';
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -37,9 +38,9 @@ function ensureUi(){
       <div class="super-opt-modal" role="dialog" aria-modal="true" aria-label="Super Optimizer">
         <button id="super-opt-close" class="modal-close" aria-label="Close">×</button>
         <div class="super-title">Super Optimizer <span>WIP</span></div>
-        <p>This keeps your current Homeland inventory, modules, speeds, recipe-note access and enabled roster, then searches the strongest setup allowed by those choices.</p>
+        <p>This keeps your Objective, speeds, recipe-note access, climate/power permissions and enabled roster, then rebuilds the production side to the strongest legal Homeland your current RV level can support.</p>
         <ul>
-          <li>Re-solves the complete recipe economy, including climate and generator possibilities.</li>
+          <li>Auto-fills every unlocked facility at the highest level legal for your RV, including the bulk Farmland / Woodland / Mine / Well progression.</li><li>Auto-maxes Ecological, Kitchen, Resource Detector and Crafting modules to the highest level legal for your RV, unlocking their recipe tiers before solving.</li><li>Re-solves the complete recipe economy, including climate and generator possibilities.</li>
           <li>Respects the current Objective, every hard <b>Also make at least</b> value and every enabled <b>MAX</b> co-objective.</li>
           <li>Tests every theoretical Aniimo count from 1 to the maximum allowed by your Homeland level.</li>
           <li>For every theoretical count, tests the largest concrete roster you can field, then shrinks it to the smallest core that preserves that result.</li>
@@ -75,12 +76,16 @@ async function run(){
   try{
     const before=api.getState();
     const base=api.normalizeState(before);
-    const cap=api.maxAniimoForLevel(base.homelandLevel);
-    const maxReal=Math.min(cap,enabledCopies(base));
+    const autoBase=api.normalizeState(fillHomelandForRV(base,DATA));
+    const cap=api.maxAniimoForLevel(autoBase.homelandLevel);
+    const maxReal=Math.min(cap,enabledCopies(autoBase));
+    const rvSummary=progressionSummary(autoBase.homelandLevel,DATA);
+    const m=rvSummary.modules;
+    summary.innerHTML=`<b>RV ${rvSummary.rv} production ceiling loaded.</b><span>${rvSummary.bulk.farmland} Farmland · ${rvSummary.bulk.woodland} Woodland · ${rvSummary.bulk.mine} Mine · ${rvSummary.bulk.well} Well · Eco ${m['ecological-module']} · Kitchen ${m['kitchen-module']} · Resource ${m['resource-detector']} · Crafting ${m['crafting-module']}</span>`;
     if(maxReal<1)throw new Error('No enabled Aniimo copies are available for the real-team pass.');
 
     spinner('Establishing one common objective scale…');
-    const referenceState=api.normalizeState({...base,workerSlots:cap,teamSlots:Math.min(maxReal,base.teamSlots)});
+    const referenceState=api.normalizeState({...autoBase,workerSlots:cap,teamSlots:Math.min(maxReal,autoBase.teamSlots)});
     const referencePlan=optimizePlan(referenceState,DATA);
     if(referencePlan.infeasible)throw new Error('The current hard requirements are not feasible even at the Homeland Aniimo cap.');
     const weights=referencePlan.objectiveWeights?.length
@@ -90,7 +95,7 @@ async function run(){
     const theoretical=[];
     for(let n=1;n<=cap;n++){
       spinner(`Theoretical pass · ${n}/${cap} Aniimo`);
-      const trial=api.normalizeState({...base,workerSlots:n,teamSlots:Math.min(maxReal,Math.max(1,base.teamSlots))});
+      const trial=api.normalizeState({...autoBase,workerSlots:n,teamSlots:Math.min(maxReal,Math.max(1,autoBase.teamSlots))});
       const plan=optimizePlan(trial,DATA);
       if(!plan.infeasible){
         const genericScore=scoreRows(plan.rows,plan.ratePerHour,weights);
@@ -104,7 +109,7 @@ async function run(){
     for(let i=0;i<theoretical.length;i++){
       const entry=theoretical[i];
       spinner(`Concrete pass · theoretical ${entry.n}/${cap} · ${i+1}/${theoretical.length}`);
-      const trial=api.normalizeState({...base,workerSlots:entry.n,teamSlots:maxReal});
+      const trial=api.normalizeState({...autoBase,workerSlots:entry.n,teamSlots:maxReal});
       const teamPlan={...entry.plan,objectiveWeights:weights};
       const model=buildTeamModel(teamPlan,trial,DATA);
       try{
@@ -128,10 +133,10 @@ async function run(){
     }
     if(!winner)throw new Error('No concrete team could satisfy the current requirements.');
     spinner('Applying the winner as one atomic change…');
-    const next={...base,workerSlots:winner.theoreticalN,teamSlots:winner.realN};
+    const next={...autoBase,workerSlots:winner.theoreticalN,teamSlots:winner.realN};
     api.applyAtomicState(next,before);
 
-    summary.innerHTML=`<b>Winner applied.</b><span>${winner.theoreticalN}/${cap} theoretical · ${winner.realN}/${maxReal} real team · ${fmt1(base.target==='coin'?winner.eval.rate:winner.eval.targetRate)} ${esc(objectiveName(base))}/h</span>`;
+    summary.innerHTML=`<b>Winner applied.</b><span>${winner.theoreticalN}/${cap} theoretical · ${winner.realN}/${maxReal} real team · ${fmt1(autoBase.target==='coin'?winner.eval.rate:winner.eval.targetRate)} ${esc(objectiveName(autoBase))}/h</span>`;
     spinner('Rebuilding the detailed real-team analyzer for the winning setup…');
     await api.analyzeTeam();
     setProgress('Complete. The winning settings were applied together, and the detailed roster analysis is now below.');
