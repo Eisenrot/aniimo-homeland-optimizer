@@ -38,6 +38,7 @@ jobs:
           node test.mjs
           node test-team.mjs
           node test-progression.mjs
+          node test-speed.mjs
 
       - name: Stage site
         run: |
