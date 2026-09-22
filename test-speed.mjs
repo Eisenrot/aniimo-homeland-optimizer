@@ -1,6 +1,6 @@
 import {GAME_DATA as DATA} from './src/data.js';
 import {DEFAULT_STATE} from './src/defaults.js';
-import {displayedEfficiencyPct,baseWorkRateForRecipe,workerCycleSeconds} from './src/optimizer.js';
+import {displayedEfficiencyPct,baseWorkRateForRecipe,workerCycleSeconds,cycleSeconds,defaultRecipeEfficiencyPct} from './src/optimizer.js';
 
 const recipe=id=>DATA.recipes.find(r=>Number(r.id)===Number(id));
 const eq=(actual,expected,msg,tol=1e-7)=>{if(Math.abs(actual-expected)>tol)throw new Error(`${msg}: expected ${expected}, got ${actual}`);};
@@ -19,6 +19,21 @@ eq(displayedEfficiencyPct(recipe(4010073),3,true),480,'Potato Chips · Dark Lv.3
 eq(displayedEfficiencyPct(recipe(4010174),3,false),300,'Coarse-Sifted Ore · Fire Lv.3 without S');
 eq(displayedEfficiencyPct(recipe(4010080),3,true),480,'Bamboo Ware · Artisanship Lv.3 + J');
 eq(displayedEfficiencyPct(recipe(4010080),2,true),360,'Bamboo Ware · Artisanship Lv.2 + J');
+
+// Automatic theoretical mode uses exactly the suitability the selected recipe requires.
+eq(defaultRecipeEfficiencyPct(recipe(4001057)),100,'Mine Clay automatic baseline');
+eq(defaultRecipeEfficiencyPct(recipe(4020060)),100,'Quick Sea Salt automatic baseline');
+eq(defaultRecipeEfficiencyPct(recipe(4010073)),100,'Potato Chips automatic baseline');
+
+// The stored manual values are ignored while automatic mode is active, then restored verbatim.
+const autoState=structuredClone(state);
+autoState.manualSpeeds=false;
+autoState.speeds.mine=999;
+eq(cycleSeconds(recipe(4001057),autoState,scenario),2250/1.25,'automatic mode ignores stored Mine override',1e-6);
+const manualState=structuredClone(state);
+manualState.manualSpeeds=true;
+manualState.speeds.mine=168;
+eq(cycleSeconds(recipe(4001057),manualState,scenario),2250/(1.25*1.68),'manual mode uses stored Mine override',1e-6);
 
 // Gathering / no-personality structures have a higher base workload rate on harder recipes.
 eq(baseWorkRateForRecipe(recipe(4001057)),1.25,'Mine Clay base workload rate');

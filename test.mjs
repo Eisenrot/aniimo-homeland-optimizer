@@ -37,6 +37,20 @@ const disabledPlan=optimizePlan(disabled,DATA);
 if(disabledPlan.infeasible)throw new Error('disabled sub-objective still constrained the solver');
 if((disabledPlan.objectiveWeights||[]).length!==1)throw new Error('disabled MAX sub-objective still joined the objective');
 
+const maxOverridesRate=clone(state);
+maxOverridesRate.guarantees=[{item:'4010169',perHour:1e9,maximize:true,enabled:true}];
+const maxOverridesRatePlan=optimizePlan(maxOverridesRate,DATA);
+if(maxOverridesRatePlan.infeasible)throw new Error('MAX still enforced the saved /h minimum');
+if((maxOverridesRatePlan.objectiveWeights||[]).length<2)throw new Error('MAX did not remain a co-objective');
+
+const minimum=clone(state);
+minimum.facilities['aniipod-maker']={count:2,level:2};
+minimum.guarantees=[{item:'110002',perHour:3,maximize:false,enabled:true}];
+const minimumPlan=optimizePlan(minimum,DATA);
+if(minimumPlan.infeasible)throw new Error('3/h Aniipod Pro minimum should be feasible');
+const proRate=planItemRates(minimumPlan,DATA).find(x=>x.item===110002)?.rate||0;
+if(proRate<3-1e-6)throw new Error(`solver missed hard Aniipod Pro minimum: ${proRate}/h`);
+
 const living=livingFacilityGroups(state,DATA);
 if(living.length!==7)throw new Error(`expected 7 resident families, got ${living.length}`);
 console.log('mixed coin/h',mixed.ratePerHour.toFixed(2),'scenarios',withClimate.testedScenarios,'walkaway',walkPlan.ratePerHour.toFixed(2),'resident families',living.length);
