@@ -35,6 +35,7 @@ jobs:
           node --check src/optimizer.js
           node --check src/super.js
           node --check src/progression.js
+          node test-app-parse.mjs
           node test.mjs
           node test-team.mjs
           node test-progression.mjs
