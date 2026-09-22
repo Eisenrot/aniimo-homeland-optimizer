@@ -92,7 +92,7 @@ export function solveLp(objective,A,b){
 function globalProducedItems(data){if(!data.__produced)data.__produced=new Set(data.recipes.flatMap(r=>(r.outputs||[]).map(x=>Number(x.item))));return data.__produced;}
 function objectiveSpecs(state,data){
   const primary=state.target&&state.target!=='coin'?String(state.target):'coin',seen=new Set([primary]),out=[{key:'primary',item:primary,label:primary==='coin'?'Home Coin':itemName(data,primary)}];
-  for(const g of state.guarantees||[]){const item=String(g.item||'');if(!g.maximize||!item||seen.has(item))continue;seen.add(item);out.push({key:`co:${item}`,item,label:itemName(data,item)});}
+  for(const g of state.guarantees||[]){const item=String(g.item||'');if(g.enabled===false||!g.maximize||!item||seen.has(item))continue;seen.add(item);out.push({key:`co:${item}`,item,label:itemName(data,item)});}
   return out;
 }
 function objectivePartCoef(recipe,spec,data){return spec.item==='coin'?recipeNetValue(recipe,data):recipeNetItem(recipe,spec.item);}
@@ -130,7 +130,7 @@ function addMaterialBalance(A,b,recipes,data){
   for(const item of consumed){if(!globallyProduced.has(item))continue;const row=recipes.map(r=>-recipeNetItem(r,item));A.push(row);b.push(0);}
 }
 function addGuarantees(A,b,recipes,state){
-  for(const g of state.guarantees||[]){const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;A.push(recipes.map(r=>-recipeNetItem(r,item)));b.push(-minimum);}
+  for(const g of state.guarantees||[]){if(g.enabled===false)continue;const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;A.push(recipes.map(r=>-recipeNetItem(r,item)));b.push(-minimum);}
 }
 function recipeLaborSeconds(recipe,state,scenario){const parts=cycleParts(recipe,state,scenario);return recipe.pet?Math.max(parts.cycle,parts.manual):parts.manual;}
 
@@ -233,7 +233,7 @@ export function evaluateConcreteTeam(model,team){
   const R=model.rows.length,Q=model.tasks.length,edges=[];for(let w=0;w<team.length;w++)for(let q=0;q<Q;q++)if(palCanDo(team[w].pal,model.tasks[q]))edges.push({w,q,idx:R+edges.length});const N=R+edges.length;if(!N)return{rate:0,targetRate:0,objectiveRate:0,rows:[],workerTaskSeconds:[]};
   const objective=Array(N).fill(0);for(let r=0;r<R;r++)objective[r]=model.rows[r].objective;const A=[],b=[];addTeamFacilityConstraints(A,b,N,model.rows,model);
   for(const item of model.internalItems){const row=Array(N).fill(0);for(let r=0;r<R;r++)row[r]=-recipeNetItem(model.rows[r].recipe,item);A.push(row);b.push(0);}
-  for(const g of model.state.guarantees||[]){const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;const row=Array(N).fill(0);for(let r=0;r<R;r++)row[r]=-recipeNetItem(model.rows[r].recipe,item);A.push(row);b.push(-minimum);}
+  for(const g of model.state.guarantees||[]){if(g.enabled===false)continue;const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;const row=Array(N).fill(0);for(let r=0;r<R;r++)row[r]=-recipeNetItem(model.rows[r].recipe,item);A.push(row);b.push(-minimum);}
   for(let w=0;w<team.length;w++){const row=Array(N).fill(0);for(const e of edges)if(e.w===w)row[e.idx]=1;A.push(row);b.push(3600);}
   for(let q=0;q<Q;q++){const row=Array(N).fill(0),key=model.tasks[q].key;for(let r=0;r<R;r++)row[r]=Number(model.rows[r].work.get(key)||0);for(const e of edges)if(e.q===q)row[e.idx]=-1;A.push(row);b.push(-Number(model.fixedTaskSeconds.get(key)||0));}
   const solved=solveLp(objective,A,b);if(!solved)return{rate:0,targetRate:0,objectiveRate:-Infinity,rows:[],workerTaskSeconds:[],infeasible:true};
@@ -303,7 +303,7 @@ function personalityEval(model,team,profiles,rows){
   const N=recipeVars.length+alloc.length+utilityAlloc.length;if(!N)return{rate:0,targetRate:0,objectiveRate:0,profiles};const objective=Array(N).fill(0);for(const v of recipeVars)objective[v.idx]=v.objective;const A=[],b=[];
   for(const slug of [...new Set(rows.map(r=>r.facility))]){const stacks=facilityStacks(model.state,slug),thresholds=[...new Set(rows.filter(r=>r.facility===slug).map(r=>Number(r.recipe.level||1)))].sort((a,b)=>a-b);for(const lvl of thresholds){const cap=stacks.filter(x=>x.level>=lvl).reduce((sum,x)=>sum+x.count,0),row=Array(N).fill(0);let used=false;for(const v of recipeVars)if(rows[v.r].facility===slug&&Number(rows[v.r].recipe.level||1)>=lvl){row[v.idx]=v.occupancySeconds/3600;used=true;}if(used){A.push(row);b.push(cap);}const collect=Number(model.state.collectHours||0);if(collect>0){const batchCap=stacks.filter(x=>x.level>=lvl).reduce((sum,x)=>sum+x.count*facilityOutputLimit(model.data,slug,x.level),0);if(batchCap>0){const cr=Array(N).fill(0);let cu=false;for(const v of recipeVars)if(rows[v.r].facility===slug&&Number(rows[v.r].recipe.level||1)>=lvl){cr[v.idx]=collect;cu=true;}if(cu){A.push(cr);b.push(batchCap);}}}}}
   for(const item of model.internalItems){const row=Array(N).fill(0);for(const v of recipeVars)row[v.idx]=-recipeNetItem(rows[v.r].recipe,item);A.push(row);b.push(0);}
-  for(const g of model.state.guarantees||[]){const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;const row=Array(N).fill(0);for(const v of recipeVars)row[v.idx]=-recipeNetItem(rows[v.r].recipe,item);A.push(row);b.push(-minimum);}
+  for(const g of model.state.guarantees||[]){if(g.enabled===false)continue;const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;const row=Array(N).fill(0);for(const v of recipeVars)row[v.idx]=-recipeNetItem(rows[v.r].recipe,item);A.push(row);b.push(-minimum);}
   for(let w=0;w<team.length;w++){const row=Array(N).fill(0);for(const v of recipeVars)if(v.w===w)row[v.idx]+=Number(v.workerSeconds||0);for(const a of alloc)if(a.w===w)row[a.idx]+=1;for(const a of utilityAlloc)if(a.w===w)row[a.idx]+=1;A.push(row);b.push(3600);}
   for(const r of genericRows){const tasks=taskObjects(rows[r]),ri=rowVarIndices[r][0];if(ri==null)continue;for(let ti=0;ti<tasks.length;ti++){const row=Array(N).fill(0);row[ri]=tasks[ti].seconds;for(const a of alloc)if(a.r===r&&a.ti===ti)row[a.idx]=-1;A.push(row);b.push(0);}}
   for(const u of utilityTasksForScenario(model.scenario)){const row=Array(N).fill(0);for(const a of utilityAlloc)if(a.task.key===u.key)row[a.idx]-=1;A.push(row);b.push(-3600);}
