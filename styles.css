@@ -249,3 +249,42 @@
 @media(max-width:680px){
   .objective-row{grid-template-columns:26px minmax(0,1fr) 76px 58px 32px}
 }
+/* --- real-team measured efficiency --- */
+.real-speed-row .facility-name small{color:#72c98d}
+.facility-row .real-speed{
+  border-color:#38724d;
+  background:linear-gradient(180deg,rgba(55,126,78,.17),rgba(9,11,14,.96));
+  color:#a8e7b9;
+  box-shadow:inset 0 0 0 1px rgba(103,217,139,.05);
+}
+.speed-calibration{
+  margin-top:10px;
+  padding-top:2px;
+}
+.speed-calibration-grid{
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-top:6px;
+}
+.speed-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  min-height:26px;
+  padding:3px 7px 3px 4px;
+  border:1px solid #315c3e;
+  background:linear-gradient(135deg,rgba(53,127,76,.13),#101419);
+  color:#cdd5dc;
+  font-size:8px;
+}
+.speed-chip img{
+  width:18px;
+  height:18px;
+  object-fit:contain;
+}
+.speed-chip b{
+  color:#91e7aa;
+  font-size:8px;
+  font-variant-numeric:tabular-nums;
+}
