@@ -84,29 +84,46 @@ function shareUrl(){
 
 function title(text,aside=''){return`<div class="section-title"><span></span><h3>${esc(text)}</h3><i></i>${aside?`<em class="micro">${aside}</em>`:''}</div>`;}
 function update(mut,{rerender=null,plan=true}={}){mut(state);saveState();if(rerender)rerender();if(plan)scheduleCompute();}
-function climateCard(key,name,desc){const f=facilityMap.get(key==='cooling'?'cooling-unit':key==='heat'?'heat-furnace':'sunlamp'),on=!!state.climateOptions[key];return`<label class="climate-card ${on?'enabled':''}"><input class="climate-option" data-key="${key}" type="checkbox" ${on?'checked':''}><div class="climate-main"><img src="${asset(f?.icon)}" alt=""><b>${esc(name)}</b></div><small>${esc(desc)}</small></label>`;}
+function utilityCard(key,name,desc,icon=null){
+  const generator=key==='generator',slug=key==='cooling'?'cooling-unit':key==='heat'?'heat-furnace':key==='sunlamp'?'sunlamp':'crackle-generator',f=facilityMap.get(slug),on=generator?!!state.generatorAvailable:!!state.climateOptions[key],src=icon||asset(f?.icon);
+  return`<label class="utility-card ${on?'enabled':''}"><input class="utility-option" data-key="${key}" type="checkbox" ${on?'checked':''}><div class="utility-main"><img src="${src}" alt=""><b>${esc(name)}</b></div><small>${esc(desc)}</small></label>`;
+}
 function renderGeneral(){
-  const cap=maxAniimoForLevel(state.homelandLevel),rv=progressionSummary(state.homelandLevel,DATA);$('#general-panel').innerHTML=title('Plan settings')+`
-    <div class="grid2">
+  const cap=maxAniimoForLevel(state.homelandLevel),rv=progressionSummary(state.homelandLevel,DATA),collectionCap=Number(state.collectHours)>0;
+  $('#general-panel').innerHTML=title('Plan settings')+`
+    <div class="grid2 plan-settings-grid">
       <div class="field"><label>Homeland level</label><div class="number-with-max"><input id="homeland-level" type="number" min="1" max="20" value="${state.homelandLevel}"><span>/ 20</span></div></div>
+      <div class="field"><label>Planning ability ceiling</label><select id="ability-level"><option value="auto" ${String(state.abilityLevel)==='auto'?'selected':''}>Auto from enabled roster</option>${[1,2,3,4].map(n=>`<option value="${n}" ${Number(state.abilityLevel)===n?'selected':''}>Lv.${n}</option>`).join('')}</select></div>
       <div class="field"><label>Theoretical plan Aniimo</label><div class="number-with-max"><input id="worker-slots" type="number" min="1" max="${cap}" value="${state.workerSlots}"><span>/ ${cap}</span></div></div>
       <div class="field"><label>Real team Aniimo</label><div class="number-with-max"><input id="team-slots" type="number" min="1" max="${cap}" value="${state.teamSlots}"><span>/ ${cap}</span></div></div>
-      <div class="field"><label>Planning ability ceiling</label><select id="ability-level"><option value="auto" ${String(state.abilityLevel)==='auto'?'selected':''}>Auto from enabled roster</option>${[1,2,3,4].map(n=>`<option value="${n}" ${Number(state.abilityLevel)===n?'selected':''}>Lv.${n}</option>`).join('')}</select></div>
-      <div class="field"><label>I empty facilities every</label><select id="collect-hours">${[[0,'As often as it takes'],[1,'1 hour'],[2,'2 hours'],[4,'4 hours'],[8,'8 hours'],[12,'12 hours'],[24,'1 day'],[48,'2 days']].map(([v,n])=>`<option value="${v}" ${Number(state.collectHours)===v?'selected':''}>${n}</option>`).join('')}</select></div>
-      <div class="field"><label>Global speed</label><div class="quick-row" style="margin:0"><button class="ghost speed-all" data-speed="100">100%</button><button class="ghost speed-all" data-speed="300">300%</button><button class="ghost speed-all" data-speed="400">400%</button></div></div>
     </div>
     <div class="capacity-note"><span>RV ${rv.rv} ceiling · ${rv.bulk.farmland} Farmland · ${rv.bulk.woodland} Woodland · ${rv.bulk.mine} Mine · ${rv.bulk.well} Well</span><button id="fill-rv" class="ghost compact">Fill for RV ${rv.rv}</button></div>
-    <div class="grid2" style="margin-top:9px">
-      <label class="check-row"><input id="one-recipe" type="checkbox" ${state.oneRecipePerFacility?'checked':''}><span><b>One recipe per facility</b><small>Walk-away mode. Each physical copy stays on one recipe; multiple copies of the same facility may be dedicated to different recipes. Off may time-share a single copy.</small></span></label>
-      <label class="check-row"><input id="generator" type="checkbox" ${state.generatorAvailable?'checked':''}><span><b>Crackle Generator available</b><small>This is permission, not forced placement. The solver tests whether spending one station slot on E-mode is actually worth it.</small></span></label>
-      <label class="check-row"><input id="hungry" type="checkbox" ${state.hungry?'checked':''}><span><b>Aniimo are out of food</b><small>Manual worker speed is reduced to 20%. Electric recipes are unaffected.</small></span></label>
+    <div class="plan-rules">
+      <label class="check-row compact-rule"><input id="one-recipe" type="checkbox" ${state.oneRecipePerFacility?'checked':''}><span><b>One recipe per facility</b><small>Each physical copy stays on one recipe.</small></span></label>
+      <div class="check-row compact-rule collection-rule ${collectionCap?'enabled':''}">
+        <label class="collection-toggle"><input id="limit-collection" type="checkbox" ${collectionCap?'checked':''}><span><b>I empty facilities every</b><small>${collectionCap?'Use a collection interval.':'As often as needed.'}</small></span></label>
+        <select id="collect-hours" aria-label="Collection interval" ${collectionCap?'':'disabled'}>${[[0,'As often as it takes'],[1,'1 hour'],[2,'2 hours'],[4,'4 hours'],[8,'8 hours'],[12,'12 hours'],[24,'1 day'],[48,'2 days']].filter(([v])=>collectionCap?v>0:v===0).map(([v,n])=>`<option value="${v}" ${Number(state.collectHours)===v?'selected':''}>${n}</option>`).join('')}</select>
+      </div>
+      <label class="check-row compact-rule"><input id="hungry" type="checkbox" ${state.hungry?'checked':''}><span><b>Aniimo are out of food</b><small>Manual work runs at 20% speed.</small></span></label>
     </div>
-    <div class="micro-label" style="margin-top:11px">Climate buildings available to the solver</div>
-    <div class="climate-grid">${climateCard('cooling','Cooling Unit','May be unused, Cool, or Freeze. The solver tests all three.')}${climateCard('heat','Heat Furnace','May be unused, Warm, or Scorching. The solver chooses.')}${climateCard('sunlamp','Sunlamp','May be unused or provide Adequate recipes.')}</div>
-    <p class="micro">Checked means “I could place this if it improves the answer.” It does not mean the building is already committed. Utility buildings only consume a worker when the winning solution actually uses them.</p>`;
-  $('#homeland-level').onchange=e=>{state.homelandLevel=Math.min(20,Math.max(1,Number(e.target.value)||1));const m=maxAniimoForLevel(state.homelandLevel);state.workerSlots=Math.min(m,state.workerSlots);state.teamSlots=Math.min(m,state.teamSlots);saveState();renderGeneral();scheduleCompute();};$('#fill-rv').onclick=()=>{const before=clone(state);applyAtomicState(fillHomelandForRV(state,DATA),before);};$('#worker-slots').oninput=e=>update(x=>x.workerSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));$('#team-slots').oninput=e=>update(x=>x.teamSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));$('#ability-level').onchange=e=>update(x=>x.abilityLevel=e.target.value==='auto'?'auto':Number(e.target.value));$('#collect-hours').onchange=e=>update(x=>x.collectHours=Number(e.target.value));
-  $('#one-recipe').onchange=e=>update(x=>x.oneRecipePerFacility=e.target.checked);$('#generator').onchange=e=>update(x=>x.generatorAvailable=e.target.checked);$('#hungry').onchange=e=>update(x=>x.hungry=e.target.checked);
-  document.querySelectorAll('.climate-option').forEach(i=>i.onchange=e=>update(x=>x.climateOptions[e.target.dataset.key]=e.target.checked,{rerender:renderGeneral}));document.querySelectorAll('.speed-all').forEach(b=>b.onclick=()=>{const n=Number(b.dataset.speed);for(const f of DATA.facilities)if(f.kind!=='utility')state.speeds[f.slug]=n;saveState();renderFacilities();scheduleCompute();});
+    <div class="micro-label utility-heading">Utility buildings available to the solver</div>
+    <div class="utility-grid">
+      ${utilityCard('cooling','Cooling Unit','Provides Cool or Freeze.')}
+      ${utilityCard('heat','Heat Furnace','Provides Warm or Scorching.')}
+      ${utilityCard('sunlamp','Sunlamp','Provides Adequate conditions.')}
+      ${utilityCard('generator','Crackle Generator','Enables E-mode recipes.','https://aniipedia.com/items/10400021.webp')}
+    </div>
+    <p class="micro utility-help">Checked means the solver may place it when useful; nothing is forced.</p>`;
+  $('#homeland-level').onchange=e=>{state.homelandLevel=Math.min(20,Math.max(1,Number(e.target.value)||1));const m=maxAniimoForLevel(state.homelandLevel);state.workerSlots=Math.min(m,state.workerSlots);state.teamSlots=Math.min(m,state.teamSlots);saveState();renderGeneral();scheduleCompute();};
+  $('#fill-rv').onclick=()=>{const before=clone(state);applyAtomicState(fillHomelandForRV(state,DATA),before);};
+  $('#worker-slots').oninput=e=>update(x=>x.workerSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));
+  $('#team-slots').oninput=e=>update(x=>x.teamSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));
+  $('#ability-level').onchange=e=>update(x=>x.abilityLevel=e.target.value==='auto'?'auto':Number(e.target.value));
+  $('#one-recipe').onchange=e=>update(x=>x.oneRecipePerFacility=e.target.checked);
+  $('#limit-collection').onchange=e=>{state.collectHours=e.target.checked?(Number(state.collectHours)>0?Number(state.collectHours):1):0;saveState();renderGeneral();scheduleCompute();};
+  $('#collect-hours').onchange=e=>update(x=>x.collectHours=Math.max(1,Number(e.target.value)||1),{rerender:renderGeneral});
+  $('#hungry').onchange=e=>update(x=>x.hungry=e.target.checked);
+  document.querySelectorAll('.utility-option').forEach(i=>i.onchange=e=>update(x=>{const key=e.target.dataset.key;if(key==='generator')x.generatorAvailable=e.target.checked;else x.climateOptions[key]=e.target.checked;},{rerender:renderGeneral}));
 }
 function automaticFacilitySpeed(slug){
   const active=(currentPlan?.rows||[]).filter(r=>r.facility===slug&&!r.recipe.electric&&(r.recipe.steps||[]).length);
@@ -126,7 +143,16 @@ function renderFacilities(){
   document.querySelectorAll('.facility-row').forEach(row=>{const slug=row.dataset.facility;row.querySelector('.fac-count').oninput=e=>facilityUpdate(slug,'count',Math.max(0,Number(e.target.value)||0));row.querySelector('.fac-level').oninput=e=>facilityUpdate(slug,'level',Math.max(1,Number(e.target.value)||1));row.querySelector('.fac-speed').oninput=e=>{if(!state.manualSpeeds)return;state.speeds[slug]=Math.max(1,Number(e.target.value)||100);saveState();scheduleCompute({refreshFacilities:false});};});
 }
 function facilityUpdate(slug,key,value){if(!state.facilities[slug])state.facilities[slug]={count:0,level:1};state.facilities[slug][key]=value;saveState();scheduleCompute();}
-function renderModules(){const mods=[['crafting-module','Crafting Module'],['ecological-module','Ecological Module'],['kitchen-module','Kitchen Module'],['resource-detector','Resource Detector']];$('#modules-panel').innerHTML=title('Upgrade modules')+`<div class="grid2">${mods.map(([k,n])=>`<div class="field"><label>${n}</label><input class="module-level" data-module="${k}" type="number" min="0" max="20" value="${state.modules[k]||0}"></div>`).join('')}</div>`;document.querySelectorAll('.module-level').forEach(i=>i.oninput=e=>update(x=>x.modules[e.target.dataset.module]=Math.max(0,Number(e.target.value)||0)));}
+function renderModules(){
+  const mods=[
+    ['crafting-module','Crafting Module','https://aniipedia.com/items/4040014.webp'],
+    ['ecological-module','Ecological Module','https://aniipedia.com/items/4040011.webp'],
+    ['kitchen-module','Kitchen Module','https://aniipedia.com/items/4040012.webp'],
+    ['resource-detector','Resource Detector','https://aniipedia.com/items/4040013.webp']
+  ];
+  $('#modules-panel').innerHTML=title('Upgrade modules')+`<div class="module-grid">${mods.map(([k,n,icon])=>`<div class="module-card"><img src="${icon}" alt=""><div class="module-info"><label>${esc(n)}</label><span>Upgrade level</span></div><input class="module-level" data-module="${k}" type="number" min="0" max="20" value="${state.modules[k]||0}" aria-label="${esc(n)} level"></div>`).join('')}</div>`;
+  document.querySelectorAll('.module-level').forEach(i=>i.oninput=e=>update(x=>x.modules[e.target.dataset.module]=Math.max(0,Number(e.target.value)||0)));
+}
 const RECIPE_NOTE_UNLOCKS={'4040114':'RV 7','4040115':'RV 9','4040116':'RV 12','4040117':'RV 16','4040118':'RV 18','4040119':'RV 19'};
 function recipeNoteIcon(id){return `${HIDEOUT}/images/aniimo/database/materials/item_${id}.webp`;}
 function recipeNotes(){const m=new Map();for(const r of DATA.recipes)if(r.note){const key=String(r.note.item),old=m.get(key),output=(r.outputs||[])[0]?.item;if(!old)m.set(key,{...r.note,outputItem:output,outputName:output?itemName(DATA,output):''});else if(!old.outputItem&&output){old.outputItem=output;old.outputName=itemName(DATA,output);}}const rv=n=>Number((RECIPE_NOTE_UNLOCKS[String(n.item)]||'999').match(/\d+/)?.[0]||999);return[...m.values()].sort((a,b)=>rv(a)-rv(b)||a.name.localeCompare(b.name));}
