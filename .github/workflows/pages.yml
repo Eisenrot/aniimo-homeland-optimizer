@@ -49,6 +49,7 @@ jobs:
           mkdir _site
           cp index.html styles.css super.css .nojekyll _site/
           cp -a src _site/
+          sed -i "s/__BUILD__/\${GITHUB_SHA}/g" _site/index.html
 
       - uses: actions/configure-pages@v5
 
