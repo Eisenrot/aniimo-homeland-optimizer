@@ -31,6 +31,12 @@ if((jointPlan.objectiveWeights||[]).length<2)throw new Error('co-max requirement
 const rough=planItemRates(jointPlan,DATA).find(x=>x.item===4010169)?.rate||0;
 if(!(rough>0))throw new Error('co-max Rough Lumber objective produced no Rough Lumber');
 
+const disabled=clone(state);
+disabled.guarantees=[{item:'4010169',perHour:1e9,maximize:true,enabled:false}];
+const disabledPlan=optimizePlan(disabled,DATA);
+if(disabledPlan.infeasible)throw new Error('disabled sub-objective still constrained the solver');
+if((disabledPlan.objectiveWeights||[]).length!==1)throw new Error('disabled MAX sub-objective still joined the objective');
+
 const living=livingFacilityGroups(state,DATA);
 if(living.length!==7)throw new Error(`expected 7 resident families, got ${living.length}`);
 console.log('mixed coin/h',mixed.ratePerHour.toFixed(2),'scenarios',withClimate.testedScenarios,'walkaway',walkPlan.ratePerHour.toFixed(2),'resident families',living.length);
