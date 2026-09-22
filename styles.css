@@ -546,3 +546,7 @@
 .facility-continuation .prod{padding-left:12px}
 .facility-group-arrow{width:12px;flex:0 0 12px;color:#78838e;font-size:13px;line-height:1;text-align:center;margin-right:-3px}
 .facility-continuation .prod img{opacity:.86}
+
+/* --- roster ability/level search --- */
+.ownership-filter-hint{margin:-1px 0 7px;color:#66717c;font-size:7.5px;letter-spacing:.02em}
+.ownership-filter-hint b{color:#9da7b1;font-weight:700}
