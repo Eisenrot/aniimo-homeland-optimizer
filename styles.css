@@ -553,10 +553,11 @@
 
 
 /* --- environment-gated plan rows --- */
-.plan-table tr.climate-row{--env-edge:#87919c;--env-a:rgba(135,145,156,.08);--env-b:rgba(12,15,19,.01)}
-.plan-table tr.climate-row td{background:linear-gradient(90deg,var(--env-a),var(--env-b) 72%)}
+.plan-table tr.climate-row{--env-edge:#87919c;--env-a:rgba(135,145,156,.08);--env-b:rgba(12,15,19,.01);background:linear-gradient(90deg,var(--env-a),var(--env-b) 72%)}
+.plan-table tr.climate-row td{background:transparent}
 .plan-table tr.climate-row td:first-child{box-shadow:inset 3px 0 var(--env-edge)}
-.plan-table tr.climate-row:hover td{background:linear-gradient(90deg,color-mix(in srgb,var(--env-edge) 15%,#0c0f13),#0c0f13 75%)}
+.plan-table tr.climate-row:hover{background:linear-gradient(90deg,color-mix(in srgb,var(--env-edge) 15%,#0c0f13),#0c0f13 75%)}
+.plan-table tr.climate-row:hover td{background:transparent}
 .plan-table tr.climate-cool{--env-edge:#8edfff;--env-a:rgba(105,202,239,.13)}
 .plan-table tr.climate-freeze{--env-edge:#67aaf7;--env-a:rgba(74,145,230,.16)}
 .plan-table tr.climate-warm{--env-edge:#ff9ca4;--env-a:rgba(235,101,113,.12)}
