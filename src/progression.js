@@ -26,6 +26,34 @@ export const RV_BULK_FACILITIES={
   20:{farmland:40,woodland:20,mine:10,well:2}
 };
 
+export const FACILITY_RV_COUNTS={
+  'tidewhisper-sandcastle':[0,0,0,0,1,1,1,1,1,1,1],
+  'dewy-house':[0,0,0,0,0,1,1,1,1,1,1],
+  'nimbus-bed':[0,0,0,0,0,0,0,0,0,1,1],
+  'starfall-hammock':[0,0,0,0,0,0,0,0,0,0,0,1],
+  'floral-windmill':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  'carousel-mill':[0,1,1,1,1,1,1,1,2],
+  'crafting-table':[0,0,1,1,1,1,1,1,1,2],
+  'claw-game-cooker':[0,0,0,1,1,1,1,1,1,1,2],
+  'jukebox-dryer':[0,0,0,1,1,1,1,1,1,1,2],
+  'simmering-pot':[0,0,0,0,1,1,1,1,1,1,1],
+  'phonolfactory-table':[0,0,0,0,0,1,1,1,1,1,1],
+  'bouncy-brew-keg':[0,0,0,0,0,1,1,1,1,1,1],
+  'blazing-stove':[0,0,0,0,0,0,0,1,1,1,1],
+  'pickling-jar':[0,0,0,0,0,0,0,1,1,1,1],
+  'joy-wheel-loom':[0,0,0,0,0,0,1,1,1,1,1],
+  'dance-pad-polisher':[0,1],
+  'aniipod-maker':[0,0,1],
+  'woodworking-bench':[0,0,0,0,0,1,1,1,1,2],
+  'chimney-kiln':[0,0,0,0,0,1,1,1,1,2]
+};
+
+export function facilityCountAtRV(slug,rv){
+  const counts=FACILITY_RV_COUNTS[slug];if(!counts)return null;
+  const level=clampRv(rv),index=Math.min(level,counts.length)-1;
+  return Number(counts[index]||0);
+}
+
 export const MODULE_RV_UNLOCKS={
   'ecological-module':[[1,3],[2,7],[3,8],[4,11],[5,12],[6,14],[7,17],[8,18]],
   'kitchen-module':[[1,2],[2,4],[3,8],[4,10],[5,13],[6,16],[7,19]],
@@ -63,9 +91,10 @@ export function fillHomelandForRV(source,data){
   for(const facility of data.facilities||[]){
     if(facility.kind==='utility')continue;
     const maxLevel=maxFacilityLevelAtRV(facility,rv);
+    const knownCount=facilityCountAtRV(facility.slug,rv);
     const count=Object.prototype.hasOwnProperty.call(bulk,facility.slug)
       ? Number(bulk[facility.slug]||0)
-      : maxLevel>0?1:0;
+      : knownCount!=null?knownCount:(maxLevel>0?1:0);
     facilities[facility.slug]={count,level:maxLevel||1};
   }
 
@@ -81,7 +110,7 @@ export function progressionSummary(rv,data){
   const level=clampRv(rv),bulk=RV_BULK_FACILITIES[level];
   const unlocked=(data.facilities||[])
     .filter(f=>f.kind!=='utility')
-    .map(f=>({slug:f.slug,name:f.name,count:Object.prototype.hasOwnProperty.call(bulk,f.slug)?bulk[f.slug]:(maxFacilityLevelAtRV(f,level)?1:0),level:maxFacilityLevelAtRV(f,level)}))
+    .map(f=>{const knownCount=facilityCountAtRV(f.slug,level);return{slug:f.slug,name:f.name,count:Object.prototype.hasOwnProperty.call(bulk,f.slug)?bulk[f.slug]:(knownCount!=null?knownCount:(maxFacilityLevelAtRV(f,level)?1:0)),level:maxFacilityLevelAtRV(f,level)}})
     .filter(x=>x.count>0&&x.level>0);
   const modules=Object.fromEntries(Object.keys(MODULE_RV_UNLOCKS).map(k=>[k,maxModuleLevelAtRV(k,level)]));
   return{rv:level,bulk:{...bulk},unlocked,modules};

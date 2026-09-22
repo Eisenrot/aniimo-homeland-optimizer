@@ -16,6 +16,8 @@ export const PERSONALITY_PROFILES=(()=>{const out=[];for(const a of PERSONALITY_
 const TEMP_ORDER=['Freeze','Cool','Adequate','Warm','Scorching'];
 const UTILITY_ABILITY={cooling:{facility:'cooling-unit',ability:'Ice',level:1},heat:{facility:'heat-furnace',ability:'Fire',level:1},sunlamp:{facility:'sunlamp',ability:'Light',level:1},generator:{facility:'crackle-generator',ability:'Lightning',level:1}};
 const BASIC=new Set(['mine','well','farmland','woodland']);
+const PERMANENT_STAFFING=new Set(['mine','well','dewy-house','tidewhisper-sandcastle']);
+const BURST_STAFFING=new Set(['farmland','woodland']);
 const NO_PERSONALITY_SPEED_FACILITIES=new Set(['aniipod-maker','dance-pad-polisher']);
 
 export function familyId(id){const n=Number(id);return Number.isFinite(n)?Math.floor(n/1000):null;}
@@ -455,8 +457,54 @@ export function ownedSpecies(state,data){const list=[];for(const pal of data.pal
 function nextCopy(spec,team){const used=team.filter(x=>Number(x.pal.id)===Number(spec.pal.id)).length;if(used>=spec.maxCount)return null;return{pal:spec.pal,key:`${spec.pal.id}#${used+1}`,copy:used+1,label:spec.pal.name};}
 
 function taskObjects(row){const out=[];for(const[key,seconds]of row.work){const[ability,lvl,fam,tag]=key.split('|');out.push({key,ability,level:Number(lvl),family:fam?Number(fam):null,tag,facility:tag||row.facility,seconds:Number(seconds||0)});}return out;}
-export function burstSlots(model,rows=model.plan.rows){const slots=[];let seq=0;for(const base of rows){if(!BASIC.has(base.facility))continue;const row=model.rows.find(x=>x.recipe.id===base.recipe.id)||{...base,work:splitRecipeWork(base.recipe,model.state,model.scenario)},tasks=taskObjects(row);if(!tasks.length)continue;if(row.facility==='mine'||row.facility==='well'){const copies=Math.max(1,Math.ceil(base.units-1e-9));for(let n=1;n<=copies;n++)for(const task of tasks)slots.push({id:`b${seq++}`,facility:row.facility,task,label:`${row.facility==='mine'?'Mine':'Well'} #${n} · ${task.ability}`,weight:row.facility==='mine'?5:4});}else{const seen=new Set();for(const task of tasks){const k=`${task.ability}|${task.level}|${task.family||''}`;if(seen.has(k))continue;seen.add(k);slots.push({id:`b${seq++}`,facility:row.facility,task,label:`${row.facility==='farmland'?'Farmland':'Woodland'} · ${task.ability}`,weight:row.facility==='woodland'?4.4:4.2});}}}return slots;}
-export function burstMatch(model,team,rows=model.plan.rows){const slots=burstSlots(model,rows),W=team.length;if(!slots.length||!W)return{coverageWeight:0,totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments:[],slots};const used=new Set(),assignments=[];for(const slot of [...slots].sort((a,b)=>b.weight-a.weight||a.label.localeCompare(b.label))){let pick=-1,best=-Infinity;for(let w=0;w<W;w++){if(used.has(w)||!palCanDo(team[w].pal,slot.task))continue;const over=Math.max(0,Number(team[w].pal.abilities?.[slot.task.ability]||0)-slot.task.level),score=over*10+relevance(model,team[w].pal);if(score>best){best=score;pick=w;}}if(pick>=0){used.add(pick);assignments.push({worker:pick,slot});}}return{coverageWeight:assignments.reduce((s,x)=>s+x.slot.weight,0),totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments,slots};}
+export function staffingCoverageSlots(model,rows=model.plan.rows){
+  const slots=[],seq={n:0},active=rows||[];
+  const permanentGroups=new Map();
+  for(const base of active){
+    if(!PERMANENT_STAFFING.has(base.facility))continue;
+    const row=model.rows.find(x=>x.recipe.id===base.recipe.id)||{...base,work:splitRecipeWork(base.recipe,model.state,model.scenario)},tasks=taskObjects(row);
+    if(!tasks.length)continue;
+    const rec=permanentGroups.get(row.facility)||{units:0,tasks:[]};
+    rec.units+=Math.max(0,Number(base.units||0));
+    rec.tasks.push(...tasks);
+    permanentGroups.set(row.facility,rec);
+  }
+  for(const[facility,rec]of permanentGroups){
+    const copies=Math.max(1,Math.ceil(rec.units-1e-9));
+    const strongest=[...rec.tasks].sort((a,b)=>Number(b.level||0)-Number(a.level||0))[0];
+    if(!strongest)continue;
+    for(let n=1;n<=copies;n++)slots.push({id:`p${seq.n++}`,mode:'permanent',facility,task:strongest,label:`${facility.replaceAll('-',' ')} #${n} · ${strongest.ability}`,weight:100});
+  }
+  for(const base of active){
+    if(!BURST_STAFFING.has(base.facility))continue;
+    const row=model.rows.find(x=>x.recipe.id===base.recipe.id)||{...base,work:splitRecipeWork(base.recipe,model.state,model.scenario)},tasks=taskObjects(row);
+    if(!tasks.length)continue;
+    const seen=new Set();
+    for(const task of tasks){
+      const k=`${task.ability}|${task.level}|${task.family||''}`;if(seen.has(k))continue;seen.add(k);
+      slots.push({id:`b${seq.n++}`,mode:'burst',facility:row.facility,task,label:`${row.facility==='farmland'?'Farmland':'Woodland'} · ${task.ability}`,weight:row.facility==='woodland'?4.4:4.2});
+    }
+  }
+  return slots;
+}
+export function staffingCoverageMatch(model,team,rows=model.plan.rows){
+  const slots=staffingCoverageSlots(model,rows),W=team.length;
+  if(!slots.length||!W)return{coverageWeight:0,totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments:[],slots};
+  const used=new Set(),assignments=[],ordered=[...slots].sort((a,b)=>(a.mode==='permanent'?0:1)-(b.mode==='permanent'?0:1)||b.weight-a.weight||a.label.localeCompare(b.label));
+  for(const slot of ordered){
+    let pick=-1,best=-Infinity;
+    for(let w=0;w<W;w++){
+      if(used.has(w)||!palCanDo(team[w].pal,slot.task))continue;
+      const over=Math.max(0,Number(team[w].pal.abilities?.[slot.task.ability]||0)-slot.task.level),score=over*10+relevance(model,team[w].pal);
+      if(score>best){best=score;pick=w;}
+    }
+    if(pick>=0){used.add(pick);assignments.push({worker:pick,slot});}
+  }
+  return{coverageWeight:assignments.reduce((s,x)=>s+x.slot.weight,0),totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments,slots};
+}
+export function burstSlots(model,rows=model.plan.rows){return staffingCoverageSlots(model,rows).filter(x=>x.mode==='burst');}
+export function burstMatch(model,team,rows=model.plan.rows){return staffingCoverageMatch(model,team,rows);}
+
 
 export async function findBestTeams(model,state,data,{limit=4,onProgress}={}){
   const species=ownedSpecies(state,data),workers=Math.max(1,Number(state.teamSlots||state.workerSlots||1));if(species.reduce((sum,x)=>sum+x.maxCount,0)<workers)throw new Error('Not enough enabled Aniimo copies for the requested real-team slots.');
@@ -471,7 +519,20 @@ export async function findBestTeams(model,state,data,{limit=4,onProgress}={}){
 }
 
 export function findEssentialCore(model,team,target){let core=normalizeTeam(team),changed=true;while(changed){changed=false;for(let i=core.length-1;i>=0;i--){const test=normalizeTeam(core.filter((_,j)=>j!==i)),ev=evaluateConcreteTeam(model,test);if(ev.objectiveRate>=target-.0001){core=test;changed=true;break;}}}return core;}
-export function antiStallSummary(model,full,core,rows=null){const need=new Map();for(const x of core)need.set(Number(x.pal.id),(need.get(Number(x.pal.id))||0)+1);const reserves=[];for(const x of full){const id=Number(x.pal.id),n=need.get(id)||0;if(n>0)need.set(id,n-1);else reserves.push(x);}const match=burstMatch(model,full,rows||model.plan.rows),byFacility=new Map();for(const slot of match.slots){const rec=byFacility.get(slot.facility)||{total:0,hit:0};rec.total++;byFacility.set(slot.facility,rec);}for(const a of match.assignments)byFacility.get(a.slot.facility).hit++;return{reserves,match,byFacility};}
+export function antiStallSummary(model,full,core,rows=null){
+  const need=new Map();for(const x of core)need.set(Number(x.pal.id),(need.get(Number(x.pal.id))||0)+1);
+  const reserves=[];for(const x of full){const id=Number(x.pal.id),n=need.get(id)||0;if(n>0)need.set(id,n-1);else reserves.push(x);}
+  const match=staffingCoverageMatch(model,full,rows||model.plan.rows),byFacility=new Map(),permanentByFacility=new Map(),burstByFacility=new Map();
+  for(const slot of match.slots){
+    const maps=[byFacility,slot.mode==='permanent'?permanentByFacility:burstByFacility];
+    for(const map of maps){const rec=map.get(slot.facility)||{total:0,hit:0};rec.total++;map.set(slot.facility,rec);}
+  }
+  for(const a of match.assignments){
+    byFacility.get(a.slot.facility).hit++;
+    (a.slot.mode==='permanent'?permanentByFacility:burstByFacility).get(a.slot.facility).hit++;
+  }
+  return{reserves,match,byFacility,permanentByFacility,burstByFacility};
+}
 
 function profileHas(p,l){return!!p&&!!l&&String(p).includes(l);}
 function activePersonalityRows(model,concreteEval){return(concreteEval?.rows?.length?concreteEval.rows:model.plan.rows).map(r=>{const base=model.rows.find(x=>x.recipe.id===r.recipe.id);return base?{...base,batchesPerHour:r.batchesPerHour,units:r.units,perHour:r.perHour}:{...r,work:splitRecipeWork(r.recipe,model.state,model.scenario),objective:combinedObjectiveCoef(r.recipe,model.state,model.data,model.plan.objectiveWeights)};});}
@@ -513,11 +574,15 @@ function personalityEval(model,team,profiles,rows){
   for(let w=0;w<team.length;w++){const row=Array(N).fill(0);for(const v of recipeVars)if(v.w===w)row[v.idx]+=Number(v.workerSeconds||0);for(const a of alloc)if(a.w===w)row[a.idx]+=1;for(const a of utilityAlloc)if(a.w===w)row[a.idx]+=1;A.push(row);b.push(3600);}
   for(const r of genericRows){const tasks=taskObjects(rows[r]),ri=rowVarIndices[r][0];if(ri==null)continue;for(let ti=0;ti<tasks.length;ti++){const row=Array(N).fill(0);row[ri]=tasks[ti].seconds;for(const a of alloc)if(a.r===r&&a.ti===ti)row[a.idx]=-1;A.push(row);b.push(0);}}
   for(const u of utilityTasksForScenario(model.scenario)){const row=Array(N).fill(0);for(const a of utilityAlloc)if(a.task.key===u.key)row[a.idx]-=1;A.push(row);b.push(-3600);}
-  const solved=solveLp(objective,A,b);if(!solved)return{rate:0,targetRate:0,objectiveRate:-Infinity,profiles};let obj=0,coin=0,target=0;const batches=Array(rows.length).fill(0),boostedByWorker=Array.from({length:team.length},()=>new Set()),speedAssignments=[];
-  for(const v of recipeVars){const x=Math.max(0,Number(solved.x[v.idx]||0));batches[v.r]+=x;obj+=v.objective*x;coin+=v.coin*x;target+=model.state.target&&model.state.target!=='coin'?recipeNetItem(rows[v.r].recipe,model.state.target)*x:v.coin*x;if(v.w!=null&&x>1e-8){if(v.boosted)boostedByWorker[v.w].add(rows[v.r].facility);if(v.efficiencyPct)speedAssignments.push({row:v.r,recipeId:rows[v.r].recipe.id,facility:rows[v.r].facility,worker:v.w,batches:x,efficiencyPct:v.efficiencyPct,baseRate:v.baseRate||1,ability:v.ability,abilityLevel:v.abilityLevel,requiredLevel:v.requiredLevel,personality:!!v.personality});}}
+  const solved=solveLp(objective,A,b);if(!solved)return{rate:0,targetRate:0,objectiveRate:-Infinity,profiles,rows:[]};let obj=0,coin=0,target=0;const batches=Array(rows.length).fill(0),occupancy=Array(rows.length).fill(0),worked=Array(rows.length).fill(0),boostedByWorker=Array.from({length:team.length},()=>new Set()),speedAssignments=[];
+  for(const v of recipeVars){
+    const x=Math.max(0,Number(solved.x[v.idx]||0));batches[v.r]+=x;occupancy[v.r]+=x*Number(v.occupancySeconds||rows[v.r].cycleSeconds||0);worked[v.r]+=x*Number(v.workerSeconds||0);obj+=v.objective*x;coin+=v.coin*x;target+=model.state.target&&model.state.target!=='coin'?recipeNetItem(rows[v.r].recipe,model.state.target)*x:v.coin*x;
+    if(v.w!=null&&x>1e-8){if(v.boosted)boostedByWorker[v.w].add(rows[v.r].facility);if(v.efficiencyPct)speedAssignments.push({row:v.r,recipeId:rows[v.r].recipe.id,facility:rows[v.r].facility,worker:v.w,batches:x,efficiencyPct:v.efficiencyPct,baseRate:v.baseRate||1,ability:v.ability,abilityLevel:v.abilityLevel,requiredLevel:v.requiredLevel,personality:!!v.personality});}
+  }
   const recipeAcc=new Map(),facilityAcc=new Map();for(const a of speedAssignments){const recipe=rows[a.row].recipe,baseSeconds=manualWorkload(recipe)/Math.max(.01,a.baseRate||1),weight=Math.max(1e-9,baseSeconds*a.batches),time=weight/Math.max(.01,a.efficiencyPct/100);for(const[k,key]of [['recipe',String(a.recipeId)],['facility',a.facility]]){const map=k==='recipe'?recipeAcc:facilityAcc,rec=map.get(key)||{base:0,time:0,workers:new Set(),recipes:new Set()};rec.base+=weight;rec.time+=time;rec.workers.add(a.worker);rec.recipes.add(String(a.recipeId));map.set(key,rec);}}
   const summarize=map=>Object.fromEntries([...map].map(([k,v])=>[k,{pct:v.time>0?v.base/v.time*100:100,workers:[...v.workers],recipes:[...v.recipes]}]));
-  return{rate:coin,targetRate:target,objectiveRate:obj,profiles,recipeBatches:batches,boostedByWorker,speedAssignments,speedProfile:{recipes:summarize(recipeAcc),facilities:summarize(facilityAcc)}};
+  const resultRows=[];for(let r=0;r<rows.length;r++){const bph=Number(batches[r]||0);if(bph<=1e-8)continue;const base=rows[r],coinPart=recipeNetValue(base.recipe,model.data)*bph,targetPart=model.state.target&&model.state.target!=='coin'?recipeNetItem(base.recipe,model.state.target)*bph:coinPart,cycle=bph>0?occupancy[r]/bph:base.cycleSeconds,manual=bph>0&&worked[r]>0?worked[r]/bph:base.manualSeconds;resultRows.push({...base,batchesPerHour:bph,units:occupancy[r]/3600,perHour:coinPart,targetPerHour:targetPart,cycleSeconds:cycle,manualSeconds:manual});}
+  return{rate:coin,targetRate:target,objectiveRate:obj,profiles,rows:resultRows,recipeBatches:batches,boostedByWorker,speedAssignments,utilityWorkers:utilityTasksForScenario(model.scenario).length,speedProfile:{recipes:summarize(recipeAcc),facilities:summarize(facilityAcc)}};
 }
 
 export async function optimizePersonalities(model,team,onProgress,concreteEval,burst=null){

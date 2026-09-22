@@ -1,6 +1,6 @@
 import {GAME_DATA as DATA} from './src/data.js';
 import {DEFAULT_STATE} from './src/defaults.js';
-import {optimizePlan,buildTeamModel,findBestTeams,optimizePersonalities} from './src/optimizer.js';
+import {optimizePlan,buildTeamModel,findBestTeams,optimizePersonalities,antiStallSummary} from './src/optimizer.js';
 const state=structuredClone(DEFAULT_STATE);state.owned={};for(const p of DATA.pals)state.owned[String(p.id)]={enabled:true,count:1};state.teamSlots=9;
 const plan=optimizePlan(state,DATA),model=buildTeamModel(plan,state,DATA);
 const teams=await findBestTeams(model,state,DATA,{limit:1,onProgress:()=>{}});
@@ -8,4 +8,9 @@ if(!teams.length)throw new Error('real team search returned no team');
 if(!(teams[0].eval.objectiveRate>=0))throw new Error('real team evaluation failed');
 const special=await optimizePersonalities(model,teams[0].team,()=>{},teams[0].eval,teams[0].burst);
 if(!special.traitHints?.length)throw new Error('personality hints missing');
-console.log('generic',plan.ratePerHour.toFixed(2),'real',teams[0].eval.rate.toFixed(2),'special',special.rate.toFixed(2));
+if(!special.rows?.length)throw new Error('personality result rows missing');
+const specialRate=special.rows.reduce((sum,row)=>sum+Number(row.perHour||0),0);
+if(Math.abs(specialRate-special.rate)>1e-5)throw new Error(`special displayed rows do not match special rate: ${specialRate} vs ${special.rate}`);
+const coverage=antiStallSummary(model,teams[0].team,teams[0].team,special.rows);
+for(const [f,v] of coverage.permanentByFacility)if(v.hit>v.total)throw new Error(`invalid permanent coverage ${f}: ${v.hit}/${v.total}`);
+console.log('generic',plan.ratePerHour.toFixed(2),'real',teams[0].eval.rate.toFixed(2),'special',special.rate.toFixed(2),'permanent',Object.fromEntries(coverage.permanentByFacility));

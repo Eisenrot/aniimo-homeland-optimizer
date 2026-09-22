@@ -550,3 +550,19 @@
 /* --- roster ability/level search --- */
 .ownership-filter-hint{margin:-1px 0 7px;color:#66717c;font-size:7.5px;letter-spacing:.02em}
 .ownership-filter-hint b{color:#9da7b1;font-weight:700}
+
+
+/* --- environment-gated plan rows --- */
+.plan-table tr.climate-row{--env-edge:#87919c;--env-a:rgba(135,145,156,.08);--env-b:rgba(12,15,19,.01)}
+.plan-table tr.climate-row td{background:linear-gradient(90deg,var(--env-a),var(--env-b) 72%)}
+.plan-table tr.climate-row td:first-child{box-shadow:inset 3px 0 var(--env-edge)}
+.plan-table tr.climate-row:hover td{background:linear-gradient(90deg,color-mix(in srgb,var(--env-edge) 15%,#0c0f13),#0c0f13 75%)}
+.plan-table tr.climate-cool{--env-edge:#8edfff;--env-a:rgba(105,202,239,.13)}
+.plan-table tr.climate-freeze{--env-edge:#67aaf7;--env-a:rgba(74,145,230,.16)}
+.plan-table tr.climate-warm{--env-edge:#ff9ca4;--env-a:rgba(235,101,113,.12)}
+.plan-table tr.climate-scorching{--env-edge:#dc5366;--env-a:rgba(191,55,76,.18)}
+.plan-table tr.climate-adequate{--env-edge:#e6cc78;--env-a:rgba(194,157,78,.14)}
+.plan-table tr.climate-electric{--env-edge:#d9a928;--env-a:rgba(177,126,31,.17)}
+.coverage.permanent-coverage .coverage-chip{border-color:#3b5e75;background:rgba(58,112,148,.09)}
+.coverage.permanent-coverage .coverage-chip.full{border-color:#2f6b49;background:rgba(52,133,79,.1);color:var(--green)}
+.coverage.burst-coverage .coverage-chip{border-style:dashed}

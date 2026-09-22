@@ -18,6 +18,7 @@ assert(rv9.facilities.farmland.count===20,'RV9 Farmland ceiling should be 20');
 assert(rv9.facilities.woodland.count===10,'RV9 Woodland ceiling should be 10');
 assert(rv9.facilities.mine.count===5,'RV9 Mine ceiling should be 5');
 assert(rv9.facilities.well.count===2,'RV9 Well ceiling should remain 2');
+assert(rv9.facilities['carousel-mill'].count===2,'RV9 should unlock a second Carousel Mill');
 
 assert(rv8.facilities.farmland.level===4,'RV8 Farmland should cap at Lv.4');
 assert(rv9.facilities.farmland.level===5,'RV9 Farmland should unlock Lv.5');
@@ -25,6 +26,12 @@ assert(rv9.facilities.mine.level===3,'RV9 Mine should unlock Lv.3');
 assert(rv9.facilities['crafting-table'].level===4,'RV9 Crafting Table should unlock Lv.4');
 assert(rv9.facilities['bouncy-brew-keg'].level===2,'RV9 Bouncy Brew Keg should unlock Lv.2');
 assert(rv9.facilities['aniipod-maker'].level===3,'RV9 Aniipod Maker should unlock Lv.3');
+const rv10=fillHomelandForRV({...base,homelandLevel:10},DATA),rv11=fillHomelandForRV({...base,homelandLevel:11},DATA);
+assert(rv10.facilities['crafting-table'].count===2,'RV10 should unlock a second Crafting Table');
+assert(rv10.facilities['woodworking-bench'].count===2,'RV10 should unlock a second Woodworking Bench');
+assert(rv10.facilities['chimney-kiln'].count===2,'RV10 should unlock a second Chimney Kiln');
+assert(rv11.facilities['claw-game-cooker'].count===2,'RV11 should unlock a second Claw Game Cooker');
+assert(rv11.facilities['jukebox-dryer'].count===2,'RV11 should unlock a second Jukebox Dryer');
 
 assert(rv9.modules['ecological-module']===3,'RV9 Ecological Module should be Lv.3');
 assert(rv9.modules['kitchen-module']===3,'RV9 Kitchen Module should be Lv.3');
