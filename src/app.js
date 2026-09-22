@@ -4,6 +4,7 @@ import {
   optimizePlan,requiredAbilities,pickCoverageCore,buildTeamModel,findBestTeams,optimizePersonalities,
   findEssentialCore,antiStallSummary,itemName,itemValue,livingFacilityGroups,planItemRates,externalInputs
 } from './optimizer.js';
+import {fillHomelandForRV,progressionSummary} from './progression.js';
 
 const STORE='aniimoHomelandOptimizerStateV1',HIDEOUT='https://www.hideoutgacha.com';
 const MAX_ANIIMO_BY_HOMELAND=[0,5,8,11,14,17,20,22,24,26,28,30,32,34,36,38,40,42,43,44,45];
@@ -56,7 +57,7 @@ function title(text,aside=''){return`<div class="section-title"><span></span><h3
 function update(mut,{rerender=null,plan=true}={}){mut(state);saveState();if(rerender)rerender();if(plan)scheduleCompute();}
 function climateCard(key,name,desc){const f=facilityMap.get(key==='cooling'?'cooling-unit':key==='heat'?'heat-furnace':'sunlamp'),on=!!state.climateOptions[key];return`<label class="climate-card ${on?'enabled':''}"><input class="climate-option" data-key="${key}" type="checkbox" ${on?'checked':''}><div class="climate-main"><img src="${asset(f?.icon)}" alt=""><b>${esc(name)}</b></div><small>${esc(desc)}</small></label>`;}
 function renderGeneral(){
-  const cap=maxAniimoForLevel(state.homelandLevel);$('#general-panel').innerHTML=title('Plan settings')+`
+  const cap=maxAniimoForLevel(state.homelandLevel),rv=progressionSummary(state.homelandLevel,DATA);$('#general-panel').innerHTML=title('Plan settings')+`
     <div class="grid2">
       <div class="field"><label>Homeland level</label><div class="number-with-max"><input id="homeland-level" type="number" min="1" max="20" value="${state.homelandLevel}"><span>/ 20</span></div></div>
       <div class="field"><label>Theoretical plan Aniimo</label><div class="number-with-max"><input id="worker-slots" type="number" min="1" max="${cap}" value="${state.workerSlots}"><span>/ ${cap}</span></div></div>
@@ -65,6 +66,7 @@ function renderGeneral(){
       <div class="field"><label>I empty facilities every</label><select id="collect-hours">${[[0,'As often as it takes'],[1,'1 hour'],[2,'2 hours'],[4,'4 hours'],[8,'8 hours'],[12,'12 hours'],[24,'1 day'],[48,'2 days']].map(([v,n])=>`<option value="${v}" ${Number(state.collectHours)===v?'selected':''}>${n}</option>`).join('')}</select></div>
       <div class="field"><label>Global speed</label><div class="quick-row" style="margin:0"><button class="ghost speed-all" data-speed="100">100%</button><button class="ghost speed-all" data-speed="300">300%</button><button class="ghost speed-all" data-speed="400">400%</button></div></div>
     </div>
+    <div class="capacity-note"><span>RV ${rv.rv} ceiling · ${rv.bulk.farmland} Farmland · ${rv.bulk.woodland} Woodland · ${rv.bulk.mine} Mine · ${rv.bulk.well} Well</span><button id="fill-rv" class="ghost compact">Fill for RV ${rv.rv}</button></div>
     <div class="grid2" style="margin-top:9px">
       <label class="check-row"><input id="one-recipe" type="checkbox" ${state.oneRecipePerFacility?'checked':''}><span><b>One recipe per facility</b><small>Walk-away mode. Off lets the solver split facility time across recipes for the strongest mathematical mix.</small></span></label>
       <label class="check-row"><input id="generator" type="checkbox" ${state.generatorAvailable?'checked':''}><span><b>Crackle Generator available</b><small>This is permission, not forced placement. The solver tests whether spending one station slot on E-mode is actually worth it.</small></span></label>
@@ -73,7 +75,7 @@ function renderGeneral(){
     <div class="micro-label" style="margin-top:11px">Climate buildings available to the solver</div>
     <div class="climate-grid">${climateCard('cooling','Cooling Unit','May be unused, Cool, or Freeze. The solver tests all three.')}${climateCard('heat','Heat Furnace','May be unused, Warm, or Scorching. The solver chooses.')}${climateCard('sunlamp','Sunlamp','May be unused or provide Adequate recipes.')}</div>
     <p class="micro">Checked means “I could place this if it improves the answer.” It does not mean the building is already committed. Utility buildings only consume a worker when the winning solution actually uses them.</p>`;
-  $('#homeland-level').onchange=e=>{state.homelandLevel=Math.min(20,Math.max(1,Number(e.target.value)||1));const m=maxAniimoForLevel(state.homelandLevel);state.workerSlots=Math.min(m,state.workerSlots);state.teamSlots=Math.min(m,state.teamSlots);saveState();renderGeneral();scheduleCompute();};$('#worker-slots').oninput=e=>update(x=>x.workerSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));$('#team-slots').oninput=e=>update(x=>x.teamSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));$('#ability-level').onchange=e=>update(x=>x.abilityLevel=e.target.value==='auto'?'auto':Number(e.target.value));$('#collect-hours').onchange=e=>update(x=>x.collectHours=Number(e.target.value));
+  $('#homeland-level').onchange=e=>{state.homelandLevel=Math.min(20,Math.max(1,Number(e.target.value)||1));const m=maxAniimoForLevel(state.homelandLevel);state.workerSlots=Math.min(m,state.workerSlots);state.teamSlots=Math.min(m,state.teamSlots);saveState();renderGeneral();scheduleCompute();};$('#fill-rv').onclick=()=>{const before=clone(state);applyAtomicState(fillHomelandForRV(state,DATA),before);};$('#worker-slots').oninput=e=>update(x=>x.workerSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));$('#team-slots').oninput=e=>update(x=>x.teamSlots=Math.min(maxAniimoForLevel(x.homelandLevel),Math.max(1,Number(e.target.value)||1)));$('#ability-level').onchange=e=>update(x=>x.abilityLevel=e.target.value==='auto'?'auto':Number(e.target.value));$('#collect-hours').onchange=e=>update(x=>x.collectHours=Number(e.target.value));
   $('#one-recipe').onchange=e=>update(x=>x.oneRecipePerFacility=e.target.checked);$('#generator').onchange=e=>update(x=>x.generatorAvailable=e.target.checked);$('#hungry').onchange=e=>update(x=>x.hungry=e.target.checked);
   document.querySelectorAll('.climate-option').forEach(i=>i.onchange=e=>update(x=>x.climateOptions[e.target.dataset.key]=e.target.checked,{rerender:renderGeneral}));document.querySelectorAll('.speed-all').forEach(b=>b.onclick=()=>{const n=Number(b.dataset.speed);for(const f of DATA.facilities)if(f.kind!=='utility')state.speeds[f.slug]=n;saveState();renderFacilities();scheduleCompute();});
 }
