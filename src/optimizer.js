@@ -200,16 +200,111 @@ function rawOptimize(state,data,scenario,allowRecipes=null,forcedWeights=null){
   return{ratePerHour:coin,targetRate:target,objectiveRate:obj,rows,runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:false,objectiveWeights,jointMinShare:joint?.jointMinShare??null};
 }
 function oneRecipeOptimize(state,data,scenario,mixed){
-  const runnableSet=new Set(mixed.runnableRecipes.map(r=>r.id)),byFacility=new Map();
+  const byFacility=new Map();
   for(const r of mixed.runnableRecipes){const arr=byFacility.get(r.facility)||[];arr.push(r);byFacility.set(r.facility,arr);}
-  const options=new Map([...byFacility].filter(([,rs])=>rs.length>1).map(([f,rs])=>[f,rs.map(r=>r.id)]));
-  if(!options.size)return mixed;
-  const fixed=[...byFacility].filter(([,rs])=>rs.length===1).map(([,rs])=>rs[0].id);
-  const solveSelected=sel=>rawOptimize(state,data,scenario,new Set([...fixed,...sel.values()]),mixed.objectiveWeights);
-  function localSearch(seed,budget=450){const sel=new Map(seed);let best=solveSelected(sel),left=budget;for(let pass=0;pass<4;pass++){let improved=false;for(const [facility,ids] of options){let current=sel.get(facility);for(const id of ids){if(id===current||left--<=0)continue;sel.set(facility,id);const test=solveSelected(sel);if(planBeats(test,best)){best=test;improved=true;current=id;}else sel.set(facility,current);}}if(!improved||left<=0)break;}return best;}
-  const seeds=[];const activeByFacility=new Map();for(const row of mixed.rows){const arr=activeByFacility.get(row.facility)||[];arr.push(row);activeByFacility.set(row.facility,arr);}const seedFrom=(pick)=>new Map([...options].map(([f,ids])=>{const active=activeByFacility.get(f)||[];if(active.length)return[f,pick(active).recipe.id];const rs=data.recipes.filter(r=>r.facility===f&&ids.includes(r.id));return[f,rs.sort((a,b)=>recipeGrossValue(b,data)-recipeGrossValue(a,data))[0]?.id];}));
-  seeds.push(seedFrom(rows=>[...rows].sort((a,b)=>b.targetPerHour-a.targetPerHour)[0]));seeds.push(seedFrom(rows=>[...rows].sort((a,b)=>b.units-a.units)[0]));seeds.push(new Map([...options].map(([f,ids])=>{const rs=data.recipes.filter(r=>r.facility===f&&ids.includes(r.id));rs.sort((a,b)=>recipeGrossValue(b,data)-recipeGrossValue(a,data));return[f,rs[0]?.id];})));
-  let best=null;for(const seed of seeds){const test=localSearch(seed);if(planBeats(test,best))best=test;}return best||mixed;
+  const constrained=new Map(),alwaysAllowed=[];
+  for(const [facility,rs] of byFacility){
+    const cap=Math.max(1,Math.floor(facilityCount(state,facility)||1)),ids=rs.map(r=>r.id);
+    if(ids.length<=cap)alwaysAllowed.push(...ids);else constrained.set(facility,{ids,cap,recipes:rs});
+  }
+  if(!constrained.size)return mixed;
+  const cloneSelection=sel=>new Map([...sel].map(([f,ids])=>[f,new Set(ids)]));
+  const selectionKey=sel=>[...sel].sort((a,b)=>a[0].localeCompare(b[0])).map(([f,ids])=>`${f}:${[...ids].sort((a,b)=>Number(a)-Number(b)).join(',')}`).join('|');
+  const selectedRecipeIds=sel=>new Set([...alwaysAllowed,...[...sel.values()].flatMap(ids=>[...ids])]);
+  const solveSelected=sel=>rawOptimize(state,data,scenario,selectedRecipeIds(sel),mixed.objectiveWeights);
+  const activeByFacility=new Map();for(const row of mixed.rows){const arr=activeByFacility.get(row.facility)||[];arr.push(row);activeByFacility.set(row.facility,arr);}
+  const recipeById=new Map(mixed.runnableRecipes.map(r=>[r.id,r]));
+  const objectiveRecipeScore=r=>combinedObjectiveCoef(r,state,data,mixed.objectiveWeights);
+  function makeSeed(mode='objective'){
+    const sel=new Map();
+    for(const [facility,cfg] of constrained){
+      const active=[...(activeByFacility.get(facility)||[])],chosen=[],seen=new Set();
+      const score=row=>mode==='units'?Number(row.units||0):mode==='coin'?Number(row.perHour||0):objectiveRecipeScore(row.recipe)*Number(row.batchesPerHour||0);
+      active.sort((a,b)=>score(b)-score(a));
+      for(const row of active)if(!seen.has(row.recipe.id)&&chosen.length<cfg.cap){seen.add(row.recipe.id);chosen.push(row.recipe.id);}
+      const rest=[...cfg.recipes].sort((a,b)=>objectiveRecipeScore(b)-objectiveRecipeScore(a)||recipeGrossValue(b,data)-recipeGrossValue(a,data));
+      for(const r of rest)if(!seen.has(r.id)&&chosen.length<cfg.cap){seen.add(r.id);chosen.push(r.id);}
+      sel.set(facility,new Set(chosen));
+    }
+    return sel;
+  }
+  const outputRecipes=new Map();
+  for(const r of mixed.runnableRecipes)for(const o of r.outputs||[]){const id=Number(o.item),arr=outputRecipes.get(id)||[];arr.push(r);outputRecipes.set(id,arr);}
+  for(const [item,rs] of outputRecipes)rs.sort((a,b)=>{
+    const aq=(a.outputs||[]).filter(o=>Number(o.item)===item).reduce((s,o)=>s+Number(o.qty||0),0),bq=(b.outputs||[]).filter(o=>Number(o.item)===item).reduce((s,o)=>s+Number(o.qty||0),0);
+    const ac=cycleParts(a,state,scenario).cycle,bc=cycleParts(b,state,scenario).cycle;
+    return (bq/Math.max(1,bc))-(aq/Math.max(1,ac))||objectiveRecipeScore(b)-objectiveRecipeScore(a);
+  });
+  function reserveRecipe(sel,locked,recipe){
+    const cfg=constrained.get(recipe.facility);if(!cfg)return{sel,locked};
+    const ids=new Set(sel.get(recipe.facility)||[]),locks=new Set(locked.get(recipe.facility)||[]);
+    if(ids.has(recipe.id)){locks.add(recipe.id);const nl=new Map(locked);nl.set(recipe.facility,locks);return{sel,locked:nl};}
+    let victim=null;
+    for(const id of ids)if(!locks.has(id)){
+      if(victim==null)victim=id;
+      else{
+        const a=recipeById.get(id),b=recipeById.get(victim);
+        if(objectiveRecipeScore(a)<objectiveRecipeScore(b))victim=id;
+      }
+    }
+    if(ids.size>=cfg.cap&&victim==null)return null;
+    const ns=cloneSelection(sel),next=new Set(ns.get(recipe.facility)||[]);
+    if(next.size>=cfg.cap)next.delete(victim);
+    next.add(recipe.id);ns.set(recipe.facility,next);
+    const nl=new Map(locked);locks.add(recipe.id);nl.set(recipe.facility,locks);
+    return{sel:ns,locked:nl};
+  }
+  function injectItem(sel,locked,item,visiting=new Set(),depth=0){
+    const id=Number(item);if(depth>12||visiting.has(id))return{sel,locked};
+    const producers=outputRecipes.get(id)||[];
+    if(!producers.length)return globalProducedItems(data).has(id)?null:{sel,locked};
+    const nextVisiting=new Set(visiting);nextVisiting.add(id);
+    for(const recipe of producers){
+      let reserved=reserveRecipe(sel,locked,recipe);if(!reserved)continue;
+      let cur=reserved,ok=true;
+      for(const input of recipe.inputs||[]){
+        const inputId=Number(input.item);if(!globalProducedItems(data).has(inputId))continue;
+        const next=injectItem(cur.sel,cur.locked,inputId,nextVisiting,depth+1);if(!next){ok=false;break;}cur=next;
+      }
+      if(ok)return cur;
+    }
+    return null;
+  }
+  function objectiveSeed(base,items){
+    let cur={sel:cloneSelection(base),locked:new Map()};
+    for(const item of items){const next=injectItem(cur.sel,cur.locked,item);if(!next)return null;cur=next;}
+    return cur.sel;
+  }
+  function localSearch(seed,budget=900){
+    let sel=cloneSelection(seed),best=solveSelected(sel),left=budget;
+    for(let pass=0;pass<5;pass++){
+      let improved=false;
+      for(const [facility,cfg] of constrained){
+        let current=new Set(sel.get(facility)||[]);
+        for(const outId of [...current]){
+          for(const inId of cfg.ids){
+            if(current.has(inId)||left--<=0)continue;
+            const testSel=cloneSelection(sel),next=new Set(current);next.delete(outId);next.add(inId);testSel.set(facility,next);
+            const test=solveSelected(testSel);
+            if(planBeats(test,best)){best=test;sel=testSel;current=next;improved=true;break;}
+          }
+          if(left<=0)break;
+        }
+        if(left<=0)break;
+      }
+      if(!improved||left<=0)break;
+    }
+    return best;
+  }
+  const baseSeeds=[makeSeed('objective'),makeSeed('coin'),makeSeed('units')],objectiveItems=activeObjectiveWeights(mixed.objectiveWeights).map(w=>w.item).filter(x=>x!=='coin'),seeds=[];
+  for(const base of baseSeeds){
+    seeds.push(base);
+    for(const item of objectiveItems){const s=objectiveSeed(base,[item]);if(s)seeds.push(s);}
+    if(objectiveItems.length)for(let off=0;off<Math.min(4,objectiveItems.length);off++){const order=[...objectiveItems.slice(off),...objectiveItems.slice(0,off)],s=objectiveSeed(base,order);if(s)seeds.push(s);}
+  }
+  const unique=new Map(seeds.map(s=>[selectionKey(s),s]));let best=null;
+  for(const seed of unique.values()){const test=localSearch(seed);if(planBeats(test,best))best=test;}
+  return best||mixed;
 }
 
 function scenarios(state){
@@ -235,6 +330,58 @@ export function optimizePlan(state,data){
 export function planItemRates(plan,data){
   const rates=new Map();for(const row of plan.rows){const b=row.batchesPerHour;for(const o of row.recipe.outputs||[])rates.set(Number(o.item),(rates.get(Number(o.item))||0)+Number(o.qty||0)*b);for(const i of row.recipe.inputs||[])rates.set(Number(i.item),(rates.get(Number(i.item))||0)-Number(i.qty||0)*b);}
   return[...rates].map(([item,rate])=>({item,rate,name:itemName(data,item),value:itemValue(data,item),coinPerHour:Math.max(0,rate)*itemValue(data,item)}));
+}
+function recipeBlockerMessages(recipe,state,data,scenario,plan){
+  const out=[],fac=data.facilities.find(x=>x.slug===recipe.facility),facName=fac?.name||recipe.facility,count=facilityCount(state,recipe.facility),level=maxFacilityLevel(state,recipe.facility);
+  if(count<=0)out.push(`${facName} is not placed.`);else if(Number(recipe.level||1)>level)out.push(`${facName} needs Lv.${recipe.level}; your highest is Lv.${level}.`);
+  if(recipe.electric){if(!scenario?.generator)out.push(`${facName} E-mode needs the Crackle Generator in the chosen utility plan.`);if(Number(state.homelandLevel||1)<Number(fac?.electricHomeLevel||12))out.push(`${facName} E-mode unlocks at RV ${fac?.electricHomeLevel||12}.`);}
+  if(!noteEnabled(recipe,state))out.push(`${recipe.note?.name||'Required Recipe Note'} is disabled.`);
+  if(recipe.module){const slug=MODULE_SLUGS[recipe.module.name],have=Number(state.modules?.[slug]||0),need=Number(recipe.module.level||0);if(!slug||have<need)out.push(`${recipe.module.name} Lv.${need} is required; current Lv.${have}.`);}
+  if(recipe.env&&weatherRatio(recipe.env,scenario||{})<=0){
+    if(recipe.env==='Scorching')out.push(state.climateOptions?.heat?'Needs Scorching from the Heat Furnace, but the chosen utility plan is not Scorching.':'Needs Scorching, but Heat Furnace is disabled.');
+    else if(recipe.env==='Warm')out.push(state.climateOptions?.heat?'Needs Warm/compatible Heat Furnace climate, but the chosen utility plan does not provide it.':'Needs Warm climate, but Heat Furnace is disabled.');
+    else if(recipe.env==='Freeze'||recipe.env==='Cool')out.push(state.climateOptions?.cooling?`Needs ${recipe.env}/compatible Cooling Unit climate, but the chosen utility plan does not provide it.`:`Needs ${recipe.env}, but Cooling Unit is disabled.`);
+    else if(recipe.env==='Adequate')out.push(state.climateOptions?.sunlamp?'Needs Adequate from Sunlamp, but the chosen utility plan does not use it.':'Needs Adequate climate, but Sunlamp is disabled.');
+    else out.push(`Needs ${recipe.env} climate, which the chosen utility plan does not provide.`);
+  }
+  const fam=recipe.pet?familyId(recipe.pet):null;if(fam&&!enabledFamilySet(state,data).has(fam))out.push(`Needs resident ${recipe.petName||'Aniimo family'}, but that family is not enabled.`);
+  if(!recipe.electric)for(const step of recipe.steps||[])if(!abilityAvailable(step,state,data,fam))out.push(String(state.abilityLevel)==='auto'?`No enabled Aniimo can cover ${step.ability} Lv.${step.level} for this recipe.`:`Planning ability ceiling is below ${step.ability} Lv.${step.level}.`);
+  if(state.oneRecipePerFacility&&count>0){
+    const active=[...new Map((plan?.rows||[]).filter(row=>row.facility===recipe.facility&&Number(row.batchesPerHour||0)>1e-8).map(row=>[row.recipe.id,row.recipe])).values()];
+    if(!active.some(r=>r.id===recipe.id)&&active.length>=count){
+      const names=[...new Set(active.flatMap(r=>(r.outputs||[]).map(o=>itemName(data,o.item))))].slice(0,4);
+      out.push(`One-recipe mode has all ${count} ${facName} cop${count===1?'y':'ies'} committed to ${names.join(', ')||'other recipes'}.`);
+    }
+  }
+  return out;
+}
+function objectiveProductionTrace(plan,state,data,item){
+  const produced=globalProducedItems(data),steps=[],seen=new Set(),scenario=plan?.scenario||{};
+  function walk(id,depth=0,path=new Set()){
+    id=Number(id);if(depth>8||path.has(id))return;
+    const key=`${id}:${depth}`;if(seen.has(key))return;seen.add(key);
+    const producers=data.recipes.filter(r=>(r.outputs||[]).some(o=>Number(o.item)===id));
+    if(!producers.length){steps.push({item:id,name:itemName(data,id),facility:null,blockers:[`No recipe in the data produces ${itemName(data,id)}.`]});return;}
+    const ranked=producers.map(recipe=>{const blockers=recipeBlockerMessages(recipe,state,data,scenario,plan),run=recipeRunnable(recipe,state,data,scenario),cycle=cycleParts(recipe,state,scenario).cycle;return{recipe,blockers,run,cycle};}).sort((a,b)=>Number(b.run)-Number(a.run)||a.blockers.length-b.blockers.length||a.cycle-b.cycle);
+    const chosen=ranked[0],fac=data.facilities.find(f=>f.slug===chosen.recipe.facility);
+    steps.push({item:id,name:itemName(data,id),facility:fac?.name||chosen.recipe.facility,recipeId:chosen.recipe.id,blockers:chosen.blockers});
+    const nextPath=new Set(path);nextPath.add(id);
+    for(const input of chosen.recipe.inputs||[])if(produced.has(Number(input.item)))walk(Number(input.item),depth+1,nextPath);
+  }
+  walk(Number(item));
+  const uniq=[],keys=new Set();for(const s of steps){const k=`${s.item}|${s.facility||''}`;if(!keys.has(k)){keys.add(k);uniq.push(s);}}
+  return uniq;
+}
+export function diagnoseObjective(plan,state,data,item,{minimum=0,maximize=false}={}){
+  const id=Number(item),actual=planItemRates(plan||{rows:[]},data).find(x=>Number(x.item)===id)?.rate||0,need=Math.max(0,Number(minimum||0)),ok=maximize?actual>1e-8:actual+1e-7>=need;
+  if(ok)return{ok:true,item:id,actual,minimum:need,maximize,detail:'',chain:[]};
+  const weight=(plan?.objectiveWeights||[]).find(w=>String(w.item)===String(item)),theoreticalMax=Number(weight?.max||0),trace=objectiveProductionTrace(plan,state,data,id),blockers=[...new Set(trace.flatMap(x=>x.blockers||[]))],chain=trace.map(x=>x.facility?`${x.name} @ ${x.facility}`:x.name);
+  let detail='';
+  if(blockers.length)detail=blockers.join(' ');
+  else if(maximize&&theoreticalMax>1e-8)detail=`The model says this objective can reach about ${theoreticalMax.toFixed(2)}/h, but the final optimizer result contains 0/h. That is a solver-selection failure rather than an unlock failure.`;
+  else if(maximize)detail='No currently legal production chain reaches this MAX objective.';
+  else detail=`The final plan produces ${actual.toFixed(2)}/h, below the required ${need.toFixed(2)}/h.`;
+  return{ok:false,item:id,actual,minimum:need,maximize,theoreticalMax,detail,chain,trace};
 }
 export function externalInputs(plan,data){const produced=globalProducedItems(data);return planItemRates(plan,data).filter(x=>x.rate< -1e-8&&!produced.has(Number(x.item))).map(x=>({...x,perHour:-x.rate,costPerHour:-x.rate*x.value}));}
 

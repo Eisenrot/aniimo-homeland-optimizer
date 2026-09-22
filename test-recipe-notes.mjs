@@ -1,7 +1,7 @@
 import {GAME_DATA as DATA} from './src/data.js';
 import {DEFAULT_STATE} from './src/defaults.js';
 import {fillHomelandForRV} from './src/progression.js';
-import {optimizePlan,recipeRunnable,planItemRates} from './src/optimizer.js';
+import {optimizePlan,recipeRunnable,planItemRates,diagnoseObjective} from './src/optimizer.js';
 
 const clone=x=>structuredClone(x);
 const kvass=DATA.recipes.find(r=>Number(r.id)===4010006);
@@ -49,4 +49,19 @@ for(const id of [4010169,4010174,4010006])if(!((jointRates.get(id)||0)>1e-8))thr
 if(jointPlan.scenario?.heat!=='Scorching')throw new Error(`joint Potato Kvass MAX did not choose Scorching: ${jointPlan.scenarioLabel}`);
 if(!(Number(jointPlan.jointMinShare)>1e-8))throw new Error(`joint MAX fairness share is not positive: ${jointPlan.jointMinShare}`);
 console.log('joint MAX rates',Object.fromEntries([...jointRates].filter(([id])=>[4010169,4010174,4010006].includes(id))),'share',jointPlan.jointMinShare,'scenario',jointPlan.scenarioLabel);
+
+const walk=clone(joint);
+walk.oneRecipePerFacility=true;
+const walkPlan=optimizePlan(walk,DATA),walkRates=new Map(planItemRates(walkPlan,DATA).map(x=>[Number(x.item),x.rate]));
+for(const id of [4010169,4010174,4010006])if(!((walkRates.get(id)||0)>1e-8))throw new Error('walk-away MAX starved '+id+': '+(walkRates.get(id)||0)+'/h · '+walkPlan.scenarioLabel);
+if(walkPlan.scenario?.heat!=='Scorching')throw new Error('walk-away Potato Kvass MAX did not choose Scorching: '+walkPlan.scenarioLabel);
+const walkKvass=diagnoseObjective(walkPlan,walk,DATA,'4010006',{maximize:true});
+if(!walkKvass.ok)throw new Error('walk-away diagnostics still think Potato Kvass is missing: '+walkKvass.detail);
+console.log('walk-away MAX rates',Object.fromEntries([...walkRates].filter(([id])=>[4010169,4010174,4010006].includes(id))),'scenario',walkPlan.scenarioLabel);
+
+const noHeat=clone(joint);noHeat.climateOptions.heat=false;
+const noHeatPlan=optimizePlan(noHeat,DATA),noHeatDiag=diagnoseObjective(noHeatPlan,noHeat,DATA,'4010006',{maximize:true});
+if(noHeatDiag.ok)throw new Error('Potato Kvass unexpectedly remained reachable with Heat Furnace disabled');
+if(!/Scorching|Heat Furnace/i.test(noHeatDiag.detail))throw new Error('objective diagnostics failed to identify climate chain: '+noHeatDiag.detail);
+
 console.log('recipe-note MAX gating works');

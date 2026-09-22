@@ -3,7 +3,7 @@ import {DEFAULT_STATE} from './defaults.js';
 import {
   optimizePlan,requiredAbilities,pickCoverageCore,buildTeamModel,findBestTeams,optimizePersonalities,
   findEssentialCore,antiStallSummary,itemName,itemValue,livingFacilityGroups,planItemRates,externalInputs,
-  defaultRecipeEfficiencyPct
+  diagnoseObjective,defaultRecipeEfficiencyPct
 } from './optimizer.js';
 import {fillHomelandForRV,progressionSummary} from './progression.js';
 
@@ -97,7 +97,7 @@ function renderGeneral(){
     </div>
     <div class="capacity-note"><span>RV ${rv.rv} ceiling · ${rv.bulk.farmland} Farmland · ${rv.bulk.woodland} Woodland · ${rv.bulk.mine} Mine · ${rv.bulk.well} Well</span><button id="fill-rv" class="ghost compact">Fill for RV ${rv.rv}</button></div>
     <div class="grid2" style="margin-top:9px">
-      <label class="check-row"><input id="one-recipe" type="checkbox" ${state.oneRecipePerFacility?'checked':''}><span><b>One recipe per facility</b><small>Walk-away mode. Off lets the solver split facility time across recipes for the strongest mathematical mix.</small></span></label>
+      <label class="check-row"><input id="one-recipe" type="checkbox" ${state.oneRecipePerFacility?'checked':''}><span><b>One recipe per facility</b><small>Walk-away mode. Each physical copy stays on one recipe; multiple copies of the same facility may be dedicated to different recipes. Off may time-share a single copy.</small></span></label>
       <label class="check-row"><input id="generator" type="checkbox" ${state.generatorAvailable?'checked':''}><span><b>Crackle Generator available</b><small>This is permission, not forced placement. The solver tests whether spending one station slot on E-mode is actually worth it.</small></span></label>
       <label class="check-row"><input id="hungry" type="checkbox" ${state.hungry?'checked':''}><span><b>Aniimo are out of food</b><small>Manual worker speed is reduced to 20%. Electric recipes are unaffected.</small></span></label>
     </div>
@@ -225,15 +225,20 @@ function renderObjectives(){
 function guaranteeRow(g,i){const enabled=g.enabled!==false,maxed=!!g.maximize;return`<div class="objective-row ${enabled?'':'disabled'} ${maxed?'maxed':''}"><label class="guarantee-enabled-toggle" title="${enabled?'Disable this requirement without deleting it':'Enable this requirement'}"><input class="guarantee-enabled" data-i="${i}" type="checkbox" ${enabled?'checked':''} aria-label="${enabled?'Disable':'Enable'} requirement"></label>${itemPicker(g.item,false,'guarantee',i)}<label class="rate-field" title="${maxed?'Ignored while MAX is enabled; uncheck MAX to restore this minimum':'Minimum items per hour'}"><input class="guarantee-rate" data-i="${i}" type="number" min="0" step="any" value="${g.perHour||0}" aria-label="How many per hour" ${maxed?'disabled':''}><span>${maxed?'MAX':'/h'}</span></label><label class="maximize-toggle" title="Maximise this item together with the main objective; this replaces the /h minimum"><input class="guarantee-max" data-i="${i}" type="checkbox" ${maxed?'checked':''}><span>MAX</span></label><button class="ghost guarantee-remove" data-i="${i}" aria-label="Remove">×</button></div>`;}
 function renderObjectiveDiagnostics(){
   const host=$('#objective-diagnostics');if(!host||!currentPlan)return;
-  const warnings=[];
+  const requests=[];
+  if(state.target&&state.target!=='coin')requests.push({item:String(state.target),maximize:true,primary:true});
   for(const g of state.guarantees||[]){
-    if(g.enabled===false||!g.maximize||!g.item)continue;
-    const weight=(currentPlan.objectiveWeights||[]).find(w=>String(w.item)===String(g.item));
-    if(!weight||Number(weight.max||0)>1e-8)continue;
-    const name=itemName(DATA,g.item),producers=DATA.recipes.filter(r=>(r.outputs||[]).some(o=>String(o.item)===String(g.item))),noteIds=[...new Set(producers.filter(r=>r.note).map(r=>String(r.note.item)))],noteOn=!noteIds.length||noteIds.some(id=>state.recipeNotes?.[id]!==false);
-    let detail=noteOn?'The recipe is unlocked, but its production chain is blocked by the current facility levels, climate, modules, abilities, resident family, or an upstream ingredient.':'Its Recipe Note is disabled.';
-    if(String(g.item)==='4010006'&&noteOn)detail='Recipe Note is enabled. Potato Kvass still needs Rock Candy; Rock Candy needs Sugarcane, and normal Sugarcane production requires Scorching. At RV9 also make sure Bouncy Brew Keg is Lv.2 and Simmering Pot is Lv.3.';
-    warnings.push(`<div class="objective-warning"><img src="${itemIcon(g.item)}" alt=""><div><b>${esc(name)} MAX is currently unreachable</b><span>${esc(detail)}</span></div></div>`);
+    if(g.enabled===false||!g.item)continue;
+    if(g.maximize)requests.push({item:String(g.item),maximize:true,primary:false});
+    else if(Number(g.perHour||0)>0)requests.push({item:String(g.item),maximize:false,minimum:Number(g.perHour||0),primary:false});
+  }
+  const warnings=[];
+  for(const req of requests){
+    const d=diagnoseObjective(currentPlan,effectivePlanState(),DATA,req.item,{minimum:req.minimum||0,maximize:req.maximize});
+    if(d.ok)continue;
+    const name=itemName(DATA,req.item),kind=req.maximize?'MAX':`${fmt1(req.minimum)}/h minimum`;
+    const chain=d.chain?.length?` Relevant production line: ${d.chain.join(' ← ')}.`:'';
+    warnings.push(`<div class="objective-warning"><img src="${itemIcon(req.item)}" alt=""><div><b>${esc(name)} ${esc(kind)} is missing from the final plan</b><span>${esc(d.detail+chain)}</span></div></div>`);
   }
   host.innerHTML=warnings.join('');
 }
