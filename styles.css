@@ -288,3 +288,51 @@
   font-size:8px;
   font-variant-numeric:tabular-nums;
 }
+/* --- automatic / manual facility speed mode --- */
+.speed-mode-toggle{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin:0 0 8px;
+  padding:8px 9px;
+  border:1px solid #2b333c;
+  background:#0c1014;
+  cursor:pointer;
+}
+.speed-mode-toggle input{
+  margin-top:2px;
+  accent-color:#d83d58;
+}
+.speed-mode-toggle span{
+  display:grid;
+  gap:2px;
+}
+.speed-mode-toggle b{
+  color:#d9dfe5;
+  font-size:9px;
+}
+.speed-mode-toggle small{
+  color:#6f7984;
+  font-size:8px;
+  line-height:1.4;
+}
+.facility-row .auto-speed{
+  border-color:#35485a;
+  background:linear-gradient(180deg,rgba(63,101,137,.13),rgba(9,11,14,.96));
+  color:#9bc6ed;
+  cursor:default;
+}
+.auto-speed-row .facility-name small{color:#7f9fbd}
+.objective-row.maxed .rate-field{
+  border-color:#5d4c2e;
+  background:rgba(121,91,35,.08);
+}
+.objective-row.maxed .rate-field input:disabled{
+  color:#756f63;
+  -webkit-text-fill-color:#756f63;
+  opacity:1;
+}
+.objective-row.maxed .rate-field span{
+  color:#e1b85c;
+  font-weight:800;
+}
