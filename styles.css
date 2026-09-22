@@ -144,3 +144,27 @@
 .undo-action{height:26px;border:1px solid #5a6570;background:#171c22;color:#fff;font-size:8px;font-weight:800;letter-spacing:.08em;padding:0 9px;cursor:pointer}
 .undo-action.muted{color:#7d8791;border-color:#303741;background:#101419}
 @media(max-width:680px){.change-undo{bottom:10px;width:calc(100% - 20px);justify-content:space-between}}
+/* --- RV production autofill --- */
+.capacity-note{
+  margin-top:7px;
+  border:1px solid #252d35;
+  background:#0c1014;
+  padding:6px 7px 6px 9px;
+  color:#737e89;
+  font-size:8px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.capacity-note span{line-height:1.45}
+.capacity-note .compact{
+  padding:5px 8px;
+  font-size:8px;
+  white-space:nowrap;
+  flex:0 0 auto;
+}
+@media(max-width:680px){
+  .capacity-note{align-items:flex-start;flex-wrap:wrap}
+  .capacity-note .compact{width:100%}
+}
