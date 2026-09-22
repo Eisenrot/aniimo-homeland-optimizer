@@ -1,38 +1,134 @@
-# Aniimo Homeland Optimizer
+<p align="center">
+  <img src="./assets/readme-hero.svg" alt="Aniimo Homeland Optimizer" width="100%">
+</p>
 
-> Aniimo Homeland, minus the guesswork. Real staffing, personality-aware optimization, anti-stall planning, and production math that actually respects the workers doing the job.
+<p align="center">
+  <strong><a href="https://eisenrot.github.io/aniimo-homeland-optimizer/">Open the optimizer</a></strong>
+  &nbsp;·&nbsp;
+  <a href="#whats-inside">What's inside</a>
+  &nbsp;·&nbsp;
+  <a href="#how-it-works">How it works</a>
+  &nbsp;·&nbsp;
+  <a href="#running-locally">Run locally</a>
+</p>
 
-A standalone, client-side Homeland optimizer for **Aniimo**. It does the production planning itself, then goes further by asking whether the concrete Aniimo you actually own can sustain or improve that plan.
+<p align="center">
+  Aniimo Homeland, minus the guesswork.<br>
+  Production planning, real-team staffing, personality-aware optimization, objective chaining and anti-stall coverage in one client-side tool.
+</p>
 
-## What it does
+---
 
-- Solves the best production chain across your facilities, levels, modules, speed percentages and theoretical worker cap.
-- Optimizes either **Home Coin or a specific material**, including progression materials that do not sell.
-- Supports hard **“also make at least”** constraints, with per-hour values and optional **MAX** toggles that turn requirements into normalized co-objectives alongside the main target.
-- Treats **Cooling Unit, Heat Furnace, Sunlamp and Crackle Generator as optional possibilities**: enabling one means the solver may use it, not that it is forced into the winning setup.
-- Tests climate / temperature scenarios and only pays their station-slot cost when the winning solution actually uses them.
-- Supports **collection intervals** so finite facility output storage can cap unattended production.
-- Supports **One recipe per facility** for walk-away setups, while mixed mode remains the unconstrained mathematical maximum.
-- Infers **resident-family production automatically** from the Aniimo roster. There is no second ownership checklist for Dewy, Susuta, Celestis, Iris, Nimbi, Shelly, Flutternym, or future equivalents present in the data.
-- Keeps separate **Theoretical plan Aniimo** and **Real team Aniimo** counts.
-- Re-optimizes the full runnable recipe space around a **real team**, using actual enabled copies, ability levels, family restrictions and utility jobs instead of merely checking whether the roster can imitate the generic plan.
-- Finds legal personality recommendations using E/I · N/S · F/T · J/P. Primary-role traits are marked as required, useful secondary traits as optional, and irrelevant pairs as `o` rather than inventing a fake complete personality.
-- Adds a subordinate **anti-stall basic-material objective** after the economic target is sustained: Mine / Well coverage plus separate Farmland and Woodland restart jobs.
-- Shows **Abilities needed** against the enabled roster and copy counts.
-- Imports Hideout-style setup parameters for convenience, but **does not depend on Hideout to produce the plan**.
-- Runs completely in the browser. No account, API key, backend, or upload is required.
+## What's inside
 
-## Solver model
+<table>
+<tr>
+<td width="50%" valign="top">
 
-The production optimizer evaluates the current recipe dataset, facility capacity, material balance, worker-hours, resident jobs, modules, recipe-note gates, climate requirements, electric variants, collection storage limits, selected objective and minimum-output constraints.
+### Production solver
 
-The real-team pass is deliberately separate from the generic production pass. The first answers “what is theoretically best with N generic station slots?” The second answers “what can these exact Aniimo copies actually run?” and may rebalance the recipes around the concrete roster.
+Finds the strongest legal production plan across your actual Homeland setup.
 
-The anti-stall layer is an operational heuristic rather than a claim about Aniimo's hidden dispatcher. Its purpose is to prefer spare ability coverage for synchronized basic-material facilities once the economic target is already sustained.
+- facility counts and levels
+- modules and Recipe Notes
+- material balances and dependencies
+- climate / utility buildings
+- collection storage limits
+- one-recipe walk-away mode
+- Home Coin or material objectives
+
+</td>
+<td width="50%" valign="top">
+
+### Real-team optimizer
+
+Takes the theoretical plan and asks the more useful question: **can the Aniimo you actually own run it?**
+
+- enabled species and copy counts
+- real ability levels
+- resident-family restrictions
+- utility jobs
+- personality recommendations
+- measured efficiency overrides
+- anti-stall basic-material coverage
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Objective-aware planning
+
+The solver can do more than chase Coin.
+
+- maximise any producible item
+- require hard minimums in items/hour
+- turn requirements into **MAX** co-objectives
+- balance multiple reachable MAX targets
+- trace missing objectives back through their production chain
+- explain recipe, climate, module, level or roster blockers
+
+</td>
+<td width="50%" valign="top">
+
+### Roster intelligence
+
+The ownership panel is part of the planning model, not decorative bookkeeping.
+
+- search by Aniimo name
+- filter by ability, e.g. `Light`
+- filter by level, e.g. `4`
+- combine them, e.g. `Light, >=2`
+- keep separate **Theoretical plan Aniimo** and **Real team Aniimo** caps
+
+</td>
+</tr>
+</table>
+
+## How it works
+
+<table>
+<tr>
+<td align="center" width="25%"><strong>01</strong><br><sub>Describe your Homeland</sub></td>
+<td align="center" width="25%"><strong>02</strong><br><sub>Choose an objective</sub></td>
+<td align="center" width="25%"><strong>03</strong><br><sub>Inspect the production plan</sub></td>
+<td align="center" width="25%"><strong>04</strong><br><sub>Run the real-team pass</sub></td>
+</tr>
+<tr>
+<td valign="top">Set RV level, structures, upgrades, Recipe Notes and optional utility buildings.</td>
+<td valign="top">Maximise Home Coin or a material, then add minimums or co-MAX requirements.</td>
+<td valign="top">The solver builds complete material chains, groups structure assignments, and shows utility / labour costs.</td>
+<td valign="top">Your actual roster is tested against the plan and can rebalance it around abilities and personalities.</td>
+</tr>
+</table>
+
+## The solver understands
+
+The production pass models the current recipe dataset, facility capacity, level requirements, material balance, worker-hours, resident jobs, modules, Recipe Notes, climate requirements, electric variants, collection limits, optional utility buildings, the selected objective, and minimum-output constraints.
+
+**Utility buildings are permissions, not commitments.** Enabling Cooling Unit, Heat Furnace, Sunlamp or Crackle Generator means the solver may place it if the winning plan benefits from it. The station cost is only paid when that utility is actually selected.
+
+**One recipe per facility** is a real walk-away constraint: each physical structure copy stays on one recipe, while multiple copies of the same structure can be assigned to different recipes.
+
+The real-team pass is deliberately separate. The first pass answers *“what is theoretically best with N generic station slots?”* The second asks *“what can these exact Aniimo copies actually sustain?”* and may rebalance production around the concrete roster.
+
+## A little less babysitting
+
+The tool is designed around the annoying parts that ordinary calculators tend to hand back to you:
+
+- chained inputs that must stay balanced
+- objectives that quietly disappear from a mathematically “better” plan
+- climate-gated recipes
+- resident-only production
+- the difference between generic worker capacity and your real roster
+- personality bonuses that matter only on the jobs actually being assigned
+- spare coverage for restarting basic-material production after a stall
+
+The anti-stall layer is an operational heuristic rather than a claim about Aniimo's hidden dispatcher. Its purpose is to prefer useful spare coverage after the main economic target is already sustained.
 
 ## Running locally
 
-The project is static. Open `index.html` directly in a modern browser, or serve the folder if your browser is strict about ES modules:
+This is a static site. Open `index.html` directly in a modern browser, or serve the folder if your browser is strict about ES modules:
 
 ```bash
 python -m http.server 8765
@@ -40,16 +136,40 @@ python -m http.server 8765
 
 Then open `http://localhost:8765`.
 
+<details>
+<summary><strong>Project layout</strong></summary>
+
+```text
+index.html              page shell
+styles.css              main interface styling
+super.css               small visual overrides
+src/app.js              UI, state, rendering and interaction
+src/optimizer.js        production + staffing solver
+src/progression.js      RV / progression helpers
+src/data.js             game-data assembly
+src/data/                recipes, facilities, items and related data
+test*.mjs               optimizer regression tests
+.github/workflows/      verification + GitHub Pages deployment
+```
+
+</details>
+
 ## GitHub Pages
 
-Everything needed for Pages lives visibly in the repository root. The included workflow verifies the JavaScript and optimizer tests, stages the static site, and deploys it from `main`.
+The live version is deployed from `main`:
+
+**https://eisenrot.github.io/aniimo-homeland-optimizer/**
+
+The Pages workflow verifies the JavaScript and optimizer regression tests before staging the static site.
 
 ## Current boundaries
 
-“One recipe per facility” is currently a facility-type restriction rather than a full integer assignment solver for individual copies of the same building. Climate optimization models the economic cost and recipe access of utility buildings, but does not yet solve physical Homeland-map coverage geometry for their influence radius.
+The optimizer models production and staffing, but it does **not** solve physical Homeland-map geometry such as the exact influence radius / placement coverage of utility structures.
 
-Those are explicit boundaries rather than guessed mechanics.
+Real-team recommendations are constrained by the roster and game data available to the project; they are not a reconstruction of any hidden in-game scheduling algorithm.
 
-## Data / attribution
+## Data & attribution
 
-This is an unofficial community tool. Aniimo names, game data and game imagery belong to their respective owners. The implementation and additional optimization layers in this repository are independent community work. Facility and character images are currently referenced from public web asset paths and gracefully degrade if unavailable.
+This is an unofficial community tool for **Aniimo**. Aniimo names, game data and game imagery belong to their respective owners.
+
+The optimizer, staffing model, UI and additional planning logic in this repository are independent community work. Public web asset paths are used for some game imagery and gracefully degrade if unavailable.

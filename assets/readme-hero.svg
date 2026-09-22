@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="460" viewBox="0 0 1280 460" role="img" aria-labelledby="title desc">
+  <title id="title">Aniimo Homeland Optimizer</title>
+  <desc id="desc">Dark dashboard-style banner matching the Aniimo Homeland Optimizer website.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#090b0e"/>
+      <stop offset=".62" stop-color="#101318"/>
+      <stop offset="1" stop-color="#0a0d11"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="78%" cy="0%" r="78%">
+      <stop offset="0" stop-color="#d42d46" stop-opacity=".18"/>
+      <stop offset=".48" stop-color="#d42d46" stop-opacity=".045"/>
+      <stop offset="1" stop-color="#d42d46" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M 34 0 L 0 0 0 34" fill="none" stroke="#ffffff" stroke-opacity=".025" stroke-width="1"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#000000" flood-opacity=".38"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="460" fill="url(#bg)"/>
+  <rect width="1280" height="460" fill="url(#glow)"/>
+  <rect width="1280" height="460" fill="url(#grid)"/>
+
+  <rect x="0" y="0" width="7" height="460" fill="#d42d46"/>
+  <rect x="54" y="48" width="4" height="26" fill="#d42d46"/>
+  <text x="76" y="69" fill="#9aa4af" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="4">HOMELAND / PRODUCTION / STAFFING</text>
+
+  <text x="54" y="139" fill="#f2f5f7" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="48" font-weight="850" letter-spacing="-1.5">Aniimo Homeland Optimizer</text>
+  <text x="56" y="179" fill="#a0aab4" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="20">Production math that respects the workers doing the job.</text>
+
+  <g transform="translate(54 218)" filter="url(#shadow)">
+    <rect width="270" height="126" fill="#0c0f13" stroke="#2b323a"/>
+    <rect width="4" height="126" fill="#67d98b"/>
+    <text x="22" y="29" fill="#eef2f5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="800">PRODUCTION</text>
+    <text x="22" y="56" fill="#78838e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12">Full recipe-chain solver</text>
+    <text x="22" y="78" fill="#78838e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12">Climate · modules · notes</text>
+    <text x="22" y="101" fill="#67d98b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700">best legal plan →</text>
+  </g>
+
+  <g transform="translate(340 218)" filter="url(#shadow)">
+    <rect width="270" height="126" fill="#0c0f13" stroke="#2b323a"/>
+    <rect width="4" height="126" fill="#74aef2"/>
+    <text x="22" y="29" fill="#eef2f5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="800">REAL TEAM</text>
+    <text x="22" y="56" fill="#78838e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12">Owned copies · abilities</text>
+    <text x="22" y="78" fill="#78838e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12">personalities · utilities</text>
+    <text x="22" y="101" fill="#74aef2" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700">roster-aware →</text>
+  </g>
+
+  <g transform="translate(626 218)" filter="url(#shadow)">
+    <rect width="270" height="126" fill="#0c0f13" stroke="#2b323a"/>
+    <rect width="4" height="126" fill="#e6b85c"/>
+    <text x="22" y="29" fill="#eef2f5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="800">OBJECTIVES</text>
+    <text x="22" y="56" fill="#78838e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12">Home Coin · materials</text>
+    <text x="22" y="78" fill="#78838e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12">minimums · co-MAX goals</text>
+    <text x="22" y="101" fill="#e6b85c" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700">chain-aware →</text>
+  </g>
+
+  <g transform="translate(912 218)" filter="url(#shadow)">
+    <rect width="314" height="126" fill="#0c0f13" stroke="#4b2a34"/>
+    <rect width="4" height="126" fill="#d42d46"/>
+    <text x="22" y="29" fill="#eef2f5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="800">NO BACKEND</text>
+    <text x="22" y="56" fill="#78838e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12">Runs entirely in your browser</text>
+    <text x="22" y="78" fill="#78838e" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12">shareable state · local storage</text>
+    <text x="22" y="101" fill="#ff8da0" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700">open and optimize →</text>
+  </g>
+
+  <line x1="54" y1="386" x2="1226" y2="386" stroke="#252b33"/>
+  <circle cx="61" cy="414" r="4" fill="#67d98b"/>
+  <text x="75" y="419" fill="#7d8791" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" letter-spacing="1.5">LIVE TOOL · STATIC SITE · UNOFFICIAL COMMUNITY PROJECT</text>
+</svg>
