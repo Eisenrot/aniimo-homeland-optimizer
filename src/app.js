@@ -72,7 +72,7 @@ function startPlanSolve(planState,{onProgress=null}={}){
     const promise=new Promise((resolve,reject)=>setTimeout(()=>{if(cancelled)return reject(Object.assign(new Error('Cancelled'),{name:'AbortError'}));try{const started=performance.now(),plan=optimizePlan(planState,DATA,{...options,onProgress});plan.optimizerStats={...(plan.optimizerStats||{}),engine:'main',elapsedMs:Number(plan.optimizerStats?.elapsedMs??performance.now()-started)};resolve({plan,stats:plan.optimizerStats});}catch(e){reject(e);}},0));
     return{promise,cancel:()=>{cancelled=true;}};
   }
-  const worker=new Worker(new URL('./optimizer-worker.js',import.meta.url),{type:'module'});let settled=false;
+  const worker=new Worker('./src/optimizer-worker.js',{type:'module'});let settled=false;
   const promise=new Promise((resolve,reject)=>{
     worker.onmessage=e=>{const msg=e.data||{};if(msg.type==='progress'){onProgress?.(msg.progress||{});return;}if(msg.type==='result'){settled=true;worker.terminate();resolve({plan:msg.plan,stats:msg.stats||msg.plan?.optimizerStats||{}});}else if(msg.type==='error'){settled=true;worker.terminate();reject(new Error(msg.message||'Optimizer worker failed.'));}};
     worker.onerror=e=>{if(settled)return;settled=true;worker.terminate();reject(new Error(e.message||'Optimizer worker crashed.'));};
