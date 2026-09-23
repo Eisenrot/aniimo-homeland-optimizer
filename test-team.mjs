@@ -1,6 +1,6 @@
 import {GAME_DATA as DATA} from './src/data.js';
 import {DEFAULT_STATE} from './src/defaults.js';
-import {optimizePlan,buildTeamModel,findBestTeams,optimizePersonalities,antiStallSummary,staffingCoverageMatch} from './src/optimizer.js';
+import {optimizePlan,buildTeamModel,findBestTeams,optimizePersonalities,antiStallSummary,staffingCoverageMatch,utilityTasksForScenario,assignUtilityWorkers} from './src/optimizer.js';
 const state=structuredClone(DEFAULT_STATE);state.owned={};for(const p of DATA.pals)state.owned[String(p.id)]={enabled:true,count:1};state.teamSlots=9;
 const plan=optimizePlan(state,DATA),model=buildTeamModel(plan,state,DATA);
 const teams=await findBestTeams(model,state,DATA,{limit:1,onProgress:()=>{}});
@@ -57,3 +57,30 @@ if(Math.abs(farmLoad.capacityRatio-1)>1e-6)throw new Error(`Farmland capacity ra
 if(Math.abs(woodLoad.capacityRatio-10)>1e-6)throw new Error(`Woodland capacity ratio should be 10.0x with one free generalist, got ${woodLoad.capacityRatio}`);
 if(!(woodLoad.capacityRatio>farmLoad.capacityRatio))throw new Error('lighter Woodland workload should show more burst headroom than Farmland');
 console.log('burst load metrics',{farmland:farmLoad,woodland:woodLoad});
+
+
+const utilityTasks=utilityTasksForScenario({cooling:'Cool',heat:'Scorching',sunlamp:true,generator:false});
+const utilityModel={
+  tasks:[
+    ...utilityTasks,
+    {key:'Earth|1||mine',ability:'Earth',level:1,fixed:false,facility:'mine'}
+  ],
+  baselineDemandSeconds:new Map([['Earth|1||mine',3600],...utilityTasks.map(t=>[t.key,3600])]),
+  state:{manualSpeeds:false},
+  rows:[]
+};
+const utilityTeam=[
+  {pal:{id:9910001,name:'Ice specialist',abilities:{Ice:1,Earth:4}}},
+  {pal:{id:9910002,name:'Fire specialist',abilities:{Fire:1}}},
+  {pal:{id:9910003,name:'Light specialist',abilities:{Light:1}}},
+  {pal:{id:9910004,name:'Flexible climate',abilities:{Ice:1,Fire:1,Light:1,Earth:1}}}
+];
+const utilityMatch=assignUtilityWorkers(utilityModel,utilityTeam);
+if(!utilityMatch.feasible||utilityMatch.assignments.length!==3)throw new Error('three climate utilities require three dedicated Aniimo');
+if(new Set(utilityMatch.assignments.map(x=>x.worker)).size!==3)throw new Error('one Aniimo must not be split across multiple 24/7 utility stations');
+for(const a of utilityMatch.assignments)if(Number(utilityTeam[a.worker].pal.abilities[a.task.ability]||0)<a.task.level)throw new Error('utility assignment ignored required climate ability');
+const coverageModel={...utilityModel,plan:{rows:[]},scenario:{cooling:'Cool',heat:'Scorching',sunlamp:true,generator:false}};
+const utilityCoverage=staffingCoverageMatch(coverageModel,utilityTeam,[]);
+if(utilityCoverage.slots.filter(x=>x.mode==='utility').length!==3)throw new Error('utility coverage slots missing from team staffing');
+if(utilityCoverage.assignments.filter(x=>x.slot.mode==='utility').length!==3)throw new Error('utility staffing coverage did not assign all climate stations');
+console.log('dedicated utility workers OK',utilityMatch.assignments.map(a=>({facility:a.task.facility,ability:a.task.ability,worker:utilityTeam[a.worker].pal.name})));

@@ -470,7 +470,7 @@ function splitRecipeWork(recipe,state,scenario){
   if(recipe.pet){const s=steps[0]||{ability:'Leisure',level:1};return new Map([[taskKey(s.ability,s.level,fam,recipe.facility),parts.cycle]]);}
   const rawTotal=manualWorkload(recipe);if(parts.manual<=1e-9||rawTotal<=0||!steps.length)return new Map();const raw=new Map();if(Number(recipe.workload||0)>0){const s=steps[0],k=taskKey(s.ability,s.level,fam,recipe.facility);raw.set(k,(raw.get(k)||0)+Number(recipe.workload||0));}for(const s of steps){const w=Number(s.workload||0);if(w<=0)continue;const k=taskKey(s.ability,s.level,fam,recipe.facility);raw.set(k,(raw.get(k)||0)+w);}const out=new Map();for(const[k,v]of raw)out.set(k,parts.manual*v/rawTotal);return out;
 }
-function utilityTasksForScenario(scenario){const out=[];for(const key of ['cooling','heat','sunlamp','generator'])if(scenario?.[key]){const x=UTILITY_ABILITY[key];out.push({key:taskKey(x.ability,x.level,'',x.facility),ability:x.ability,level:x.level,family:null,facility:x.facility,name:x.facility.replaceAll('-',' '),seconds:3600,fixed:true});}return out;}
+export function utilityTasksForScenario(scenario){const out=[];for(const key of ['cooling','heat','sunlamp','generator'])if(scenario?.[key]){const x=UTILITY_ABILITY[key];out.push({key:taskKey(x.ability,x.level,'',x.facility),ability:x.ability,level:x.level,family:null,facility:x.facility,name:x.facility.replaceAll('-',' '),seconds:3600,fixed:true});}return out;}
 function makeCandidateRows(plan,state,data){const source=state.oneRecipePerFacility?plan.rows.map(r=>r.recipe):(plan.runnableRecipes||[]);const uniq=[...new Map(source.map(r=>[r.id,r])).values()];return uniq.map(recipe=>{const parts=cycleParts(recipe,state,plan.scenario);return{facility:recipe.facility,recipe,cycleSeconds:parts.cycle,manualSeconds:parts.manual,work:splitRecipeWork(recipe,state,plan.scenario),netValue:recipeNetValue(recipe,data),objective:combinedObjectiveCoef(recipe,state,data,plan.objectiveWeights)};});}
 
 export function buildTeamModel(plan,state,data){
@@ -490,24 +490,66 @@ function workerTaskRelativeSpeed(model,pal,task){
   return actual>0?actual/baseline:0;
 }
 
+function utilityOpportunityCost(model,pal){
+  let score=0;
+  for(const task of model.tasks||[]){
+    if(task.fixed||!palCanDo(pal,task))continue;
+    const demand=Math.max(0,Number(model.baselineDemandSeconds?.get?.(task.key)||0))/3600,over=Math.max(0,Number(pal?.abilities?.[task.ability]||0)-Number(task.level||0));
+    score+=demand*(1+over*.04);
+  }
+  return score;
+}
+function hungarianUtilityAssignment(cost){
+  const n=cost.length,m=cost[0]?.length||0;if(!n)return[];if(m<n)return null;
+  const u=Array(n+1).fill(0),v=Array(m+1).fill(0),p=Array(m+1).fill(0),way=Array(m+1).fill(0);
+  for(let i=1;i<=n;i++){
+    p[0]=i;let j0=0;const minv=Array(m+1).fill(Infinity),used=Array(m+1).fill(false);
+    do{
+      used[j0]=true;const i0=p[j0];let delta=Infinity,j1=0;
+      for(let j=1;j<=m;j++)if(!used[j]){const cur=cost[i0-1][j-1]-u[i0]-v[j];if(cur<minv[j]){minv[j]=cur;way[j]=j0;}if(minv[j]<delta){delta=minv[j];j1=j;}}
+      if(!Number.isFinite(delta))return null;
+      for(let j=0;j<=m;j++)if(used[j]){u[p[j]]+=delta;v[j]-=delta;}else minv[j]-=delta;
+      j0=j1;
+    }while(p[j0]!==0);
+    do{const j1=way[j0];p[j0]=p[j1];j0=j1;}while(j0!==0);
+  }
+  const assignment=Array(n).fill(-1);for(let j=1;j<=m;j++)if(p[j]>0&&p[j]<=n)assignment[p[j]-1]=j-1;return assignment;
+}
+export function assignUtilityWorkers(model,team){
+  const tasks=(model.tasks||[]).filter(t=>t.fixed);
+  if(!tasks.length)return{feasible:true,assignments:[],workers:[]};
+  if(team.length<tasks.length)return{feasible:false,assignments:[],workers:[],uncovered:tasks};
+  const BIG=1e9,cost=tasks.map((task,ti)=>team.map((member,w)=>{
+    if(!palCanDo(member.pal||member,task))return BIG;
+    const pal=member.pal||member,opportunity=utilityOpportunityCost(model,pal),over=Math.max(0,Number(pal.abilities?.[task.ability]||0)-Number(task.level||0));
+    return opportunity*1000+over*.05+w*.000001+ti*.000000001;
+  })),match=hungarianUtilityAssignment(cost);
+  if(!match)return{feasible:false,assignments:[],workers:[],uncovered:tasks};
+  const assignments=[];for(let ti=0;ti<tasks.length;ti++){const w=match[ti];if(w<0||cost[ti][w]>=BIG/2)return{feasible:false,assignments:[],workers:[],uncovered:[tasks[ti]]};assignments.push({worker:w,task:tasks[ti],seconds:3600});}
+  return{feasible:true,assignments,workers:[...new Set(assignments.map(a=>a.worker))],uncovered:[]};
+}
+
 function addTeamFacilityConstraints(A,b,N,rows,model){
   const state=model.state,data=model.data,scenario=model.scenario,slugs=[...new Set(rows.map(r=>r.facility))];
   for(const slug of slugs){const stacks=facilityStacks(state,slug);if(!stacks.length)continue;const thresholds=[...new Set(rows.filter(r=>r.facility===slug).map(r=>Number(r.recipe.level||1)))].sort((a,b)=>a-b);for(const lvl of thresholds){const cap=stacks.filter(x=>x.level>=lvl).reduce((s,x)=>s+x.count,0),row=Array(N).fill(0);let used=false;rows.forEach((r,i)=>{if(r.facility===slug&&Number(r.recipe.level||1)>=lvl){row[i]=r.cycleSeconds/3600;used=true;}});if(used){A.push(row);b.push(cap);}const collect=Number(state.collectHours||0);if(collect>0){const batchCap=stacks.filter(x=>x.level>=lvl).reduce((s,x)=>s+x.count*facilityOutputLimit(data,slug,x.level),0);if(batchCap>0){const cr=Array(N).fill(0);let cu=false;rows.forEach((r,i)=>{if(r.facility===slug&&Number(r.recipe.level||1)>=lvl){cr[i]=collect;cu=true;}});if(cu){A.push(cr);b.push(batchCap);}}}}}
 }
 
 export function evaluateConcreteTeam(model,team){
-  const R=model.rows.length,Q=model.tasks.length,edges=[];for(let w=0;w<team.length;w++)for(let q=0;q<Q;q++)if(palCanDo(team[w].pal,model.tasks[q]))edges.push({w,q,ratio:workerTaskRelativeSpeed(model,team[w].pal,model.tasks[q]),idx:R+edges.length});const N=R+edges.length;if(!N)return{rate:0,targetRate:0,objectiveRate:0,rows:[],workerTaskSeconds:[]};
+  const utility=assignUtilityWorkers(model,team);if(!utility.feasible)return{rate:0,targetRate:0,objectiveRate:-Infinity,rows:[],workerTaskSeconds:Array.from({length:team.length},()=>new Map()),utilityAssignments:[],utilityWorkers:0,infeasible:true,utilityInfeasible:true};
+  const reserved=new Set(utility.workers),activeTasks=model.tasks.filter(t=>!t.fixed),R=model.rows.length,Q=activeTasks.length,edges=[];
+  for(let w=0;w<team.length;w++){if(reserved.has(w))continue;for(let q=0;q<Q;q++)if(palCanDo(team[w].pal,activeTasks[q]))edges.push({w,q,ratio:workerTaskRelativeSpeed(model,team[w].pal,activeTasks[q]),idx:R+edges.length});}
+  const N=R+edges.length;
+  if(!N){const workerTaskSeconds=Array.from({length:team.length},()=>new Map());for(const a of utility.assignments)workerTaskSeconds[a.worker].set(a.task.key,3600);return{rate:0,targetRate:0,objectiveRate:0,rows:[],workerTaskSeconds,utilityAssignments:utility.assignments,utilityWorkers:utility.assignments.length,infeasible:false};}
   const objective=Array(N).fill(0);for(let r=0;r<R;r++)objective[r]=model.rows[r].objective;const A=[],b=[];addTeamFacilityConstraints(A,b,N,model.rows,model);
   for(const item of model.internalItems){const row=Array(N).fill(0);for(let r=0;r<R;r++)row[r]=-recipeNetItem(model.rows[r].recipe,item);A.push(row);b.push(0);}
   for(const g of model.state.guarantees||[]){if(g.enabled===false||g.maximize)continue;const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;const row=Array(N).fill(0);for(let r=0;r<R;r++)row[r]=-recipeNetItem(model.rows[r].recipe,item);A.push(row);b.push(-minimum);}
-  for(let w=0;w<team.length;w++){const row=Array(N).fill(0);for(const e of edges)if(e.w===w)row[e.idx]=1;A.push(row);b.push(3600);}
-  for(let q=0;q<Q;q++){const row=Array(N).fill(0),key=model.tasks[q].key;for(let r=0;r<R;r++)row[r]=Number(model.rows[r].work.get(key)||0);for(const e of edges)if(e.q===q)row[e.idx]=-Math.max(.0001,e.ratio||1);A.push(row);b.push(-Number(model.fixedTaskSeconds.get(key)||0));}
-  const solved=solveLp(objective,A,b);if(!solved)return{rate:0,targetRate:0,objectiveRate:-Infinity,rows:[],workerTaskSeconds:[],infeasible:true};
+  for(let w=0;w<team.length;w++){const row=Array(N).fill(0);for(const e of edges)if(e.w===w)row[e.idx]=1;A.push(row);b.push(reserved.has(w)?0:3600);}
+  for(let q=0;q<Q;q++){const row=Array(N).fill(0),key=activeTasks[q].key;for(let r=0;r<R;r++)row[r]=Number(model.rows[r].work.get(key)||0);for(const e of edges)if(e.q===q)row[e.idx]=-Math.max(.0001,e.ratio||1);A.push(row);b.push(0);}
+  const solved=solveLp(objective,A,b);if(!solved)return{rate:0,targetRate:0,objectiveRate:-Infinity,rows:[],workerTaskSeconds:[],utilityAssignments:utility.assignments,utilityWorkers:utility.assignments.length,infeasible:true};
   const recipeBatches=solved.x.slice(0,R),rows=[];let rate=0,target=0,obj=0;for(let r=0;r<R;r++){const batches=Number(recipeBatches[r]||0);if(batches<=1e-8)continue;const base=model.rows[r],coin=base.netValue*batches,targ=model.state.target&&model.state.target!=='coin'?recipeNetItem(base.recipe,model.state.target)*batches:coin;rate+=coin;target+=targ;obj+=base.objective*batches;rows.push({...base,batchesPerHour:batches,units:batches*base.cycleSeconds/3600,perHour:coin,targetPerHour:targ});}
-  const workerTaskSeconds=Array.from({length:team.length},()=>new Map());for(const e of edges){const sec=Number(solved.x[e.idx]||0);if(sec>1e-7)workerTaskSeconds[e.w].set(model.tasks[e.q].key,sec);}
-  return{rate,targetRate:target,objectiveRate:obj,rows,recipeBatches,workerTaskSeconds,x:solved.x,infeasible:false};
+  const workerTaskSeconds=Array.from({length:team.length},()=>new Map());for(const a of utility.assignments)workerTaskSeconds[a.worker].set(a.task.key,3600);for(const e of edges){const sec=Number(solved.x[e.idx]||0);if(sec>1e-7)workerTaskSeconds[e.w].set(activeTasks[e.q].key,sec);}
+  return{rate,targetRate:target,objectiveRate:obj,rows,recipeBatches,workerTaskSeconds,utilityAssignments:utility.assignments,utilityWorkers:utility.assignments.length,x:solved.x,infeasible:false};
 }
-
 function relevance(model,pal){let s=0;for(const t of model.tasks)if(palCanDo(pal,t)){const d=Number(model.baselineDemandSeconds.get(t.key)||0)/3600,over=Math.max(0,Number(pal.abilities?.[t.ability]||0)-t.level);s+=d*(1+over*.03);}return s;}
 function normalizeTeam(team){const seen=new Map();return team.map(x=>{const id=Number(x.pal.id),n=(seen.get(id)||0)+1;seen.set(id,n);return{...x,key:`${id}#${n}`,copy:n,label:x.pal.name};});}
 function teamKey(team){return team.map(x=>x.key).sort().join('|');}
@@ -517,6 +559,7 @@ function nextCopy(spec,team){const used=team.filter(x=>Number(x.pal.id)===Number
 function taskObjects(row){const out=[];for(const[key,seconds]of row.work){const[ability,lvl,fam,tag]=key.split('|');out.push({key,ability,level:Number(lvl),family:fam?Number(fam):null,tag,facility:tag||row.facility,seconds:Number(seconds||0)});}return out;}
 export function staffingCoverageSlots(model,rows=model.plan.rows){
   const slots=[],seq={n:0},active=rows||[];
+  for(const task of utilityTasksForScenario(model.scenario))slots.push({id:`u${seq.n++}`,mode:'utility',facility:task.facility,task,label:`${task.facility.replaceAll('-',' ')} · ${task.ability} Lv.${task.level}`,weight:140});
   const permanentGroups=new Map(),burstGroups=new Map();
   for(const base of active){
     const row=model.rows.find(x=>x.recipe.id===base.recipe.id)||{...base,work:splitRecipeWork(base.recipe,model.state,model.scenario)},tasks=taskObjects(row);
@@ -551,34 +594,26 @@ export function staffingCoverageSlots(model,rows=model.plan.rows){
 }
 export function staffingCoverageMatch(model,team,rows=model.plan.rows){
   const slots=staffingCoverageSlots(model,rows),W=team.length;
-  if(!slots.length||!W)return{coverageWeight:0,totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments:[],slots};
-  const permanentUsed=new Set(),assignments=[],permanent=slots.filter(x=>x.mode==='permanent').sort((a,b)=>b.weight-a.weight||a.label.localeCompare(b.label)),burst=slots.filter(x=>x.mode==='burst').sort((a,b)=>b.weight-a.weight||a.label.localeCompare(b.label));
+  if(!slots.length||!W)return{coverageWeight:0,totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments:[],slots,utilityWorkers:[],permanentWorkers:[],reservedWorkers:[]};
+  const assignments=[],reservedUsed=new Set(),utilitySlots=slots.filter(x=>x.mode==='utility'),permanent=slots.filter(x=>x.mode==='permanent').sort((a,b)=>b.weight-a.weight||a.label.localeCompare(b.label)),burst=slots.filter(x=>x.mode==='burst').sort((a,b)=>b.weight-a.weight||a.label.localeCompare(b.label)),utility=assignUtilityWorkers(model,team);
+  if(utility.feasible)for(const a of utility.assignments){const slot=utilitySlots.find(s=>s.task.key===a.task.key);if(slot){reservedUsed.add(a.worker);assignments.push({worker:a.worker,slot});}}
   const scoreWorker=(w,slot)=>{const over=Math.max(0,Number(team[w].pal.abilities?.[slot.task.ability]||0)-slot.task.level);return over*10+relevance(model,team[w].pal);};
   for(const slot of permanent){
     let pick=-1,best=-Infinity;
-    for(let w=0;w<W;w++){
-      if(permanentUsed.has(w)||!palCanDo(team[w].pal,slot.task))continue;
-      const score=scoreWorker(w,slot);if(score>best){best=score;pick=w;}
-    }
-    if(pick>=0){permanentUsed.add(pick);assignments.push({worker:pick,slot});}
+    for(let w=0;w<W;w++){if(reservedUsed.has(w)||!palCanDo(team[w].pal,slot.task))continue;const score=scoreWorker(w,slot);if(score>best){best=score;pick=w;}}
+    if(pick>=0){reservedUsed.add(pick);assignments.push({worker:pick,slot});}
   }
-  // Burst jobs are sequential/restart capability, not simultaneous 24/7 reservations.
-  // A free worker may therefore cover several Farmland/Woodland ability stages, and may
-  // count for both facility families. Workers already reserved by permanent jobs stay unavailable.
   for(const slot of burst){
     let pick=-1,best=-Infinity;
-    for(let w=0;w<W;w++){
-      if(permanentUsed.has(w)||!palCanDo(team[w].pal,slot.task))continue;
-      const score=scoreWorker(w,slot);if(score>best){best=score;pick=w;}
-    }
+    for(let w=0;w<W;w++){if(reservedUsed.has(w)||!palCanDo(team[w].pal,slot.task))continue;const score=scoreWorker(w,slot);if(score>best){best=score;pick=w;}}
     if(pick>=0)assignments.push({worker:pick,slot});
   }
-  const base={coverageWeight:assignments.reduce((s,x)=>s+x.slot.weight,0),totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments,slots,permanentWorkers:[...permanentUsed]};
+  const utilityWorkers=assignments.filter(x=>x.slot.mode==='utility').map(x=>x.worker),permanentWorkers=assignments.filter(x=>x.slot.mode==='permanent').map(x=>x.worker),base={coverageWeight:assignments.reduce((s,x)=>s+x.slot.weight,0),totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments,slots,utilityWorkers,permanentWorkers,reservedWorkers:[...reservedUsed]};
   const burstLoadByFacility=burstLoadSummary(model,team,rows,base),ratios=[...burstLoadByFacility.values()].map(x=>Number(x.capacityRatio||0));
   return{...base,burstLoadByFacility,burstResilienceScore:ratios.length?Math.min(...ratios):0};
 }
 export function burstLoadSummary(model,team,rows=model.plan.rows,match=null){
-  const active=rows||[],reserved=new Set(match?.permanentWorkers||staffingCoverageMatch(model,team,active).permanentWorkers||[]),free=team.map((_,i)=>i).filter(i=>!reserved.has(i)),byFacility=new Map();
+  const active=rows||[],resolvedMatch=match||staffingCoverageMatch(model,team,active),reserved=new Set(resolvedMatch.reservedWorkers||resolvedMatch.permanentWorkers||[]),free=team.map((_,i)=>i).filter(i=>!reserved.has(i)),byFacility=new Map();
   for(const base of active){
     if(!BURST_STAFFING.has(base.facility))continue;
     const row=model.rows.find(x=>x.recipe.id===base.recipe.id)||{...base,work:splitRecipeWork(base.recipe,model.state,model.scenario)},batches=Math.max(0,Number(base.batchesPerHour||0));
@@ -626,19 +661,13 @@ export function findEssentialCore(model,team,target){let core=normalizeTeam(team
 export function antiStallSummary(model,full,core,rows=null){
   const need=new Map();for(const x of core)need.set(Number(x.pal.id),(need.get(Number(x.pal.id))||0)+1);
   const reserves=[];for(const x of full){const id=Number(x.pal.id),n=need.get(id)||0;if(n>0)need.set(id,n-1);else reserves.push(x);}
-  const match=staffingCoverageMatch(model,full,rows||model.plan.rows),byFacility=new Map(),permanentByFacility=new Map(),burstByFacility=new Map();
-  for(const slot of match.slots){
-    const maps=[byFacility,slot.mode==='permanent'?permanentByFacility:burstByFacility];
-    for(const map of maps){const rec=map.get(slot.facility)||{total:0,hit:0};rec.total++;map.set(slot.facility,rec);}
-  }
-  for(const a of match.assignments){
-    byFacility.get(a.slot.facility).hit++;
-    (a.slot.mode==='permanent'?permanentByFacility:burstByFacility).get(a.slot.facility).hit++;
-  }
+  const match=staffingCoverageMatch(model,full,rows||model.plan.rows),byFacility=new Map(),utilityByFacility=new Map(),permanentByFacility=new Map(),burstByFacility=new Map();
+  const modeMap=mode=>mode==='utility'?utilityByFacility:mode==='permanent'?permanentByFacility:burstByFacility;
+  for(const slot of match.slots){for(const map of[byFacility,modeMap(slot.mode)]){const rec=map.get(slot.facility)||{total:0,hit:0};rec.total++;map.set(slot.facility,rec);}}
+  for(const a of match.assignments){byFacility.get(a.slot.facility).hit++;modeMap(a.slot.mode).get(a.slot.facility).hit++;}
   for(const[facility,metrics]of match.burstLoadByFacility||[])Object.assign(burstByFacility.get(facility)||{},metrics);
-  return{reserves,match,byFacility,permanentByFacility,burstByFacility,burstResilienceScore:match.burstResilienceScore||0};
+  return{reserves,match,byFacility,utilityByFacility,permanentByFacility,burstByFacility,burstResilienceScore:match.burstResilienceScore||0};
 }
-
 function profileHas(p,l){return!!p&&!!l&&String(p).includes(l);}
 function activePersonalityRows(model,concreteEval){return(concreteEval?.rows?.length?concreteEval.rows:model.plan.rows).map(r=>{const base=model.rows.find(x=>x.recipe.id===r.recipe.id);return base?{...base,batchesPerHour:r.batchesPerHour,units:r.units,perHour:r.perHour}:{...r,work:splitRecipeWork(r.recipe,model.state,model.scenario),objective:combinedObjectiveCoef(r.recipe,model.state,model.data,model.plan.objectiveWeights)};});}
 function workerFacilityWeights(model,team,concreteEval,burst){
@@ -666,29 +695,29 @@ function chooseProfileHints(model,team,concreteEval,burst){
 }
 
 function personalityEval(model,team,profiles,rows){
-  // Re-optimise only the concrete team's active recipe set. This keeps the model tractable while
-  // still allowing personality speed to rebalance those jobs above the generic baseline.
-  const recipeVars=[],rowVarIndices=Array.from({length:rows.length},()=>[]),genericRows=new Set(),add=v=>{v.idx=recipeVars.length;recipeVars.push(v);rowVarIndices[v.r].push(v.idx);};
-  for(let r=0;r<rows.length;r++){const row=rows[r],tasks=taskObjects(row),letter=model.state.manualSpeeds?null:(FACILITY_PERSONALITY[row.facility]||null);if(!model.state.manualSpeeds&&tasks.length===1&&recipeUsesMeasuredEfficiency(row.recipe)){const task=tasks[0];for(let w=0;w<team.length;w++)if(palCanDo(team[w].pal,task)){const personality=!!letter&&profileHas(profiles[w],letter),abilityLevel=Number(team[w].pal.abilities?.[task.ability]||0),parts=workerCycleParts(row.recipe,model.state,model.scenario,abilityLevel,personality);add({r,w,letter,boosted:personality,personality,ability:task.ability,abilityLevel,requiredLevel:task.level,efficiencyPct:parts.efficiencyPct||displayedEfficiencyPct(row.recipe,abilityLevel,personality),baseRate:parts.baseRate||baseWorkRateForRecipe(row.recipe),workerSeconds:row.recipe.pet?parts.cycle:parts.manual,occupancySeconds:parts.cycle,objective:combinedObjectiveCoef(row.recipe,model.state,model.data,model.plan.objectiveWeights),coin:recipeNetValue(row.recipe,model.data)});}}else if(letter&&tasks.length===1){const task=tasks[0];for(let w=0;w<team.length;w++)if(palCanDo(team[w].pal,task)){const mult=profileHas(profiles[w],letter)?1.2:1,parts=cycleParts(row.recipe,model.state,model.scenario,mult);add({r,w,letter,boosted:mult>1,workerSeconds:row.recipe.pet?parts.cycle:parts.manual,occupancySeconds:parts.cycle,objective:combinedObjectiveCoef(row.recipe,model.state,model.data,model.plan.objectiveWeights),coin:recipeNetValue(row.recipe,model.data)});}}else{genericRows.add(r);add({r,w:null,letter:null,boosted:false,workerSeconds:null,occupancySeconds:row.cycleSeconds,objective:combinedObjectiveCoef(row.recipe,model.state,model.data,model.plan.objectiveWeights),coin:recipeNetValue(row.recipe,model.data)});}}
+  // Re-optimise only the concrete team's active recipe set. Utility stations are pre-assigned to
+  // unique 24/7 workers so the LP cannot illegally split one climate station across several Aniimo.
+  const utility=assignUtilityWorkers(model,team);if(!utility.feasible)return{rate:0,targetRate:0,objectiveRate:-Infinity,profiles,rows:[],utilityAssignments:[],utilityWorkers:0};
+  const reserved=new Set(utility.workers),recipeVars=[],rowVarIndices=Array.from({length:rows.length},()=>[]),genericRows=new Set(),add=v=>{v.idx=recipeVars.length;recipeVars.push(v);rowVarIndices[v.r].push(v.idx);};
+  for(let r=0;r<rows.length;r++){const row=rows[r],tasks=taskObjects(row),letter=model.state.manualSpeeds?null:(FACILITY_PERSONALITY[row.facility]||null);if(!model.state.manualSpeeds&&tasks.length===1&&recipeUsesMeasuredEfficiency(row.recipe)){const task=tasks[0];for(let w=0;w<team.length;w++)if(!reserved.has(w)&&palCanDo(team[w].pal,task)){const personality=!!letter&&profileHas(profiles[w],letter),abilityLevel=Number(team[w].pal.abilities?.[task.ability]||0),parts=workerCycleParts(row.recipe,model.state,model.scenario,abilityLevel,personality);add({r,w,letter,boosted:personality,personality,ability:task.ability,abilityLevel,requiredLevel:task.level,efficiencyPct:parts.efficiencyPct||displayedEfficiencyPct(row.recipe,abilityLevel,personality),baseRate:parts.baseRate||baseWorkRateForRecipe(row.recipe),workerSeconds:row.recipe.pet?parts.cycle:parts.manual,occupancySeconds:parts.cycle,objective:combinedObjectiveCoef(row.recipe,model.state,model.data,model.plan.objectiveWeights),coin:recipeNetValue(row.recipe,model.data)});}}else if(letter&&tasks.length===1){const task=tasks[0];for(let w=0;w<team.length;w++)if(!reserved.has(w)&&palCanDo(team[w].pal,task)){const mult=profileHas(profiles[w],letter)?1.2:1,parts=cycleParts(row.recipe,model.state,model.scenario,mult);add({r,w,letter,boosted:mult>1,workerSeconds:row.recipe.pet?parts.cycle:parts.manual,occupancySeconds:parts.cycle,objective:combinedObjectiveCoef(row.recipe,model.state,model.data,model.plan.objectiveWeights),coin:recipeNetValue(row.recipe,model.data)});}}else{genericRows.add(r);add({r,w:null,letter:null,boosted:false,workerSeconds:null,occupancySeconds:row.cycleSeconds,objective:combinedObjectiveCoef(row.recipe,model.state,model.data,model.plan.objectiveWeights),coin:recipeNetValue(row.recipe,model.data)});}}
   const alloc=[];for(const r of genericRows){const tasks=taskObjects(rows[r]);for(let ti=0;ti<tasks.length;ti++)for(let w=0;w<team.length;w++)if(palCanDo(team[w].pal,tasks[ti]))alloc.push({r,ti,w,task:tasks[ti],idx:recipeVars.length+alloc.length});}
-  const utilityAlloc=[];for(const u of utilityTasksForScenario(model.scenario))for(let w=0;w<team.length;w++)if(palCanDo(team[w].pal,u))utilityAlloc.push({w,task:u,idx:recipeVars.length+alloc.length+utilityAlloc.length});
-  const N=recipeVars.length+alloc.length+utilityAlloc.length;if(!N)return{rate:0,targetRate:0,objectiveRate:0,profiles};const objective=Array(N).fill(0);for(const v of recipeVars)objective[v.idx]=v.objective;const A=[],b=[];
+  const N=recipeVars.length+alloc.length;if(!N)return{rate:0,targetRate:0,objectiveRate:0,profiles};const objective=Array(N).fill(0);for(const v of recipeVars)objective[v.idx]=v.objective;const A=[],b=[];
   for(const slug of [...new Set(rows.map(r=>r.facility))]){const stacks=facilityStacks(model.state,slug),thresholds=[...new Set(rows.filter(r=>r.facility===slug).map(r=>Number(r.recipe.level||1)))].sort((a,b)=>a-b);for(const lvl of thresholds){const cap=stacks.filter(x=>x.level>=lvl).reduce((sum,x)=>sum+x.count,0),row=Array(N).fill(0);let used=false;for(const v of recipeVars)if(rows[v.r].facility===slug&&Number(rows[v.r].recipe.level||1)>=lvl){row[v.idx]=v.occupancySeconds/3600;used=true;}if(used){A.push(row);b.push(cap);}const collect=Number(model.state.collectHours||0);if(collect>0){const batchCap=stacks.filter(x=>x.level>=lvl).reduce((sum,x)=>sum+x.count*facilityOutputLimit(model.data,slug,x.level),0);if(batchCap>0){const cr=Array(N).fill(0);let cu=false;for(const v of recipeVars)if(rows[v.r].facility===slug&&Number(rows[v.r].recipe.level||1)>=lvl){cr[v.idx]=collect;cu=true;}if(cu){A.push(cr);b.push(batchCap);}}}}}
   for(const item of model.internalItems){const row=Array(N).fill(0);for(const v of recipeVars)row[v.idx]=-recipeNetItem(rows[v.r].recipe,item);A.push(row);b.push(0);}
   for(const g of model.state.guarantees||[]){if(g.enabled===false||g.maximize)continue;const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;const row=Array(N).fill(0);for(const v of recipeVars)row[v.idx]=-recipeNetItem(rows[v.r].recipe,item);A.push(row);b.push(-minimum);}
-  for(let w=0;w<team.length;w++){const row=Array(N).fill(0);for(const v of recipeVars)if(v.w===w)row[v.idx]+=Number(v.workerSeconds||0);for(const a of alloc)if(a.w===w)row[a.idx]+=1;for(const a of utilityAlloc)if(a.w===w)row[a.idx]+=1;A.push(row);b.push(3600);}
+  for(let w=0;w<team.length;w++){const row=Array(N).fill(0);for(const v of recipeVars)if(v.w===w)row[v.idx]+=Number(v.workerSeconds||0);for(const a of alloc)if(a.w===w)row[a.idx]+=1;A.push(row);b.push(reserved.has(w)?0:3600);}
   for(const r of genericRows){const tasks=taskObjects(rows[r]),ri=rowVarIndices[r][0];if(ri==null)continue;for(let ti=0;ti<tasks.length;ti++){const row=Array(N).fill(0);row[ri]=tasks[ti].seconds;for(const a of alloc)if(a.r===r&&a.ti===ti)row[a.idx]=-1;A.push(row);b.push(0);}}
-  for(const u of utilityTasksForScenario(model.scenario)){const row=Array(N).fill(0);for(const a of utilityAlloc)if(a.task.key===u.key)row[a.idx]-=1;A.push(row);b.push(-3600);}
   const solved=solveLp(objective,A,b);if(!solved)return{rate:0,targetRate:0,objectiveRate:-Infinity,profiles,rows:[]};let obj=0,coin=0,target=0;const batches=Array(rows.length).fill(0),occupancy=Array(rows.length).fill(0),worked=Array(rows.length).fill(0),boostedByWorker=Array.from({length:team.length},()=>new Set()),speedAssignments=[];
   for(const v of recipeVars){
     const x=Math.max(0,Number(solved.x[v.idx]||0));batches[v.r]+=x;occupancy[v.r]+=x*Number(v.occupancySeconds||rows[v.r].cycleSeconds||0);worked[v.r]+=x*Number(v.workerSeconds||0);obj+=v.objective*x;coin+=v.coin*x;target+=model.state.target&&model.state.target!=='coin'?recipeNetItem(rows[v.r].recipe,model.state.target)*x:v.coin*x;
     if(v.w!=null&&x>1e-8){if(v.boosted)boostedByWorker[v.w].add(rows[v.r].facility);if(v.efficiencyPct)speedAssignments.push({row:v.r,recipeId:rows[v.r].recipe.id,facility:rows[v.r].facility,worker:v.w,batches:x,efficiencyPct:v.efficiencyPct,baseRate:v.baseRate||1,ability:v.ability,abilityLevel:v.abilityLevel,requiredLevel:v.requiredLevel,personality:!!v.personality});}
   }
   for(const a of alloc)worked[a.r]+=Math.max(0,Number(solved.x[a.idx]||0));
+  const workerTaskSeconds=Array.from({length:team.length},()=>new Map());for(const a of utility.assignments)workerTaskSeconds[a.worker].set(a.task.key,3600);for(const v of recipeVars)if(v.w!=null){const x=Math.max(0,Number(solved.x[v.idx]||0));if(x>1e-8)workerTaskSeconds[v.w].set(`recipe:${rows[v.r].recipe.id}`,(workerTaskSeconds[v.w].get(`recipe:${rows[v.r].recipe.id}`)||0)+x*Number(v.workerSeconds||0));}for(const a of alloc){const sec=Math.max(0,Number(solved.x[a.idx]||0));if(sec>1e-8)workerTaskSeconds[a.w].set(a.task.key,(workerTaskSeconds[a.w].get(a.task.key)||0)+sec);}
   const recipeAcc=new Map(),facilityAcc=new Map();for(const a of speedAssignments){const recipe=rows[a.row].recipe,baseSeconds=manualWorkload(recipe)/Math.max(.01,a.baseRate||1),weight=Math.max(1e-9,baseSeconds*a.batches),time=weight/Math.max(.01,a.efficiencyPct/100);for(const[k,key]of [['recipe',String(a.recipeId)],['facility',a.facility]]){const map=k==='recipe'?recipeAcc:facilityAcc,rec=map.get(key)||{base:0,time:0,workers:new Set(),recipes:new Set()};rec.base+=weight;rec.time+=time;rec.workers.add(a.worker);rec.recipes.add(String(a.recipeId));map.set(key,rec);}}
   const summarize=map=>Object.fromEntries([...map].map(([k,v])=>[k,{pct:v.time>0?v.base/v.time*100:100,workers:[...v.workers],recipes:[...v.recipes]}]));
   const resultRows=[];for(let r=0;r<rows.length;r++){const bph=Number(batches[r]||0);if(bph<=1e-8)continue;const base=rows[r],coinPart=recipeNetValue(base.recipe,model.data)*bph,targetPart=model.state.target&&model.state.target!=='coin'?recipeNetItem(base.recipe,model.state.target)*bph:coinPart,cycle=bph>0?occupancy[r]/bph:base.cycleSeconds,manual=bph>0&&worked[r]>0?worked[r]/bph:base.manualSeconds;resultRows.push({...base,batchesPerHour:bph,units:occupancy[r]/3600,perHour:coinPart,targetPerHour:targetPart,cycleSeconds:cycle,manualSeconds:manual});}
-  return{rate:coin,targetRate:target,objectiveRate:obj,profiles,rows:resultRows,recipeBatches:batches,boostedByWorker,speedAssignments,utilityWorkers:utilityTasksForScenario(model.scenario).length,speedProfile:{recipes:summarize(recipeAcc),facilities:summarize(facilityAcc)}};
+  return{rate:coin,targetRate:target,objectiveRate:obj,profiles,rows:resultRows,recipeBatches:batches,boostedByWorker,speedAssignments,workerTaskSeconds,utilityAssignments:utility.assignments,utilityWorkers:utility.assignments.length,speedProfile:{recipes:summarize(recipeAcc),facilities:summarize(facilityAcc)}};
 }
 
 export async function optimizePersonalities(model,team,onProgress,concreteEval,burst=null){
