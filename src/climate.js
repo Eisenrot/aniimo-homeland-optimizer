@@ -1,5 +1,6 @@
 const SCALE=2;
 const FIELD=18;
+const OVERLAP_CACHE=new Map();
 
 function intersects(a,b){
   return a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
@@ -117,6 +118,8 @@ function tryGreedyOffset(demands,mode,dx,dy){
 }
 
 export function searchOverlapLayout(demands,mode,{maxOffset=9}={}){
+  const cacheKey=mode+'|'+[...(demands||[])].map(d=>[d.facility,d.env,d.count,d.w,d.h,d.canRotate?1:0].join(':')).sort().join(';')+'|'+maxOffset;
+  if(OVERLAP_CACHE.has(cacheKey))return OVERLAP_CACHE.get(cacheKey);
   const halfMax=Math.round(maxOffset*SCALE),attempts=[];
   for(let dx=0;dx<=halfMax;dx++)for(let dy=0;dy<=dx;dy++){
     if(!validUtilityOffset(dx,dy))continue;
@@ -130,7 +133,7 @@ export function searchOverlapLayout(demands,mode,{maxOffset=9}={}){
     const placed=tryGreedyOffset(demands,mode,dx,dy);
     if(!placed)continue;
     const g=utilityGeometry(dx,dy),convert=r=>({x:r.x/SCALE,y:r.y/SCALE,w:r.w/SCALE,h:r.h/SCALE});
-    return{
+    const result={
       feasible:true,mode,triedOffsets:tried,offset:{x:dx/SCALE,y:dy/SCALE},
       coolingField:convert(g.coolingField),heatField:convert(g.heatField),
       utilities:[
@@ -138,9 +141,9 @@ export function searchOverlapLayout(demands,mode,{maxOffset=9}={}){
         {facility:'heat-furnace',...convert(g.heatUnit)}
       ],
       placements:placed.map(p=>({facility:p.facility,name:p.name,env:p.env,copy:p.copy,...convert(p.rect)}))
-    };
+    };OVERLAP_CACHE.set(cacheKey,result);return result;
   }
-  return{feasible:false,mode,triedOffsets:tried,placements:[]};
+  const result={feasible:false,mode,triedOffsets:tried,placements:[]};OVERLAP_CACHE.set(cacheKey,result);return result;
 }
 
 function singleZoneCandidates(d){

@@ -1,5 +1,6 @@
 import {GAME_DATA as DATA} from './src/data.js';
 import {climateAllows,evaluateClimateLayout,searchOverlapLayout} from './src/climate.js';
+import {optimizePlan} from './src/optimizer.js';
 
 const demand=(facility,env,count,w,h)=>({key:facility+'|'+env,facility,name:facility,env,count,units:count,w,h,canRotate:true});
 
@@ -53,3 +54,34 @@ console.log('climate layout regression OK',{
   hotNine:searchOverlapLayout(hotNine,'hot').offset,
   coldThreeTier:searchOverlapLayout(threeTier,'cold').offset
 });
+
+
+const tinyData={
+  items:{
+    '1':{name:'Hot Crop',value:100},
+    '2':{name:'Warm Wood',value:100}
+  },
+  facilities:[
+    {slug:'farmland',name:'Farmland',kind:'production',footprint:{w:2,h:2},canRotate:true,outputLimit:{1:99}},
+    {slug:'woodland',name:'Woodland',kind:'production',footprint:{w:4,h:4},canRotate:true,outputLimit:{1:99}},
+    {slug:'cooling-unit',name:'Cooling Unit',kind:'utility',footprint:{w:2,h:2},influence:{w:9,h:9}},
+    {slug:'heat-furnace',name:'Heat Furnace',kind:'utility',footprint:{w:1,h:1},influence:{w:9,h:9}}
+  ],
+  recipes:[
+    {id:1,facility:'farmland',level:1,inputs:[],outputs:[{item:1,qty:1}],growSeconds:3600,env:'Scorching'},
+    {id:2,facility:'woodland',level:1,inputs:[],outputs:[{item:2,qty:1}],growSeconds:3600,env:'Warm'}
+  ],
+  pals:[],abilities:{}
+};
+const tinyState={
+  homelandLevel:9,workerSlots:0,teamSlots:0,abilityLevel:4,target:'coin',guarantees:[],
+  facilities:{farmland:{count:3,level:1},woodland:{count:10,level:1}},
+  modules:{},speeds:{},recipeNotes:{},owned:{},climateOptions:{cooling:true,heat:true,sunlamp:false},
+  generatorAvailable:false,hungry:false,manualSpeeds:false,collectHours:0,oneRecipePerFacility:false
+};
+const climateAware=optimizePlan(tinyState,tinyData);
+if(climateAware.infeasible)throw new Error('climate-aware optimizer failed to find the next-best physical plan');
+if(!climateAware.climateLayout?.feasible)throw new Error('climate-aware optimizer returned a physically invalid plan');
+const hotUnits=climateAware.rows.find(r=>r.facility==='farmland')?.units||0,warmUnits=climateAware.rows.find(r=>r.facility==='woodland')?.units||0;
+if(!(hotUnits<=2.000001||warmUnits<=9.000001))throw new Error(`optimizer did not back off the impossible 3+10 layout: ${hotUnits} + ${warmUnits}`);
+console.log('climate optimizer branch',hotUnits,warmUnits,climateAware.scenarioLabel);
