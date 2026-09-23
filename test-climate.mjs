@@ -90,7 +90,7 @@ console.log('climate optimizer branch',hotUnits,warmUnits,climateAware.scenarioL
 const placementState={facilities:{farmland:{count:20,level:5},woodland:{count:10,level:3}}};
 const placementRows=[
   {facility:'farmland',units:6.55,perHour:4865,recipe:{id:9101,env:'Adequate'}},
-  {facility:'farmland',units:6.51,perHour:2870,recipe:{id:9102}},
+  {facility:'farmland',units:6.70,perHour:2870,recipe:{id:9102}},
   {facility:'farmland',units:1.35,perHour:908,recipe:{id:9103,env:'Scorching'}},
   {facility:'farmland',units:3.65,perHour:539,recipe:{id:9104}},
   {facility:'farmland',units:.94,perHour:239,recipe:{id:9105}},
