@@ -459,15 +459,24 @@ function nextCopy(spec,team){const used=team.filter(x=>Number(x.pal.id)===Number
 function taskObjects(row){const out=[];for(const[key,seconds]of row.work){const[ability,lvl,fam,tag]=key.split('|');out.push({key,ability,level:Number(lvl),family:fam?Number(fam):null,tag,facility:tag||row.facility,seconds:Number(seconds||0)});}return out;}
 export function staffingCoverageSlots(model,rows=model.plan.rows){
   const slots=[],seq={n:0},active=rows||[];
-  const permanentGroups=new Map();
+  const permanentGroups=new Map(),burstGroups=new Map();
   for(const base of active){
-    if(!PERMANENT_STAFFING.has(base.facility))continue;
     const row=model.rows.find(x=>x.recipe.id===base.recipe.id)||{...base,work:splitRecipeWork(base.recipe,model.state,model.scenario)},tasks=taskObjects(row);
     if(!tasks.length)continue;
-    const rec=permanentGroups.get(row.facility)||{units:0,tasks:[]};
-    rec.units+=Math.max(0,Number(base.units||0));
-    rec.tasks.push(...tasks);
-    permanentGroups.set(row.facility,rec);
+    if(PERMANENT_STAFFING.has(base.facility)){
+      const rec=permanentGroups.get(row.facility)||{units:0,tasks:[]};
+      rec.units+=Math.max(0,Number(base.units||0));
+      rec.tasks.push(...tasks);
+      permanentGroups.set(row.facility,rec);
+    }
+    if(BURST_STAFFING.has(base.facility)){
+      const rec=burstGroups.get(row.facility)||new Map();
+      for(const task of tasks){
+        const k=`${task.ability}|${task.family||''}`,prev=rec.get(k);
+        if(!prev||Number(task.level||0)>Number(prev.level||0))rec.set(k,task);
+      }
+      burstGroups.set(row.facility,rec);
+    }
   }
   for(const[facility,rec]of permanentGroups){
     const copies=Math.max(1,Math.ceil(rec.units-1e-9));
@@ -475,14 +484,9 @@ export function staffingCoverageSlots(model,rows=model.plan.rows){
     if(!strongest)continue;
     for(let n=1;n<=copies;n++)slots.push({id:`p${seq.n++}`,mode:'permanent',facility,task:strongest,label:`${facility.replaceAll('-',' ')} #${n} · ${strongest.ability}`,weight:100});
   }
-  for(const base of active){
-    if(!BURST_STAFFING.has(base.facility))continue;
-    const row=model.rows.find(x=>x.recipe.id===base.recipe.id)||{...base,work:splitRecipeWork(base.recipe,model.state,model.scenario)},tasks=taskObjects(row);
-    if(!tasks.length)continue;
-    const seen=new Set();
-    for(const task of tasks){
-      const k=`${task.ability}|${task.level}|${task.family||''}`;if(seen.has(k))continue;seen.add(k);
-      slots.push({id:`b${seq.n++}`,mode:'burst',facility:row.facility,task,label:`${row.facility==='farmland'?'Farmland':'Woodland'} · ${task.ability}`,weight:row.facility==='woodland'?4.4:4.2});
+  for(const[facility,rec]of burstGroups){
+    for(const task of [...rec.values()].sort((a,b)=>a.ability.localeCompare(b.ability)||Number(b.level||0)-Number(a.level||0))){
+      slots.push({id:`b${seq.n++}`,mode:'burst',facility,task,label:`${facility==='farmland'?'Farmland':'Woodland'} · ${task.ability} Lv.${task.level}`,weight:facility==='woodland'?4.4:4.2});
     }
   }
   return slots;
@@ -490,17 +494,28 @@ export function staffingCoverageSlots(model,rows=model.plan.rows){
 export function staffingCoverageMatch(model,team,rows=model.plan.rows){
   const slots=staffingCoverageSlots(model,rows),W=team.length;
   if(!slots.length||!W)return{coverageWeight:0,totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments:[],slots};
-  const used=new Set(),assignments=[],ordered=[...slots].sort((a,b)=>(a.mode==='permanent'?0:1)-(b.mode==='permanent'?0:1)||b.weight-a.weight||a.label.localeCompare(b.label));
-  for(const slot of ordered){
+  const permanentUsed=new Set(),assignments=[],permanent=slots.filter(x=>x.mode==='permanent').sort((a,b)=>b.weight-a.weight||a.label.localeCompare(b.label)),burst=slots.filter(x=>x.mode==='burst').sort((a,b)=>b.weight-a.weight||a.label.localeCompare(b.label));
+  const scoreWorker=(w,slot)=>{const over=Math.max(0,Number(team[w].pal.abilities?.[slot.task.ability]||0)-slot.task.level);return over*10+relevance(model,team[w].pal);};
+  for(const slot of permanent){
     let pick=-1,best=-Infinity;
     for(let w=0;w<W;w++){
-      if(used.has(w)||!palCanDo(team[w].pal,slot.task))continue;
-      const over=Math.max(0,Number(team[w].pal.abilities?.[slot.task.ability]||0)-slot.task.level),score=over*10+relevance(model,team[w].pal);
-      if(score>best){best=score;pick=w;}
+      if(permanentUsed.has(w)||!palCanDo(team[w].pal,slot.task))continue;
+      const score=scoreWorker(w,slot);if(score>best){best=score;pick=w;}
     }
-    if(pick>=0){used.add(pick);assignments.push({worker:pick,slot});}
+    if(pick>=0){permanentUsed.add(pick);assignments.push({worker:pick,slot});}
   }
-  return{coverageWeight:assignments.reduce((s,x)=>s+x.slot.weight,0),totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments,slots};
+  // Burst jobs are sequential/restart capability, not simultaneous 24/7 reservations.
+  // A free worker may therefore cover several Farmland/Woodland ability stages, and may
+  // count for both facility families. Workers already reserved by permanent jobs stay unavailable.
+  for(const slot of burst){
+    let pick=-1,best=-Infinity;
+    for(let w=0;w<W;w++){
+      if(permanentUsed.has(w)||!palCanDo(team[w].pal,slot.task))continue;
+      const score=scoreWorker(w,slot);if(score>best){best=score;pick=w;}
+    }
+    if(pick>=0)assignments.push({worker:pick,slot});
+  }
+  return{coverageWeight:assignments.reduce((s,x)=>s+x.slot.weight,0),totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments,slots,permanentWorkers:[...permanentUsed]};
 }
 export function burstSlots(model,rows=model.plan.rows){return staffingCoverageSlots(model,rows).filter(x=>x.mode==='burst');}
 export function burstMatch(model,team,rows=model.plan.rows){return staffingCoverageMatch(model,team,rows);}
