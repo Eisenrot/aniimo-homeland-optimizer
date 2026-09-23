@@ -11,7 +11,7 @@ export const FORM_IDS={"Emberpup":[1005101,1005104],"Flameruff":[1005201,1005204
 const ANIIDEX='https://aniidex.com';
 const aniidexSlug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 const aniidexHeadKey=(id,isForm=false)=>isForm?String(id):String(id).slice(0,-2);
-export const aniidexHeadIcon=(id,isForm=false)=>`${ANIIDEX}/_ipx/q_95%26fit_inside%26s_60x60/images/aniimo/UI_PetHead_${aniidexHeadKey(id,isForm)}.webp`;
+export const aniidexHeadIcon=(id,isForm=false)=>`${ANIIDEX}/images/aniimo/UI_PetHead_${aniidexHeadKey(id,isForm)}.webp`;
 
 for(const base of BASE_PALS){
   base.speciesName=base.name;

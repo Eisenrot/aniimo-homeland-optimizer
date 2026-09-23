@@ -51,9 +51,6 @@ jobs:
           node test-speed.mjs
           node test-recipe-notes.mjs
 
-      - name: AniIDEX audit snapshot
-        run: |
-          node scripts/scrape-aniidex.mjs
 
       - name: Stage site
         run: |

@@ -12,7 +12,7 @@ for(const p of PALS){
   if(ids.has(String(p.id)))throw new Error(`duplicate Aniimo id ${p.id}`);
   ids.add(String(p.id));
   if(!p.abilities||!Object.keys(p.abilities).length)throw new Error(`missing abilities for ${p.name}`);
-  if(!String(p.icon||'').startsWith('https://aniidex.com/'))throw new Error(`non-AniIDEX Aniimo icon for ${p.name}: ${p.icon}`);
+  if(!String(p.icon||'').startsWith('https://aniidex.com/images/aniimo/UI_PetHead_'))throw new Error(`non-direct AniIDEX Aniimo icon for ${p.name}: ${p.icon}`);
 }
 for(const p of BASE_PALS){
   if(p.isForm||p.form!=='Basic')throw new Error(`base metadata drifted for ${p.name}`);
@@ -33,6 +33,10 @@ const base=name=>BASE_PALS.find(p=>p.name===name);
 const cheekie=base('Cheekie'),wavwal=base('Wavwal');
 if(!cheekie||!cheekie.unavailable||cheekie.abilities.Ice!==1||cheekie.abilities.Hauling!==1)throw new Error('Cheekie AniIDEX basic record drifted');
 if(!wavwal||!wavwal.unavailable||wavwal.abilities.Ice!==3||wavwal.abilities.Hauling!==1)throw new Error('Wavwal AniIDEX basic record drifted');
+const cheekie=base('Cheekie');
+if(!cheekie||cheekie.id!==1046100||cheekie.abilities.Ice!==1||cheekie.abilities.Hauling!==1)throw new Error('Cheekie AniIDEX basic Homeland data drifted');
+const wavwal=base('Wavwal');
+if(!wavwal||wavwal.id!==1046300||wavwal.abilities.Ice!==3||wavwal.abilities.Hauling!==1)throw new Error('Wavwal AniIDEX basic Homeland data drifted');
 const ember=base('Emberpup');
 if(!ember||ember.abilities.Fire!==1||ember.abilities.Hauling!==1||Object.keys(ember.abilities).length!==2)throw new Error('Emberpup AniIDEX Homeland abilities drifted');
 const glameep=base('Glameep');
@@ -57,4 +61,5 @@ if(app.includes('/images/aniimo/heads/'))throw new Error('Hideout Aniimo head UR
 if(app.includes('aniimoguide.com/images/aniimo'))throw new Error('AniimoGuide Aniimo artwork remains in app.js');
 const data=fs.readFileSync(new URL('./src/data/pals.js',import.meta.url),'utf8');
 if(data.includes('aniimoguide.com'))throw new Error('AniimoGuide artwork remains in pals.js');
+if(data.includes('/_ipx/')&&data.includes('UI_PetHead_'))throw new Error('Aniimo heads should use direct AniIDEX image URLs, not the IPX proxy');
 console.log('AniIDEX Aniimo roster OK',{base:BASE_PALS.length,forms:FORM_PALS.length,prismana:FORM_PALS.filter(p=>p.isPrismana).length,total:PALS.length});
