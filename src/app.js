@@ -20,7 +20,7 @@ const maxAniimoForLevel=level=>MAX_ANIIMO_BY_HOMELAND[Math.min(20,Math.max(1,Num
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const asset=path=>path?.startsWith('http')?path:`${HIDEOUT}${path||''}`,fmt=n=>Math.round(Number(n||0)).toLocaleString(),fmt1=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:1}),pct=n=>`${(Number(n||0)*100).toFixed(2)}%`,clone=x=>JSON.parse(JSON.stringify(x));
 const facilityMap=new Map(DATA.facilities.map(x=>[x.slug,x])),layoutPaletteCache=new Map();
-let state=loadState(),perfSettings=loadPerfSettings(),layoutSettings=normalizeLayoutSettings(loadRawLayoutSettings(),state.homelandLevel),currentPlan=null,currentModel=null,currentFullLayout=null,recomputeTimer=null,undoSnapshot=null,undoTimer=null,teamSpeedOverride=null,teamAnalysisBaseline=null,teamAppliedPlan=false,activePlanSolve=null,activeLayoutSolve=null,computeSerial=0,layoutComputeSerial=0,lastOptimizerStats=null;
+let state=loadState(),perfSettings=loadPerfSettings(),layoutSettings=normalizeLayoutSettings(loadRawLayoutSettings(),state.homelandLevel),currentPlan=null,currentModel=null,currentFullLayout=null,recomputeTimer=null,undoSnapshot=null,undoTimer=null,teamSpeedOverride=null,teamAnalysisBaseline=null,teamAppliedPlan=false,activePlanSolve=null,activeLayoutSolve=null,plotDraftDisabled=null,computeSerial=0,layoutComputeSerial=0,lastOptimizerStats=null;
 function diffCount(a,b){if(a===b)return 0;if(a==null||b==null||typeof a!=='object'||typeof b!=='object')return 1;const keys=new Set([...Object.keys(a),...Object.keys(b)]);let n=0;for(const k of keys){n+=diffCount(a[k],b[k]);if(n>=2)return n;}return n;}
 function ensureUndoBar(){if($('#change-undo'))return;document.body.insertAdjacentHTML('beforeend',`<div id="change-undo" class="change-undo"><span><b>Detected a change.</b> Revert?</span><div><button id="undo-change" class="undo-action">REVERT</button><button id="close-undo" class="undo-action muted">CLOSE</button></div></div>`);$('#undo-change').onclick=()=>{if(!undoSnapshot)return;state=normalizeState(undoSnapshot);undoSnapshot=null;saveState();hideUndo();renderAll();history.replaceState(null,'',shareUrl());};$('#close-undo').onclick=hideUndo;}
 function hideUndo(){clearTimeout(undoTimer);$('#change-undo')?.classList.remove('show');}
@@ -468,9 +468,9 @@ function fullLayoutSvg(layout,climate){
   }
   const plotLines=allPlots.map(p=>`<rect class="layout-plot-outline ${p.plot>level?'locked':disabled.has(p.plot)?'disabled':'enabled'}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"/>`).join('');
   const iconGroup=p=>{
-    const fac=facilityMap.get(p.facility),structureSrc=p.icon||asset(fac?.icon),outputSrc=p.outputItem?itemIcon(p.outputItem):'',min=Math.max(.8,Math.min(p.w,p.h)),size=Math.max(.5,Math.min(1.55,min*(outputSrc?.4:.55))),gap=outputSrc?Math.max(.08,size*.1):0,total=outputSrc?size*2+gap:size,cx=p.x+p.w/2,top=p.y+p.h/2-total/2,imgs=[];
-    if(structureSrc)imgs.push(`<image class="layout-structure-icon" href="${structureSrc}" x="${cx-size/2}" y="${top}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/>`);
-    if(outputSrc)imgs.push(`<image class="layout-output-icon" href="${outputSrc}" x="${cx-size/2}" y="${top+size+gap}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/>`);
+    const fac=facilityMap.get(p.facility),structureSrc=p.icon||asset(fac?.icon),outputSrc=p.outputItem?itemIcon(p.outputItem):'',min=Math.max(.8,Math.min(p.w,p.h)),pad=min*.18,structureSize=Math.max(.45,min-pad*2),outputSize=outputSrc?structureSize*.5:0,gap=outputSrc?Math.max(.05,structureSize*.06):0,total=structureSize+(outputSrc?gap+outputSize:0),cx=p.x+p.w/2,top=p.y+p.h/2-total/2,imgs=[];
+    if(structureSrc)imgs.push(`<image class="layout-structure-icon" href="${structureSrc}" x="${cx-structureSize/2}" y="${top}" width="${structureSize}" height="${structureSize}" preserveAspectRatio="xMidYMid meet"/>`);
+    if(outputSrc)imgs.push(`<image class="layout-output-icon" href="${outputSrc}" x="${cx-outputSize/2}" y="${top+structureSize+gap}" width="${outputSize}" height="${outputSize}" preserveAspectRatio="xMidYMid meet"/>`);
     return `<g class="layout-icon-group"><title>${esc(p.name)}${p.outputItem?` → ${esc(itemName(DATA,p.outputItem))}`:''}</title>${imgs.join('')}</g>`;
   };
   const icons=placements.map(iconGroup).join('');
@@ -502,12 +502,21 @@ function ensurePlotManagementUi(){
   $('#plot-management-close').onclick=()=>setPlotManagementOpen(false);$('#plot-management-overlay').onclick=e=>{if(e.target===$('#plot-management-overlay'))setPlotManagementOpen(false);};
 }
 function renderPlotManagementGrid(){
-  ensurePlotManagementUi();const grid=$('#plot-management-grid'),s=currentLayoutSettings(),disabled=new Set(s.disabledPlots||[]),level=Math.min(16,Math.max(1,Number(state.homelandLevel)||1));
+  ensurePlotManagementUi();const grid=$('#plot-management-grid'),saved=currentLayoutSettings(),draft=plotDraftDisabled??[...(saved.disabledPlots||[])],disabled=new Set(draft),level=Math.min(16,Math.max(1,Number(state.homelandLevel)||1));
   grid.innerHTML=PLOT_MATRIX.flat().map(n=>{const locked=n>level,on=!locked&&!disabled.has(n);return `<button type="button" class="plot-cell ${locked?'locked':on?'enabled':'disabled'}" data-plot="${n}" ${locked?'disabled':''}><b>${n}</b><span>${locked?`RV ${n}`:on?'ENABLED':'DISABLED'}</span></button>`;}).join('');
-  grid.querySelectorAll('.plot-cell:not(.locked)').forEach(btn=>btn.onclick=()=>{const n=Number(btn.dataset.plot),next={...currentLayoutSettings(),disabledPlots:[...(currentLayoutSettings().disabledPlots||[])]},set=new Set(next.disabledPlots);if(set.has(n))set.delete(n);else set.add(n);next.disabledPlots=[...set].sort((a,b)=>a-b);layoutSettings=normalizeLayoutSettings(next,state.homelandLevel);saveLayoutSettings();renderPlotManagementGrid();if(currentFullLayout?.feasible&&layoutStillFitsPlots(currentFullLayout,layoutSettings,state.homelandLevel)){currentFullLayout={...currentFullLayout,plots:enabledPlotRects(layoutSettings,state.homelandLevel),settings:{...currentFullLayout.settings,...layoutSettings}};writeFullLayoutCache(localStorage,currentPlan,effectivePlanState(),layoutSettings,BUILD_ID,currentFullLayout);renderClimateLayout({reuseLayout:true});}else{currentFullLayout=null;renderClimateLayout({forceLayout:true});}});
+  grid.querySelectorAll('.plot-cell:not(.locked)').forEach(btn=>btn.onclick=()=>{const n=Number(btn.dataset.plot),set=new Set(plotDraftDisabled??saved.disabledPlots??[]);if(set.has(n))set.delete(n);else set.add(n);plotDraftDisabled=[...set].filter(x=>Number.isInteger(x)&&x>=1&&x<=16).sort((a,b)=>a-b);renderPlotManagementGrid();});
 }
 function setPlotManagementOpen(open){
-  ensurePlotManagementUi();const overlay=$('#plot-management-overlay');if(open)renderPlotManagementGrid();overlay.classList.toggle('open',open);overlay.setAttribute('aria-hidden',open?'false':'true');
+  ensurePlotManagementUi();const overlay=$('#plot-management-overlay'),wasOpen=overlay.classList.contains('open');
+  if(open){
+    if(!wasOpen)plotDraftDisabled=[...(currentLayoutSettings().disabledPlots||[])];
+    renderPlotManagementGrid();overlay.classList.add('open');overlay.setAttribute('aria-hidden','false');return;
+  }
+  overlay.classList.remove('open');overlay.setAttribute('aria-hidden','true');
+  if(!wasOpen){plotDraftDisabled=null;return;}
+  const before=[...(currentLayoutSettings().disabledPlots||[])].sort((a,b)=>a-b),after=[...(plotDraftDisabled??before)].sort((a,b)=>a-b),changed=before.length!==after.length||before.some((n,i)=>n!==after[i]);plotDraftDisabled=null;
+  if(!changed)return;
+  layoutSettings=normalizeLayoutSettings({...currentLayoutSettings(),disabledPlots:after},state.homelandLevel);saveLayoutSettings();currentFullLayout=null;renderClimateLayout({forceLayout:true});
 }
 function bindFullLayoutControls(){
   $('#layout-compact').onchange=e=>updateLayoutSettings(x=>x.compact=e.target.checked);
