@@ -6,7 +6,7 @@ if(JSON.stringify(PLOT_MATRIX)!==JSON.stringify([[13,14,15,16],[12,7,8,9],[11,4,
 if(plotRect(1).x!==40||plotRect(1).y!==45||plotRect(16).x!==60||plotRect(16).y!==0)throw new Error('plot coordinates are wrong');
 if(PLOT_WIDTH!==20||PLOT_HEIGHT!==15)throw new Error('plot geometry must remain 20x15');
 const s=normalizeLayoutSettings({disabledPlots:[2,10,99],storageUnits:3},9);
-if(s.disabledPlots.join(',')!=='2'||s.storageUnits!==3)throw new Error('layout settings normalization failed');
+if(s.disabledPlots.join(',')!=='2,10'||s.storageUnits!==3)throw new Error('layout settings normalization failed');
 if(enabledPlotNumbers(s,9).join(',')!=='1,3,4,5,6,7,8,9')throw new Error('enabled plot set failed');
 
 const state={homelandLevel:9,oneRecipePerFacility:true,facilities:{farmland:{count:20,level:5},woodland:{count:10,level:3},mine:{count:5,level:3},'crafting-table':{count:1,level:4}},climateOptions:{}};

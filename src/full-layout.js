@@ -25,7 +25,7 @@ export function unlockedPlotNumbers(homelandLevel){
   const n=Math.max(1,Math.min(16,Math.floor(Number(homelandLevel)||1)));return Array.from({length:n},(_,i)=>i+1);
 }
 export function normalizeLayoutSettings(raw={},homelandLevel=1){
-  const unlocked=new Set(unlockedPlotNumbers(homelandLevel)),disabled=[...new Set((raw.disabledPlots||[]).map(Number).filter(n=>unlocked.has(n)))].sort((a,b)=>a-b);
+  const disabled=[...new Set((raw.disabledPlots||[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=16))].sort((a,b)=>a-b);
   return{
     compact:raw.compact!==false,
     shape:SHAPES.has(raw.shape)?raw.shape:'auto',

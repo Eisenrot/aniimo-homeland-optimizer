@@ -678,3 +678,57 @@
   .climate-map-panel{grid-template-rows:auto minmax(390px,1fr)}
   .climate-map-wrap{height:440px;min-height:390px}
 }
+
+/* --- full Homeland auto-layout --- */
+.full-base-grid{grid-template-columns:minmax(0,1fr) 286px}
+.full-base-copy{width:286px!important}
+.full-layout-settings{display:grid;gap:7px;margin-top:3px;padding-top:8px;border-top:1px solid #26303a}
+.layout-settings-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.layout-settings-head>b{font-size:7.5px;letter-spacing:.13em;color:#a7b8c8}
+.layout-settings-head>span{font-size:7px;color:#687580;text-align:right}
+.layout-check{display:grid;grid-template-columns:15px 1fr;gap:7px;align-items:start;border:1px solid #27323c;background:#0c1217;padding:7px;cursor:pointer}
+.layout-check input{margin:1px 0 0;accent-color:#70aef2}
+.layout-check b{display:block;color:#c7d1da;font-size:8px}
+.layout-check small{display:block;color:#687581;font-size:7px;line-height:1.4;margin-top:2px}
+.layout-field{display:grid;grid-template-columns:1fr 118px;align-items:center;gap:7px;border:1px solid #27323c;background:#0c1217;padding:6px 7px}
+.layout-field>span{font-size:8px;color:#8c9aa7}
+.layout-field select{height:28px;border:1px solid #34424f;background:#080d12;color:#d4dbe2;font-size:8px;padding:0 6px}
+.plot-management-open{border:1px solid #3a4856;background:linear-gradient(120deg,#101922,#0b1015);padding:6px 8px;display:grid;grid-template-columns:34px 1fr;align-items:center;gap:8px;text-align:left;color:#cdd7df;cursor:pointer}
+.plot-management-open:hover{border-color:#6385a7;background:linear-gradient(120deg,#142231,#0c1218)}
+.plot-management-open img{width:32px;height:32px;object-fit:contain}
+.plot-management-open b,.plot-management-open small{display:block}.plot-management-open b{font-size:8.5px}.plot-management-open small{font-size:7px;color:#71808d;margin-top:2px}
+.plot-management-overlay{position:fixed;inset:0;z-index:83;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(2,4,6,.78);backdrop-filter:blur(8px)}
+.plot-management-overlay.open{display:flex}
+.plot-management-modal{position:relative;width:min(520px,100%);border:1px solid #354452;background:linear-gradient(155deg,#111820,#080b0e 60%);padding:18px;box-shadow:0 30px 90px rgba(0,0,0,.68)}
+.plot-management-title{display:grid;grid-template-columns:58px 1fr;gap:12px;align-items:center;margin-bottom:15px}
+.plot-management-title>img{width:54px;height:54px;object-fit:contain}
+.plot-management-title small{font-size:7px;letter-spacing:.14em;color:#70879d}.plot-management-title h3{font-size:16px;margin:2px 0 3px}.plot-management-title p{font-size:8px;color:#788590;line-height:1.4;margin:0}
+.plot-management-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.plot-cell{aspect-ratio:1.33;border:1px solid #35414d;background:#0c1217;color:#d6dee5;display:grid;place-items:center;align-content:center;gap:3px;cursor:pointer}
+.plot-cell b{font-size:17px}.plot-cell span{font-size:6.5px;letter-spacing:.09em}
+.plot-cell.enabled{border-color:#3d8060;background:linear-gradient(145deg,rgba(69,159,104,.14),#0c1217)}.plot-cell.enabled span{color:#75d99b}
+.plot-cell.disabled{border-color:#69404a;background:linear-gradient(145deg,rgba(175,62,83,.11),#0c1217)}.plot-cell.disabled span{color:#cf7887}
+.plot-cell.locked{opacity:.32;cursor:not-allowed;filter:saturate(.4)}.plot-cell.locked span{color:#79818a}
+.full-layout-map .layout-plot rect{vector-effect:non-scaling-stroke;stroke-width:.07}
+.full-layout-map .layout-plot.enabled rect{fill:rgba(68,103,129,.035);stroke:rgba(127,161,188,.13)}
+.full-layout-map .layout-plot.disabled rect{fill:rgba(103,43,52,.07);stroke:rgba(158,76,89,.18)}
+.full-layout-map .layout-plot.locked rect{fill:rgba(255,255,255,.012);stroke:rgba(255,255,255,.055)}
+.full-layout-map .layout-plot text{font-size:1.05px;fill:rgba(184,201,214,.13);font-weight:800;pointer-events:none}
+.layout-structure-bg rect{stroke:rgba(255,255,255,.22);stroke-width:.08;vector-effect:non-scaling-stroke;opacity:.46}
+.layout-structure-bg:hover rect{stroke:rgba(255,255,255,.68);stroke-width:.13}
+.full-climate-field{vector-effect:non-scaling-stroke;stroke-width:.1;pointer-events:none}
+.full-climate-field.cooling{fill:rgba(73,160,221,.17);stroke:rgba(113,205,247,.56)}
+.full-climate-field.heating{fill:rgba(211,63,84,.17);stroke:rgba(233,105,124,.58)}
+.full-climate-field.adequate{fill:rgba(205,174,80,.15);stroke:rgba(235,207,119,.5)}
+.full-climate-field.derived.env-warm{fill:rgba(255,147,158,.22);stroke:rgba(255,170,179,.67)}
+.full-climate-field.derived.env-cool{fill:rgba(114,207,244,.22);stroke:rgba(161,229,255,.67)}
+.layout-plot-outline{fill:none;stroke-width:.055;vector-effect:non-scaling-stroke;pointer-events:none}
+.layout-plot-outline.enabled{stroke:rgba(195,216,232,.16)}.layout-plot-outline.disabled{stroke:rgba(198,96,112,.2)}.layout-plot-outline.locked{stroke:rgba(255,255,255,.055)}
+.layout-icon-group{pointer-events:none}.layout-structure-icon,.layout-output-icon{filter:drop-shadow(0 .08px .16px rgba(0,0,0,.9))}
+.layout-output-icon{filter:drop-shadow(0 .08px .16px rgba(0,0,0,.95)) drop-shadow(0 0 .08px rgba(255,255,255,.18))}
+.climate-infinite-grid{z-index:1}.climate-map-stage{z-index:2}
+.climate-demand-service{display:flex;align-items:center;gap:3px;margin-left:auto;white-space:nowrap}
+.climate-demand-service .climate-service-icon{width:15px;height:15px;object-fit:contain}
+.climate-demand-service b{margin-left:1px!important}
+.climate-demand-facility{flex:0 0 auto}
+@media(max-width:960px){.full-base-grid{grid-template-columns:1fr}.full-base-copy{width:100%!important}.layout-field{grid-template-columns:1fr 150px}}
