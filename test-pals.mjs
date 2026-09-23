@@ -29,6 +29,13 @@ for(const p of FORM_PALS){
 for(const [species,names] of Object.entries(FORM_CATALOG)){
   if(names.length!==(FORM_IDS[species]||[]).length)throw new Error(`form id/name count mismatch for ${species}`);
 }
+const base=name=>BASE_PALS.find(p=>p.name===name);
+const ember=base('Emberpup');
+if(!ember||ember.abilities.Fire!==1||ember.abilities.Hauling!==1||Object.keys(ember.abilities).length!==2)throw new Error('Emberpup AniIDEX Homeland abilities drifted');
+const glameep=base('Glameep');
+if(!glameep||glameep.abilities.Grass!==3||glameep.abilities.Water!==3||Object.keys(glameep.abilities).length!==2)throw new Error('Glameep AniIDEX Homeland abilities drifted');
+const popapus=base('Popapus');
+if(!popapus||popapus.abilities.Water!==3||Object.keys(popapus.abilities).length!==1)throw new Error('Popapus AniIDEX Homeland abilities drifted');
 const form=(species,name)=>FORM_PALS.find(p=>p.speciesName===species&&p.form===name);
 if(form('Emberpup','Highland')?.id!==1005101||form('Emberpup','Mountain Woods')?.id!==1005104)throw new Error('Emberpup AniIDEX form ids drifted');
 if(form('Iris','Prismana')?.id!==1021104)throw new Error('Iris Prismana AniIDEX id drifted');
