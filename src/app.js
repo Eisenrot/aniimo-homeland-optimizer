@@ -474,7 +474,7 @@ function fullLayoutSvg(layout,climate){
     return `<g class="layout-icon-group"><title>${esc(p.name)}${p.outputItem?` → ${esc(itemName(DATA,p.outputItem))}`:''}</title>${imgs.join('')}</g>`;
   };
   const icons=placements.map(iconGroup).join('');
-  return `<svg class="climate-map full-layout-map" viewBox="${minX} ${minY} ${w} ${h}" data-fit-x="${fit.x}" data-fit-y="${fit.y}" data-fit-w="${fit.w}" data-fit-h="${fit.h}" role="img" aria-label="Optimized full Homeland layout"><defs>${defs}</defs>${plotFills}${backgrounds}${fieldSvg}${derived}${plotLines}${icons}</svg>`;
+  return `<svg class="climate-map full-layout-map" viewBox="${minX} ${minY} ${w} ${h}" data-fit-x="${fit.x}" data-fit-y="${fit.y}" data-fit-w="${fit.w}" data-fit-h="${fit.h}" role="img" aria-label="Optimized full Homeland layout"><defs>${defs}</defs>${plotFills}${backgrounds}${plotLines}${fieldSvg}${derived}${icons}</svg>`;
 }
 async function analyzeLayoutPalette(src){
   if(!src)return null;if(layoutPaletteCache.has(src))return layoutPaletteCache.get(src);
