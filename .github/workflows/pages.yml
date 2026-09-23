@@ -38,6 +38,7 @@ jobs:
           node --check src/climate.js
           node --check src/plan-cache.js
           node --check src/full-layout.js
+          node --check src/layout-worker.js
           node --check src/optimizer-worker.js
           node test-app-parse.mjs
           node test.mjs

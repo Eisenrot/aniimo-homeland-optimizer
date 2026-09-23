@@ -20,7 +20,7 @@ const maxAniimoForLevel=level=>MAX_ANIIMO_BY_HOMELAND[Math.min(20,Math.max(1,Num
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const asset=path=>path?.startsWith('http')?path:`${HIDEOUT}${path||''}`,fmt=n=>Math.round(Number(n||0)).toLocaleString(),fmt1=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:1}),pct=n=>`${(Number(n||0)*100).toFixed(2)}%`,clone=x=>JSON.parse(JSON.stringify(x));
 const facilityMap=new Map(DATA.facilities.map(x=>[x.slug,x])),layoutPaletteCache=new Map();
-let state=loadState(),perfSettings=loadPerfSettings(),layoutSettings=normalizeLayoutSettings(loadRawLayoutSettings(),state.homelandLevel),currentPlan=null,currentModel=null,currentFullLayout=null,recomputeTimer=null,undoSnapshot=null,undoTimer=null,teamSpeedOverride=null,teamAnalysisBaseline=null,teamAppliedPlan=false,activePlanSolve=null,computeSerial=0,lastOptimizerStats=null;
+let state=loadState(),perfSettings=loadPerfSettings(),layoutSettings=normalizeLayoutSettings(loadRawLayoutSettings(),state.homelandLevel),currentPlan=null,currentModel=null,currentFullLayout=null,recomputeTimer=null,undoSnapshot=null,undoTimer=null,teamSpeedOverride=null,teamAnalysisBaseline=null,teamAppliedPlan=false,activePlanSolve=null,activeLayoutSolve=null,computeSerial=0,layoutComputeSerial=0,lastOptimizerStats=null;
 function diffCount(a,b){if(a===b)return 0;if(a==null||b==null||typeof a!=='object'||typeof b!=='object')return 1;const keys=new Set([...Object.keys(a),...Object.keys(b)]);let n=0;for(const k of keys){n+=diffCount(a[k],b[k]);if(n>=2)return n;}return n;}
 function ensureUndoBar(){if($('#change-undo'))return;document.body.insertAdjacentHTML('beforeend',`<div id="change-undo" class="change-undo"><span><b>Detected a change.</b> Revert?</span><div><button id="undo-change" class="undo-action">REVERT</button><button id="close-undo" class="undo-action muted">CLOSE</button></div></div>`);$('#undo-change').onclick=()=>{if(!undoSnapshot)return;state=normalizeState(undoSnapshot);undoSnapshot=null;saveState();hideUndo();renderAll();history.replaceState(null,'',shareUrl());};$('#close-undo').onclick=hideUndo;}
 function hideUndo(){clearTimeout(undoTimer);$('#change-undo')?.classList.remove('show');}
@@ -72,14 +72,16 @@ function saveState(){localStorage.setItem(STORE,JSON.stringify(state));}
 function loadRawLayoutSettings(){try{return JSON.parse(localStorage.getItem(LAYOUT_SETTINGS_STORE)||'null')||{};}catch{return{};}}
 function currentLayoutSettings(){layoutSettings=normalizeLayoutSettings(layoutSettings,state.homelandLevel);return layoutSettings;}
 function saveLayoutSettings(){layoutSettings=normalizeLayoutSettings(layoutSettings,state.homelandLevel);localStorage.setItem(LAYOUT_SETTINGS_STORE,JSON.stringify(layoutSettings));}
-function resolveFullLayout({force=false}={}){
-  if(!currentPlan?.rows?.length)return null;
-  const settings=currentLayoutSettings(),planState=effectivePlanState();
-  if(!force&&currentFullLayout)return currentFullLayout;
-  if(!force){const cached=readFullLayoutCache(localStorage,currentPlan,planState,settings,BUILD_ID);if(cached){currentFullLayout=cached;return cached;}}
-  currentFullLayout=buildFullBaseLayout(currentPlan,planState,DATA,settings);
-  writeFullLayoutCache(localStorage,currentPlan,planState,settings,BUILD_ID,currentFullLayout);
-  return currentFullLayout;
+function cachedFullLayout(){
+  if(!currentPlan?.rows?.length)return null;const settings=currentLayoutSettings(),cached=readFullLayoutCache(localStorage,currentPlan,effectivePlanState(),settings,BUILD_ID);if(cached)currentFullLayout=cached;return cached;
+}
+function startFullLayoutSolve(plan,planState,settings){
+  if(typeof Worker==='undefined'){
+    let cancelled=false;const promise=new Promise((resolve,reject)=>setTimeout(()=>{if(cancelled)return reject(Object.assign(new Error('Cancelled'),{name:'AbortError'}));try{resolve(buildFullBaseLayout(plan,planState,DATA,settings));}catch(e){reject(e);}},0));return{promise,cancel:()=>{cancelled=true;}};
+  }
+  const worker=new Worker('./src/layout-worker.js',{type:'module'});let settled=false;
+  const promise=new Promise((resolve,reject)=>{worker.onmessage=e=>{const msg=e.data||{};if(msg.type==='result'){settled=true;worker.terminate();resolve(msg.layout);}else if(msg.type==='error'){settled=true;worker.terminate();reject(new Error(msg.message||'Full-layout worker failed.'));}};worker.onerror=e=>{if(settled)return;settled=true;worker.terminate();reject(new Error(e.message||'Full-layout worker crashed.'));};worker.postMessage({type:'layout',plan,planState,settings});});
+  return{promise,cancel:()=>{if(!settled){settled=true;worker.terminate();}}};
 }
 function rebuildFullLayout(){currentFullLayout=null;renderClimateLayout({forceLayout:true});}
 function updateLayoutSettings(mutator){const next={...currentLayoutSettings(),disabledPlots:[...(currentLayoutSettings().disabledPlots||[])]};mutator(next);layoutSettings=normalizeLayoutSettings(next,state.homelandLevel);saveLayoutSettings();rebuildFullLayout();}
@@ -507,15 +509,31 @@ function renderPlotManagementGrid(){
 function setPlotManagementOpen(open){
   ensurePlotManagementUi();const overlay=$('#plot-management-overlay');if(open)renderPlotManagementGrid();overlay.classList.toggle('open',open);overlay.setAttribute('aria-hidden',open?'false':'true');
 }
-function renderClimateLayout({forceLayout=false,reuseLayout=false}={}){
-  const host=$('#climate-panel');if(!host)return;if(!currentPlan?.rows?.length){host.hidden=true;host.innerHTML='';return;}
-  let climate=currentPlan.climateLayout;if(!climate)climate=evaluateClimateLayout(currentPlan,effectivePlanState(),DATA);currentPlan.climateLayout=climate;
-  if(!reuseLayout)currentFullLayout=resolveFullLayout({force:forceLayout});const full=currentFullLayout||resolveFullLayout({force:forceLayout});host.hidden=false;
-  const demands=(climate?.demands||[]).map(d=>climateBadge(d,currentPlan.scenario||{})).join(''),good=!!full?.feasible,status=good?'PLACEMENT FOUND':'NO VALID FULL LAYOUT',message=good?(climate?.status&&climate.status!=='none'?climate.message:`${full.itemCount||0} plan structures placed across ${full.usedPlots?.length||0} Homeland plots.`):(full?.reason||'The active plan does not fit inside the enabled plots.'),aside=good?`${full.itemCount||0} structures · ${full.usedPlots?.length||0} plots`:'full-base packing blocked';
-  const map=fullLayoutSvg(full,climate),summary=`<div class="climate-layout-copy compact full-base-copy"><div class="climate-status ${good?'good':'bad'}">${status}</div><div class="climate-info-box">${esc(message)}</div>${demands?`<div class="climate-demand-list compact">${demands}</div>`:''}${layoutSettingsMarkup(full)}</div>`;
+function bindFullLayoutControls(){
+  $('#layout-compact').onchange=e=>updateLayoutSettings(x=>x.compact=e.target.checked);
+  $('#layout-shape').onchange=e=>updateLayoutSettings(x=>x.shape=e.target.value);
+  $('#layout-rotate').onchange=e=>updateLayoutSettings(x=>x.allowRotate=e.target.checked);
+  $('#layout-storage').onchange=e=>updateLayoutSettings(x=>x.storageUnits=Math.max(0,Number(e.target.value)||0));
+  $('#plot-management-open').onclick=()=>setPlotManagementOpen(true);
+}
+function paintFullLayout(host,full,climate){
+  const demands=(climate?.demands||[]).map(d=>climateBadge(d,currentPlan.scenario||{})).join(''),good=!!full?.feasible,status=good?'PLACEMENT FOUND':'NO VALID FULL LAYOUT',message=good?(climate?.status&&climate.status!=='none'?climate.message:`${full.itemCount||0} plan structures placed across ${full.usedPlots?.length||0} Homeland plots.`):(full?.reason||'The active plan does not fit inside the enabled plots.'),aside=good?`${full.itemCount||0} structures · ${full.usedPlots?.length||0} plots`:'full-base packing blocked',map=fullLayoutSvg(full,climate),summary=`<div class="climate-layout-copy compact full-base-copy"><div class="climate-status ${good?'good':'bad'}">${status}</div><div class="climate-info-box">${esc(message)}</div>${demands?`<div class="climate-demand-list compact">${demands}</div>`:''}${layoutSettingsMarkup(full)}</div>`;
   host.innerHTML=title('Climate layout',aside)+`<div class="climate-layout-grid full-base-grid"><div class="climate-map-panel"><div class="climate-map-toolbar"><button type="button" class="climate-map-btn" data-climate-action="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><span class="climate-map-zoom" id="climate-map-zoom">100%</span><button type="button" class="climate-map-btn" data-climate-action="zoom-in" title="Zoom in" aria-label="Zoom in">+</button><button type="button" class="climate-map-btn center" data-climate-action="center" title="Center optimized layout">◎ Center</button></div><div class="climate-map-wrap"><div class="climate-map-viewport" id="climate-map-viewport"><div class="climate-infinite-grid" aria-hidden="true"></div><div class="climate-map-stage" id="climate-map-stage">${map}</div></div></div></div>${summary}</div>`;
-  $('#layout-compact').onchange=e=>updateLayoutSettings(x=>x.compact=e.target.checked);$('#layout-shape').onchange=e=>updateLayoutSettings(x=>x.shape=e.target.value);$('#layout-rotate').onchange=e=>updateLayoutSettings(x=>x.allowRotate=e.target.checked);$('#layout-storage').onchange=e=>updateLayoutSettings(x=>x.storageUnits=Math.max(0,Number(e.target.value)||0));$('#plot-management-open').onclick=()=>setPlotManagementOpen(true);
-  setupClimateMapViewer(host);hydrateLayoutPalettes(host);
+  bindFullLayoutControls();setupClimateMapViewer(host);hydrateLayoutPalettes(host);
+}
+async function renderClimateLayout({forceLayout=false,reuseLayout=false}={}){
+  const host=$('#climate-panel');if(!host)return;if(!currentPlan?.rows?.length){host.hidden=true;host.innerHTML='';return;}host.hidden=false;
+  let climate=currentPlan.climateLayout;if(!climate)climate=evaluateClimateLayout(currentPlan,effectivePlanState(),DATA);currentPlan.climateLayout=climate;
+  if(reuseLayout&&currentFullLayout){paintFullLayout(host,currentFullLayout,climate);return;}
+  const serial=++layoutComputeSerial;activeLayoutSolve?.cancel?.();activeLayoutSolve=null;
+  if(!forceLayout){const cached=currentFullLayout||cachedFullLayout();if(cached){paintFullLayout(host,cached,climate);return;}}
+  const settings=currentLayoutSettings(),planSnapshot=clone(currentPlan),stateSnapshot=clone(effectivePlanState());
+  host.innerHTML=title('Climate layout','packing full base…')+`<div class="full-layout-loading"><span class="loader"></span><div><b>Arranging the full Homeland</b><small>Climate clusters first, then every active structure. You can keep using the rest of the page while this runs.</small></div></div>`;
+  const solve=startFullLayoutSolve(planSnapshot,stateSnapshot,settings);activeLayoutSolve=solve;
+  try{
+    const result=await solve.promise;if(serial!==layoutComputeSerial)return;currentFullLayout=result;writeFullLayoutCache(localStorage,currentPlan,effectivePlanState(),currentLayoutSettings(),BUILD_ID,currentFullLayout);paintFullLayout(host,currentFullLayout,climate);
+  }catch(e){if(serial!==layoutComputeSerial||e?.name==='AbortError')return;host.innerHTML=title('Climate layout','layout worker error')+`<div class="empty warning">${esc(e.message||e)}</div>`;}
+  finally{if(serial===layoutComputeSerial)activeLayoutSolve=null;}
 }
 function setupClimateMapViewer(root=document){
   const viewport=root.querySelector('#climate-map-viewport'),stage=root.querySelector('#climate-map-stage'),grid=root.querySelector('.climate-infinite-grid'),svg=stage?.querySelector('svg'),zoomLabel=root.querySelector('#climate-map-zoom');
