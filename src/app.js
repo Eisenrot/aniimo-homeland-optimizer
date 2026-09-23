@@ -423,9 +423,9 @@ function renderClimateLayout(){
   if(currentPlan?.rows?.length&&!layout)layout=evaluateClimateLayout(currentPlan,effectivePlanState(),DATA);
   if(!layout||layout.status==='none'){host.hidden=true;host.innerHTML='';return;}
   host.hidden=false;
-  const demands=(layout.demands||[]).map(climateBadge).join(''),settings=utilityChoiceMarkup(currentPlan),tested=Number(layout.triedOffsets||0),aside=layout.feasible?(layout.status==='overlap'?\`${tested} overlap offsets checked\`:'physical climate check passed'):'climate placement blocked';
+  const demands=(layout.demands||[]).map(climateBadge).join(''),settings=utilityChoiceMarkup(currentPlan),tested=Number(layout.triedOffsets||0),aside=layout.feasible?(layout.status==='overlap'?`${tested} overlap offsets checked`:'physical climate check passed'):'climate placement blocked';
   const body=layout.status==='overlap'
-    ? \`<div class="climate-layout-grid">
+    ? `<div class="climate-layout-grid">
         <div class="climate-map-panel">
           <div class="climate-map-toolbar">
             <button type="button" class="climate-map-btn" data-climate-action="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
@@ -445,11 +445,11 @@ function renderClimateLayout(){
           <div class="climate-info-box">${esc(layout.message||'Buildable climate placement found.')}</div>
           <div class="climate-demand-list compact">${demands}</div>
         </div>
-      </div>\`
+      </div>`
     : layout.feasible
-      ? \`<div class="climate-layout-simple"><div><div class="climate-status good">NO CONFLICT</div><p>${esc(layout.message||'These zones can be separated.')}</p></div><div class="climate-demand-list">${demands}</div></div>\`
-      : \`<div class="climate-layout-simple failed"><div><div class="climate-status bad">NO VALID PLACEMENT</div><p>${esc(layout.message||'The requested climate mix cannot be placed with the available utility fields.')}</p></div><div class="climate-demand-list">${demands}</div></div>\`;
-  host.innerHTML=title('Climate layout',aside)+\`<div class="climate-utility-line"><b>Utility settings</b><div class="chosen utility-choice">${settings}</div></div>${body}\`;
+      ? `<div class="climate-layout-simple"><div><div class="climate-status good">NO CONFLICT</div><p>${esc(layout.message||'These zones can be separated.')}</p></div><div class="climate-demand-list">${demands}</div></div>`
+      : `<div class="climate-layout-simple failed"><div><div class="climate-status bad">NO VALID PLACEMENT</div><p>${esc(layout.message||'The requested climate mix cannot be placed with the available utility fields.')}</p></div><div class="climate-demand-list">${demands}</div></div>`;
+  host.innerHTML=title('Climate layout',aside)+`<div class="climate-utility-line"><b>Utility settings</b><div class="chosen utility-choice">${settings}</div></div>${body}`;
   if(layout.status==='overlap')setupClimateMapViewer(host);
 }
 function setupClimateMapViewer(root=document){
@@ -457,20 +457,20 @@ function setupClimateMapViewer(root=document){
   if(!viewport||!stage||!grid||!svg)return;
   const vb=svg.viewBox?.baseVal;if(!vb?.width||!vb?.height)return;
   const BASE_UNIT=32,baseW=vb.width*BASE_UNIT,baseH=vb.height*BASE_UNIT,minScale=.18,maxScale=7;
-  stage.style.width=\`${baseW}px\`;stage.style.height=\`${baseH}px\`;svg.style.width='100%';svg.style.height='100%';
+  stage.style.width=`${baseW}px`;stage.style.height=`${baseH}px`;svg.style.width='100%';svg.style.height='100%';
   let homeScale=1,scale=1,tx=0,ty=0,dragging=false,dragStartX=0,dragStartY=0,pinchStartDistance=0,pinchStartScale=1,pinchStartTx=0,pinchStartTy=0,pinchCenterStart=null;
   const pointers=new Map(),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   function updateGrid(){
     const unit=BASE_UNIT*scale,originX=tx+(-vb.x)*unit,originY=ty+(-vb.y)*unit;
-    viewport.style.setProperty('--climate-grid-minor',\`${Math.max(2,unit/2)}px\`);
-    viewport.style.setProperty('--climate-grid-major',\`${Math.max(4,unit)}px\`);
-    viewport.style.setProperty('--climate-grid-x',\`${originX}px\`);
-    viewport.style.setProperty('--climate-grid-y',\`${originY}px\`);
+    viewport.style.setProperty('--climate-grid-minor',`${Math.max(2,unit/2)}px`);
+    viewport.style.setProperty('--climate-grid-major',`${Math.max(4,unit)}px`);
+    viewport.style.setProperty('--climate-grid-x',`${originX}px`);
+    viewport.style.setProperty('--climate-grid-y',`${originY}px`);
   }
   function apply(){
-    stage.style.transform=\`translate(${tx}px,${ty}px) scale(${scale})\`;
+    stage.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
     updateGrid();
-    if(zoomLabel)zoomLabel.textContent=\`${Math.round((scale/Math.max(.0001,homeScale))*100)}%\`;
+    if(zoomLabel)zoomLabel.textContent=`${Math.round((scale/Math.max(.0001,homeScale))*100)}%`;
   }
   function center(){
     const vw=viewport.clientWidth,vh=viewport.clientHeight;if(!vw||!vh)return;
