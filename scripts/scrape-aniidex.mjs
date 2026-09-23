@@ -1,8 +1,7 @@
-import {BASE_PALS} from '../src/data/pals.js';
+import {BASE_PALS,FORM_CATALOG,FORM_IDS,FORM_PALS} from '../src/data/pals.js';
 
 const ORIGIN='https://aniidex.com';
-const extraNames=['Cheekie','Wavwal'];
-const names=[...new Set([...BASE_PALS.map(p=>p.name),...extraNames])].sort((a,b)=>a.localeCompare(b));
+const names=[...BASE_PALS.map(p=>p.name)].sort((a,b)=>a.localeCompare(b));
 const slug=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 const decode=s=>String(s||'').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&nbsp;/g,' ').trim();
 const strip=s=>decode(String(s||'').replace(/<!--[^]*?-->/g,'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' '));
@@ -62,6 +61,27 @@ for(const row of good){
   const a=JSON.stringify(Object.fromEntries(Object.entries(p.abilities||{}).sort())),b=JSON.stringify(Object.fromEntries(Object.entries(row.abilities||{}).sort()));
   if(a!==b)mismatches.push({name:row.name,current:p.abilities,aniidex:row.abilities});
 }
-const payload={source:'https://aniidex.com/aniimo/',scrapedAt:new Date().toISOString(),count:good.length,errors,mismatches,aniimo:good};
+const expectedForms=new Map(FORM_PALS.map(p=>[`${p.speciesName}|${p.form}`,String(p.id)])),formTileMismatches=[];
+for(const row of good){
+  const names=FORM_CATALOG[row.name]||[],ids=(FORM_IDS[row.name]||[]).map(String);
+  if(!names.length)continue;
+  const live=new Map((row.tiles||[]).filter(x=>x.form!=='Basic'&&!/^·\s*Common$/i.test(x.form)).map(x=>[x.form,String(x.headId)]));
+  for(let i=0;i<names.length;i++){
+    const form=names[i],expected=ids[i],actual=live.get(form)||null;
+    if(actual!==expected)formTileMismatches.push({name:row.name,form,expected,actual,live:[...live]});
+    const generated=expectedForms.get(`${row.name}|${form}`);
+    if(generated!==expected)formTileMismatches.push({name:row.name,form,expected,generated,kind:'generated-id'});
+  }
+  for(const [form,id] of live)if(!names.includes(form))formTileMismatches.push({name:row.name,form,actual:id,kind:'unexpected-live-form'});
+}
+
+async function probeForm(species,id){
+  const url=`${ORIGIN}/aniimo/${slug(species)}/?form=${id}`,html=await fetchText(url);
+  return{species,id,url,abilities:Object.fromEntries(parseAbilities(html))};
+}
+let formProbe=null;
+try{formProbe=await probeForm('Glynsera',1013301);}catch(error){formProbe={error:String(error?.message||error)};}
+
+const payload={source:'https://aniidex.com/aniimo/',scrapedAt:new Date().toISOString(),count:good.length,errors,mismatches,formTileMismatches,formProbe,aniimo:good};
 console.log('ANIIDEX_SYNC_JSON='+JSON.stringify(payload));
-if(errors.length)process.exitCode=2;
+if(errors.length||mismatches.length||formTileMismatches.length)process.exitCode=2;
