@@ -194,8 +194,8 @@ function directClimateClusters(plan,items){
   return{clusters:out,used};
 }
 
-export function buildFullBaseLayout(plan,state,data,rawSettings={}){
-  const settings=normalizeLayoutSettings(rawSettings,state.homelandLevel),plots=enabledPlotRects(settings,state.homelandLevel);
+function buildFullBaseLayoutVariant(plan,state,data,settings){
+  const plots=enabledPlotRects(settings,state.homelandLevel);
   if(!plots.length)return{feasible:false,reason:'No unlocked plots are enabled.',placements:[],fields:[],plots:[],settings};
   const allItems=planPhysicalItems(plan,state,data,settings),placed=[],fields=[];
   const climate=clusterMembersFromClimate(plan,allItems),clusters=[...(climate.clusters||[])];let remaining=climate.remaining||allItems;
@@ -209,13 +209,26 @@ export function buildFullBaseLayout(plan,state,data,rawSettings={}){
     placed.push(...result.placements);fields.push(...result.fields);
   }
   remaining=[...remaining].sort((a,b)=>area(b)-area(a)||a.facility.localeCompare(b.facility));
-  for(const item of remaining){
-    const p=placeOne(item,placed,plots,settings);
-    if(!p)return{feasible:false,reason:`${item.name} does not fit inside the enabled plots.`,placements:placed,fields,plots,settings,unplaced:[item,...remaining.slice(remaining.indexOf(item)+1)]};
+  for(let index=0;index<remaining.length;index++){
+    const item=remaining[index],p=placeOne(item,placed,plots,settings);
+    if(!p)return{feasible:false,reason:`${item.name} does not fit inside the enabled plots.`,placements:placed,fields,plots,settings,unplaced:[item,...remaining.slice(index+1)]};
     placed.push(p);
   }
-  const usedPlots=plots.filter(plot=>placed.some(p=>intersectionArea(p,plot)>EPS)).map(p=>p.plot);
-  return{feasible:true,placements:placed,fields,plots,settings,usedPlots,bounds:bboxOf(placed),itemCount:placed.length};
+  const usedPlots=plots.filter(plot=>placed.some(p=>intersectionArea(p,plot)>EPS)).map(p=>p.plot),bounds=bboxOf(placed);
+  return{feasible:true,placements:placed,fields,plots,settings,usedPlots,bounds,itemCount:placed.length};
+}
+function layoutScore(layout,compact){
+  if(!layout?.feasible)return Infinity;const b=layout.bounds||bboxOf(layout.placements||[]),areaScore=b.w*b.h,perimeter=b.w+b.h,plots=layout.usedPlots?.length||99;
+  return compact?areaScore*10000+plots*100+perimeter:plots*10000+areaScore*10+perimeter;
+}
+export function buildFullBaseLayout(plan,state,data,rawSettings={}){
+  const settings=normalizeLayoutSettings(rawSettings,state.homelandLevel);
+  if(settings.shape!=='auto')return buildFullBaseLayoutVariant(plan,state,data,settings);
+  const candidates=(settings.compact?['compact','clusters','rows']:['clusters','rows','spread','compact']).map(shape=>buildFullBaseLayoutVariant(plan,state,data,{...settings,shape}));
+  const feasible=candidates.filter(x=>x.feasible).sort((a,b)=>layoutScore(a,settings.compact)-layoutScore(b,settings.compact));
+  if(feasible.length){const best=feasible[0];return{...best,settings:{...settings,resolvedShape:best.settings.shape}};}
+  const failed=candidates.sort((a,b)=>(b.placements?.length||0)-(a.placements?.length||0))[0];
+  return{...failed,settings:{...settings,resolvedShape:failed?.settings?.shape||'compact'}};
 }
 
 export function layoutStillFitsPlots(layout,rawSettings,homelandLevel){
