@@ -764,3 +764,13 @@
   vector-effect:non-scaling-stroke;
   pointer-events:none;
 }
+
+/* --- plot availability hierarchy --- */
+.full-layout-map .layout-plot.disabled .layout-plot-fill,
+.full-layout-map .layout-plot.locked .layout-plot-fill{
+  filter:saturate(.62) brightness(.78);
+}
+.full-layout-map .layout-plot.disabled text,
+.full-layout-map .layout-plot.locked text{
+  filter:saturate(.7);
+}
