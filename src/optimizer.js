@@ -1,3 +1,4 @@
+import {climateAllows,evaluateClimateLayout} from './climate.js';
 const MODULE_SLUGS={
   'Ecological Module':'ecological-module','Resource Detector':'resource-detector',
   'Kitchen Module':'kitchen-module','Crafting Module':'crafting-module'
@@ -65,15 +66,7 @@ function abilityAvailable(step,state,data,family=null){
 }
 function noteEnabled(recipe,state){return !recipe.note||state.recipeNotes?.[String(recipe.note.item)]!==false;}
 
-function weatherRatio(required,scenario){
-  if(!required)return 1;
-  if(required==='Adequate')return scenario.sunlamp?1:0;
-  const temps=[];if(scenario.cooling)temps.push(scenario.cooling);if(scenario.heat)temps.push(scenario.heat);
-  if(!temps.length)return 0;
-  const a=TEMP_ORDER.indexOf(required);if(a<0)return 0;let best=0;
-  for(const current of temps){const b=TEMP_ORDER.indexOf(current);if(b<0)continue;const d=Math.min(Math.abs(a-b),4);best=Math.max(best,[1,.8,.5,.2,.2][d]);}
-  return best;
-}
+function weatherRatio(required,scenario){return climateAllows(required,scenario)?1:0;}
 
 function cycleParts(recipe,state,scenario,personalityMultiplier=1){
   const weather=weatherRatio(recipe.env,scenario);if(recipe.env&&weather<=0)return{cycle:Infinity,manual:Infinity,grow:Infinity,weather:0};
@@ -186,22 +179,28 @@ function addMaterialBalance(A,b,recipes,data){
 function addGuarantees(A,b,recipes,state){
   for(const g of state.guarantees||[]){if(g.enabled===false||g.maximize)continue;const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;A.push(recipes.map(r=>-recipeNetItem(r,item)));b.push(-minimum);}
 }
+function addClimateCaps(A,b,recipes,state,scenario,caps=[]){
+  for(const cap of caps||[]){
+    const maxUnits=Math.max(0,Number(cap.maxUnits||0)),row=recipes.map(r=>r.facility===cap.facility&&r.env===cap.env?cycleParts(r,state,scenario).cycle/3600:0);
+    if(row.some(x=>x>0)){A.push(row);b.push(maxUnits);}
+  }
+}
 function recipeLaborSeconds(recipe,state,scenario){const parts=cycleParts(recipe,state,scenario);return recipe.pet?Math.max(parts.cycle,parts.manual):parts.manual;}
 
-function rawOptimize(state,data,scenario,allowRecipes=null,forcedWeights=null){
+function rawOptimize(state,data,scenario,allowRecipes=null,forcedWeights=null,climateCaps=[]){
   let recipes=data.recipes.filter(r=>recipeRunnable(r,state,data,scenario));if(allowRecipes)recipes=recipes.filter(r=>allowRecipes.has(r.id));
   if(!recipes.length)return{ratePerHour:0,targetRate:0,objectiveRate:0,rows:[],runnableRecipes:[],scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:false,objectiveWeights:forcedWeights||[]};
   const n=recipes.length,A=[],b=[];
   addFacilityConstraints(A,b,recipes,state,data,scenario);
   const workerLimit=Number(state.workerSlots||0);if(workerLimit>0){A.push(recipes.map(r=>r.electric?0:recipeLaborSeconds(r,state,scenario)/3600));b.push(Math.max(0,workerLimit-utilityWorkerCount(scenario)));}
-  addMaterialBalance(A,b,recipes,data);addGuarantees(A,b,recipes,state);
+  addMaterialBalance(A,b,recipes,data);addGuarantees(A,b,recipes,state);addClimateCaps(A,b,recipes,state,scenario,climateCaps);
   const objectiveWeights=forcedWeights?.length?forcedWeights:buildObjectiveWeights(recipes,state,data,A,b),activeWeights=activeObjectiveWeights(objectiveWeights),vectors=activeWeights.map(w=>objectiveVector(recipes,w,data)),objective=recipes.map(r=>combinedObjectiveCoef(r,state,data,objectiveWeights)),joint=solveJointObjective(vectors,A,b),solved=joint?.solved;
   if(!solved)return{ratePerHour:0,targetRate:0,objectiveRate:-Infinity,rows:[],runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:true,objectiveWeights,jointMinShare:joint?.jointMinShare??null};
   const rows=[];let coin=0,target=0,obj=0;
   recipes.forEach((recipe,i)=>{const batches=Math.max(0,Number(solved.x[i]||0));if(batches<=1e-8)return;const parts=cycleParts(recipe,state,scenario),units=batches*parts.cycle/3600,coinPart=recipeNetValue(recipe,data)*batches,targetPart=state.target&&state.target!=='coin'?recipeNetItem(recipe,state.target)*batches:coinPart;coin+=coinPart;target+=targetPart;obj+=objective[i]*batches;rows.push({facility:recipe.facility,recipe,batchesPerHour:batches,units,perHour:coinPart,targetPerHour:targetPart,cycleSeconds:parts.cycle,manualSeconds:parts.manual,netValue:recipeNetValue(recipe,data)});});
   return{ratePerHour:coin,targetRate:target,objectiveRate:obj,rows,runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:false,objectiveWeights,jointMinShare:joint?.jointMinShare??null};
 }
-function oneRecipeOptimize(state,data,scenario,mixed){
+function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[]){
   const byFacility=new Map();
   for(const r of mixed.runnableRecipes){const arr=byFacility.get(r.facility)||[];arr.push(r);byFacility.set(r.facility,arr);}
   const constrained=new Map(),alwaysAllowed=[];
@@ -213,7 +212,7 @@ function oneRecipeOptimize(state,data,scenario,mixed){
   const cloneSelection=sel=>new Map([...sel].map(([f,ids])=>[f,new Set(ids)]));
   const selectionKey=sel=>[...sel].sort((a,b)=>a[0].localeCompare(b[0])).map(([f,ids])=>`${f}:${[...ids].sort((a,b)=>Number(a)-Number(b)).join(',')}`).join('|');
   const selectedRecipeIds=sel=>new Set([...alwaysAllowed,...[...sel.values()].flatMap(ids=>[...ids])]);
-  const solveSelected=sel=>rawOptimize(state,data,scenario,selectedRecipeIds(sel),mixed.objectiveWeights);
+  const solveSelected=sel=>rawOptimize(state,data,scenario,selectedRecipeIds(sel),mixed.objectiveWeights,climateCaps);
   const activeByFacility=new Map();for(const row of mixed.rows){const arr=activeByFacility.get(row.facility)||[];arr.push(row);activeByFacility.set(row.facility,arr);}
   const recipeById=new Map(mixed.runnableRecipes.map(r=>[r.id,r]));
   const objectiveRecipeScore=r=>combinedObjectiveCoef(r,state,data,mixed.objectiveWeights);
@@ -313,6 +312,32 @@ function scenarios(state){
   const cooling=state.climateOptions?.cooling?[null,'Cool','Freeze']:[null],heat=state.climateOptions?.heat?[null,'Warm','Scorching']:[null],sun=state.climateOptions?.sunlamp?[false,true]:[false],gen=state.generatorAvailable?[false,true]:[false];
   const out=[];for(const c of cooling)for(const h of heat)for(const s of sun)for(const g of gen)out.push({cooling:c,heat:h,sunlamp:s,generator:g});return out;
 }
+function climateCapKey(caps){
+  return[...(caps||[])].sort((a,b)=>(a.facility+'|'+a.env).localeCompare(b.facility+'|'+b.env)).map(x=>`${x.facility}|${x.env}:${Number(x.maxUnits||0)}`).join(';');
+}
+function reducedClimateCaps(caps,demand){
+  const key=`${demand.facility}|${demand.env}`,next=(caps||[]).map(x=>({...x})),existing=next.find(x=>`${x.facility}|${x.env}`===key),limit=Math.max(0,Number(demand.count||0)-1);
+  if(existing){if(Number(existing.maxUnits)<=limit+1e-9)return null;existing.maxUnits=limit;}
+  else next.push({facility:demand.facility,env:demand.env,maxUnits:limit});
+  return next;
+}
+function climateFeasibleScenarioPlan(state,data,scenario,sharedWeights){
+  const queue=[[]],seen=new Set(),rejected=[];let tries=0,best=null;
+  while(queue.length&&tries<28){
+    const caps=queue.shift(),key=climateCapKey(caps);if(seen.has(key))continue;seen.add(key);tries++;
+    let plan=rawOptimize(state,data,scenario,null,sharedWeights,caps);if(state.oneRecipePerFacility&&!plan.infeasible)plan=oneRecipeOptimize(state,data,scenario,plan,caps);
+    if(plan.infeasible)continue;
+    const layout=evaluateClimateLayout(plan,state,data);plan.climateLayout=layout;plan.climateCaps=caps;plan.climateVariantsTested=tries;
+    if(layout.feasible){if(planBeats(plan,best))best=plan;continue;}
+    rejected.push(plan);
+    const branches=[...(layout.branchDemands||[])].sort((a,b)=>Number(b.count||0)-Number(a.count||0)||Number(b.units||0)-Number(a.units||0)).slice(0,4);
+    for(const demand of branches){const next=reducedClimateCaps(caps,demand);if(next&&!seen.has(climateCapKey(next)))queue.push(next);}
+  }
+  if(best)return best;
+  let fallback=null;for(const p of rejected)if(planBeats(p,fallback))fallback=p;
+  if(fallback){fallback.infeasible=true;fallback.climateFailure=fallback.climateLayout;fallback.climateVariantsTested=tries;return fallback;}
+  return null;
+}
 export function optimizePlan(state,data){
   const scenarioList=scenarios(state),specs=objectiveSpecs(state,data);let sharedWeights=null;
   if(specs.length>1){
@@ -320,14 +345,17 @@ export function optimizePlan(state,data){
     for(const scenario of scenarioList){const probe=rawOptimize(state,data,scenario);for(const w of probe.objectiveWeights||[])if(Number.isFinite(w.max)&&w.max>Number(maxima.get(w.key)||0))maxima.set(w.key,w.max);}
     sharedWeights=specs.map(spec=>{const max=Number(maxima.get(spec.key)||0),normalizer=Math.max(1e-8,Math.abs(max));return{...spec,scale:1/normalizer,normalizer,max};});
   }
-  let best=null;const tested=[];
+  let best=null,bestClimateFailure=null;const tested=[];
   for(const scenario of scenarioList){
-    let plan=rawOptimize(state,data,scenario,null,sharedWeights);if(state.oneRecipePerFacility&&!plan.infeasible)plan=oneRecipeOptimize(state,data,scenario,plan);tested.push(plan);
-    if(plan.infeasible)continue;
+    const plan=climateFeasibleScenarioPlan(state,data,scenario,sharedWeights);if(!plan)continue;tested.push(plan);
+    if(plan.infeasible){if(plan.climateFailure&&planBeats(plan,bestClimateFailure))bestClimateFailure=plan;continue;}
     if(planBeats(plan,best))best=plan;
   }
-  if(!best)return{ratePerHour:0,targetRate:0,objectiveRate:0,rows:[],runnableRecipes:[],scenario:{},scenarioLabel:'No feasible plan',utilityWorkers:0,infeasible:true,tested,objectiveWeights:sharedWeights||[]};
-  best.testedScenarios=tested.length;return best;
+  if(!best){
+    if(bestClimateFailure)return{...bestClimateFailure,testedScenarios:tested.length,tested,objectiveWeights:bestClimateFailure.objectiveWeights||sharedWeights||[]};
+    return{ratePerHour:0,targetRate:0,objectiveRate:0,rows:[],runnableRecipes:[],scenario:{},scenarioLabel:'No feasible plan',utilityWorkers:0,infeasible:true,tested,objectiveWeights:sharedWeights||[],climateLayout:{feasible:true,status:'none',demands:[],message:'No climate-sensitive production is active.'}};
+  }
+  best.testedScenarios=tested.length;best.tested=tested;return best;
 }
 export function planItemRates(plan,data){
   const rates=new Map();for(const row of plan.rows){const b=row.batchesPerHour;for(const o of row.recipe.outputs||[])rates.set(Number(o.item),(rates.get(Number(o.item))||0)+Number(o.qty||0)*b);for(const i of row.recipe.inputs||[])rates.set(Number(i.item),(rates.get(Number(i.item))||0)-Number(i.qty||0)*b);}

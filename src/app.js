@@ -6,6 +6,7 @@ import {
   diagnoseObjective,defaultRecipeEfficiencyPct
 } from './optimizer.js';
 import {fillHomelandForRV,progressionSummary} from './progression.js';
+import {evaluateClimateLayout} from './climate.js';
 
 const STORE='aniimoHomelandOptimizerStateV1',HIDEOUT='https://www.hideoutgacha.com';
 const MAX_ANIIMO_BY_HOMELAND=[0,5,8,11,14,17,20,22,24,26,28,30,32,34,36,38,40,42,43,44,45];
@@ -304,11 +305,12 @@ function renderObjectiveDiagnostics(){
     const chain=d.chain?.length?` Relevant production line: ${d.chain.join(' ← ')}.`:'';
     warnings.push(`<div class="objective-warning"><img src="${itemIcon(req.item)}" alt=""><div><b>${esc(name)} ${esc(kind)} is missing from the final plan</b><span>${esc(d.detail+chain)}</span></div></div>`);
   }
+  if(currentPlan?.climateFailure&&!currentPlan.climateFailure.feasible){const d=currentPlan.climateFailure;warnings.push(`<div class="objective-warning"><div class="climate-warning-mark">C/H</div><div><b>Climate placement is physically infeasible</b><span>${esc(d.message||'No valid Cooling / Heat placement was found for this plan.')}</span></div></div>`);}
   host.innerHTML=warnings.join('');
 }
 
 function scheduleCompute({keepTeamSpeeds=false,refreshFacilities=true}={}){if(!keepTeamSpeeds)clearTeamSpeedOverride(refreshFacilities);clearTimeout(recomputeTimer);recomputeTimer=setTimeout(()=>computePlan(),100);$('#team-panel').innerHTML=title('Real team optimizer')+`<div class="empty">Plan changed. Real-team speed calibration and its comparison baseline were cleared; the next analysis starts fresh.</div>`;}
-function computePlan({keepTeam=false}={}){try{const planState=effectivePlanState();currentPlan=optimizePlan(planState,DATA);currentModel=buildTeamModel(currentPlan,planState,DATA);renderPlan();renderOutputs();renderAbilities();renderObjectiveDiagnostics();if(!state.manualSpeeds||teamSpeedOverride)renderFacilities();if(!keepTeam)renderTeamReady();}catch(e){currentPlan={rows:[],ratePerHour:0,targetRate:0,infeasible:true,scenarioLabel:'Error'};$('#plan-panel').innerHTML=title('Best plan')+`<div class="empty warning">${esc(e.message||e)}</div>`;$('#outputs-panel').innerHTML='';$('#abilities-panel').innerHTML='';if(!keepTeam)renderTeamReady();}}
+function computePlan({keepTeam=false}={}){try{const planState=effectivePlanState();currentPlan=optimizePlan(planState,DATA);currentModel=buildTeamModel(currentPlan,planState,DATA);renderPlan();renderClimateLayout();renderOutputs();renderAbilities();renderObjectiveDiagnostics();if(!state.manualSpeeds||teamSpeedOverride)renderFacilities();if(!keepTeam)renderTeamReady();}catch(e){currentPlan={rows:[],ratePerHour:0,targetRate:0,infeasible:true,scenarioLabel:'Error'};$('#plan-panel').innerHTML=title('Best plan')+`<div class="empty warning">${esc(e.message||e)}</div>`;$('#climate-panel').hidden=true;$('#outputs-panel').innerHTML='';$('#abilities-panel').innerHTML='';if(!keepTeam)renderTeamReady();}}
 function objectiveName(){return state.target==='coin'?'Home Coin':itemName(DATA,state.target);}
 const GENERATOR_ICON='https://aniipedia.com/items/10400021.webp';
 function utilityChoiceMarkup(plan){
@@ -341,6 +343,31 @@ function renderPlan(){const rawRows=[...(currentPlan.rows||[])],rows=groupedPlan
   <div class="metric-grid"><div class="metric"><small>${esc(objectiveName())} / hour</small><strong>${metricValue(itemIcon(state.target==='coin'?'coin':state.target),fmt1(targetRate))}</strong><span>${(state.guarantees||[]).some(g=>g.enabled!==false&&g.maximize)?'jointly maximised':'maximised output'}</span></div><div class="metric"><small>Home Coin / hour</small><strong>${metricValue(HOME_COIN_ICON,fmt(currentPlan.ratePerHour))}</strong><span>${fmt(currentPlan.ratePerHour*24)} / day</span></div></div>
   <div class="scenario-bar"><div><b>Utility choice</b><div class="chosen utility-choice">${utilityChoiceMarkup(currentPlan)}</div></div><span>${currentPlan.utilityWorkers||0} dedicated station slot${currentPlan.utilityWorkers===1?'':'s'} · ${state.oneRecipePerFacility?'walk-away recipes':'mixed recipes'} · ${state.collectHours?`collect every ${state.collectHours}h`:'no collection cap'}</span></div>
   ${currentPlan.infeasible?`<div class="empty warning">No feasible plan satisfies the current requirements.</div>`:rows.length?`<table class="plan-table"><thead><tr><th>Facility</th><th>Produce</th><th>Needs</th><th class="num">Cycle</th><th class="num coin-head"><img src="${HOME_COIN_ICON}" alt="">Coin/h</th></tr></thead><tbody>${rows.map(x=>planRow(x.row,x.continued,x.displayCount)).join('')}</tbody></table><p class="micro">Estimated active labour: ${labor.toFixed(2)} Aniimo-hours per hour, including resident and utility assignments.</p>`:`<div class="empty">No runnable production chain with the current settings.</div>`}`;}
+function climateBadge(d){
+  const fac=facilityMap.get(d.facility);
+  return `<span class="climate-demand climate-${String(d.env).toLowerCase()}">${fac?.icon?`<img src="${asset(fac.icon)}" alt="">`:''}<span>${d.count}× ${esc(fac?.name||d.name||d.facility)}</span><b>${esc(d.env)}</b></span>`;
+}
+function climateMapSvg(layout){
+  if(layout?.status!=='overlap'||!layout.coolingField||!layout.heatField)return'';
+  const rects=[layout.coolingField,layout.heatField,...(layout.placements||[]),...(layout.utilities||[])],minX=Math.min(...rects.map(r=>r.x))-.6,minY=Math.min(...rects.map(r=>r.y))-.6,maxX=Math.max(...rects.map(r=>r.x+r.w))+.6,maxY=Math.max(...rects.map(r=>r.y+r.h))+.6,w=maxX-minX,h=maxY-minY,c=layout.coolingField,ht=layout.heatField,ix=Math.max(c.x,ht.x),iy=Math.max(c.y,ht.y),ir=Math.min(c.x+c.w,ht.x+ht.w),ib=Math.min(c.y+c.h,ht.y+ht.h),overlap=ir>ix&&ib>iy?{x:ix,y:iy,w:ir-ix,h:ib-iy}:null,mid=layout.mode==='hot'?'warm':'cool';
+  const placed=(layout.placements||[]).map(p=>`<rect class="climate-plot-building env-${String(p.env).toLowerCase()}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"><title>${esc(p.name)} · ${esc(p.env)}</title></rect>`).join('');
+  const utilities=(layout.utilities||[]).map(u=>`<g><rect class="climate-plot-utility" x="${u.x}" y="${u.y}" width="${u.w}" height="${u.h}"/><text x="${u.x+u.w/2}" y="${u.y+u.h/2+.16}" text-anchor="middle">${u.facility==='cooling-unit'?'C':'H'}</text></g>`).join('');
+  return `<svg class="climate-map" viewBox="${minX} ${minY} ${w} ${h}" role="img" aria-label="Suggested climate overlap placement"><rect class="climate-field cooling" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}"/><rect class="climate-field heating" x="${ht.x}" y="${ht.y}" width="${ht.w}" height="${ht.h}"/>${overlap?`<rect class="climate-field overlap env-${mid}" x="${overlap.x}" y="${overlap.y}" width="${overlap.w}" height="${overlap.h}"/>`:''}${placed}${utilities}</svg>`;
+}
+function renderClimateLayout(){
+  const host=$('#climate-panel');if(!host)return;
+  let layout=currentPlan?.climateLayout;
+  if(currentPlan?.rows?.length&&!layout)layout=evaluateClimateLayout(currentPlan,effectivePlanState(),DATA);
+  if(!layout||layout.status==='none'){host.hidden=true;host.innerHTML='';return;}
+  host.hidden=false;
+  const demands=(layout.demands||[]).map(climateBadge).join(''),settings=utilityChoiceMarkup(currentPlan),tested=Number(layout.triedOffsets||0),aside=layout.feasible?(layout.status==='overlap'?`${tested} overlap offsets checked`:'physical climate check passed'):'climate placement blocked';
+  const body=layout.status==='overlap'
+    ? `<div class="climate-layout-grid"><div class="climate-map-wrap">${climateMapSvg(layout)}</div><div class="climate-layout-copy"><div class="climate-status good">PLACEMENT FOUND</div><p>${esc(layout.message||'Buildable climate placement found.')}</p><div class="climate-demand-list">${demands}</div></div></div>`
+    : layout.feasible
+      ? `<div class="climate-layout-simple"><div><div class="climate-status good">NO CONFLICT</div><p>${esc(layout.message||'These zones can be separated.')}</p></div><div class="climate-demand-list">${demands}</div></div>`
+      : `<div class="climate-layout-simple failed"><div><div class="climate-status bad">NO VALID PLACEMENT</div><p>${esc(layout.message||'The requested climate mix cannot be placed with the available utility fields.')}</p></div><div class="climate-demand-list">${demands}</div></div>`;
+  host.innerHTML=title('Climate layout',aside)+`<div class="climate-utility-line"><b>Utility settings</b><div class="chosen utility-choice">${settings}</div></div>${body}`;
+}
 function duration(s){if(!Number.isFinite(s))return'—';if(s>=3600)return`${(s/3600).toFixed(s%3600?1:0)}h`;if(s>=60)return`${Math.round(s/60)} min`;return`${Math.round(s)}s`;}
 function durationHours(h){if(!Number.isFinite(h)||h<=0)return'—';if(h>=48)return`${(h/24).toFixed(1)}d`;if(h>=1)return`${h.toFixed(1)}h`;return`${Math.ceil(h*60)}m`;}
 function materialFlows(plan){const map=new Map();for(const row of plan?.rows||[]){const b=Number(row.batchesPerHour||0);for(const o of row.recipe.outputs||[]){const id=Number(o.item),r=map.get(id)||{produced:0,consumed:0};r.produced+=Number(o.qty||0)*b;map.set(id,r);}for(const i of row.recipe.inputs||[]){const id=Number(i.item),r=map.get(id)||{produced:0,consumed:0};r.consumed+=Number(i.qty||0)*b;map.set(id,r);}}return map;}
@@ -381,8 +408,9 @@ async function analyzeTeam(){
       special.coverage=antiStallSummary(currentModel,special.team,special.team,special.ev.rows);
       teamSpeedOverride=state.manualSpeeds?null:speedOverrideFromSpecial(special);
       currentPlan={...currentPlan,rows:special.ev.rows||[],ratePerHour:Number(special.ev.rate||0),targetRate:Number(special.ev.targetRate||0),objectiveRate:Number(special.ev.objectiveRate||0),utilityWorkers:Number(special.ev.utilityWorkers??currentPlan.utilityWorkers??0),realTeamApplied:true};
+      currentPlan.climateLayout=evaluateClimateLayout(currentPlan,effectivePlanState(),DATA);
       teamAppliedPlan=true;
-      renderPlan();renderOutputs();renderAbilities();renderObjectiveDiagnostics();renderFacilities();
+      renderPlan();renderClimateLayout();renderOutputs();renderAbilities();renderObjectiveDiagnostics();renderFacilities();
     }
     status.textContent=state.manualSpeeds?'Done · exact real-team + personality plan applied; manual Speed % remained locked':special?'Done · exact real-team + personality plan applied above; measured Efficiency shown in Facilities':'Done · actual roster optimum calculated against the frozen theoretical baseline';
     box.innerHTML=(special?renderSpecial(special,baseline):'')+teams.map((x,i)=>renderTeamCard(x,i,i===0?{core,anti}:null,baseline)).join('');
