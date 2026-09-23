@@ -774,3 +774,20 @@
 .full-layout-map .layout-plot.locked text{
   filter:saturate(.7);
 }
+
+/* --- dedicated utility Aniimo staffing --- */
+.utility-staffing{margin-top:10px;display:grid;gap:7px}
+.utility-staffing.compact{margin:8px 0 0}
+.utility-staffing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:6px}
+.utility-staff-card{border:1px solid #30404d;background:linear-gradient(135deg,rgba(72,109,142,.08),#0a0f13 55%);padding:6px;display:grid;grid-template-columns:30px minmax(105px,.7fr) minmax(120px,1fr);gap:7px;align-items:center;min-width:0}
+.utility-staff-card.assigned{border-color:#396e50;background:linear-gradient(135deg,rgba(66,150,93,.09),#0a0f13 58%)}
+.utility-staff-facility{width:28px;height:28px;object-fit:contain}
+.utility-staff-copy{display:grid;gap:3px;min-width:0}.utility-staff-copy>b{font-size:8px;color:#d7dee5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.utility-staff-copy .ability-pill{transform-origin:left center}
+.utility-staff-worker{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-width:0;flex-wrap:wrap}
+.utility-staff-worker .pal-ability-chip{max-width:150px}
+.utility-candidate-label{font-size:6.5px;letter-spacing:.08em;text-transform:uppercase;color:#697885}
+.utility-missing{font-size:7px;color:#e17b8d;border:1px solid #59333c;padding:4px 6px;background:rgba(138,45,65,.08)}
+.utility-staffing .team-pal-copy small{display:block;font-size:6.5px;color:#73c995;font-weight:600;margin-top:1px}
+.utility-coverage{border-color:#3d6f8d;background:rgba(58,114,151,.055)}
+@media(max-width:760px){.utility-staff-card{grid-template-columns:28px 1fr}.utility-staff-worker{grid-column:1/-1;justify-content:flex-start}}
