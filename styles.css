@@ -732,3 +732,16 @@
 .climate-demand-service b{margin-left:1px!important}
 .climate-demand-facility{flex:0 0 auto}
 @media(max-width:960px){.full-base-grid{grid-template-columns:1fr}.full-base-copy{width:100%!important}.layout-field{grid-template-columns:1fr 150px}}
+
+/* --- bounded Homeland world + plot identity --- */
+.climate-map-viewport{background:#060a0e}
+.climate-infinite-grid{display:none!important}
+.full-layout-map .layout-world-bg{fill:#070c11}
+.full-layout-map .layout-world-grid{pointer-events:none}
+.full-layout-map .layout-plot rect{vector-effect:non-scaling-stroke;stroke-width:.13}
+.full-layout-map .layout-plot text{font-size:1.15px;font-weight:900;paint-order:stroke;stroke:#05080b;stroke-width:.16;stroke-linejoin:round;pointer-events:none}
+.layout-plot-outline{fill:none;stroke-width:.12;vector-effect:non-scaling-stroke;pointer-events:none}
+.layout-structure-bg>rect:first-of-type{opacity:.27}
+.layout-structure-bg .layout-image-wash{opacity:.24;pointer-events:none}
+.layout-structure-bg .layout-image-shade{opacity:.34;pointer-events:none}
+.layout-structure-bg:hover>rect:first-of-type{opacity:.34}
