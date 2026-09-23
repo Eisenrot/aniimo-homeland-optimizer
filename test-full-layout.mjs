@@ -1,5 +1,6 @@
 import {GAME_DATA as DATA} from './src/data.js';
 import {PLOT_MATRIX,PLOT_WIDTH,PLOT_HEIGHT,plotRect,normalizeLayoutSettings,enabledPlotNumbers,planPhysicalItems,buildFullBaseLayout,layoutStillFitsPlots,fullLayoutSignature} from './src/full-layout.js';
+import {evaluateClimateLayout} from './src/climate.js';
 
 if(JSON.stringify(PLOT_MATRIX)!==JSON.stringify([[13,14,15,16],[12,7,8,9],[11,4,3,6],[10,2,1,5]]))throw new Error('plot numbering matrix drifted');
 if(plotRect(1).x!==40||plotRect(1).y!==45||plotRect(16).x!==60||plotRect(16).y!==0)throw new Error('plot coordinates are wrong');
@@ -19,16 +20,8 @@ const plan={scenario:{cooling:'Cool',heat:'Scorching',sunlamp:true},rows:[
   {facility:'mine',units:5,perHour:4560,recipe:{id:7,outputs:[{item:4001051,qty:6}]}},
   {facility:'crafting-table',units:.17,perHour:5132,recipe:{id:8,outputs:[{item:4010084,qty:1}]}}
 ]};
-plan.climateLayout={feasible:true,status:'overlap',mode:'hot',message:'test',demands:[
-  {facility:'farmland',name:'Farmland',env:'Scorching',count:1,w:2,h:2},
-  {facility:'farmland',name:'Farmland',env:'Adequate',count:7,w:2,h:2},
-  {facility:'woodland',name:'Woodland',env:'Warm',count:10,w:4,h:4}
-],coolingField:{x:0,y:0,w:9,h:9},heatField:{x:1.5,y:0,w:9,h:9},utilities:[
-  {facility:'cooling-unit',x:3.5,y:3.5,w:2,h:2},{facility:'heat-furnace',x:5.5,y:4,w:1,h:1}
-],placements:[
-  ...Array.from({length:10},(_,i)=>({facility:'woodland',name:'Woodland',env:'Warm',copy:i+1,x:(i%5)*3.2-3,y:Math.floor(i/5)*4,w:4,h:4})),
-  {facility:'farmland',name:'Farmland',env:'Scorching',copy:1,x:9,y:4,w:2,h:2}
-],adequateLayout:{feasible:true,field:{x:0,y:0,w:9,h:9},utility:{facility:'sunlamp',x:4,y:4,w:1,h:1},placements:Array.from({length:7},(_,i)=>({facility:'farmland',name:'Farmland',env:'Adequate',copy:i+1,x:(i%4)*2,y:Math.floor(i/4)*2,w:2,h:2}))}};
+plan.climateLayout=evaluateClimateLayout(plan,state,DATA);
+if(!plan.climateLayout.feasible)throw new Error('synthetic climate plan should be feasible: '+plan.climateLayout.message);
 
 const items=planPhysicalItems(plan,state,DATA,{storageUnits:2});
 if(items.filter(x=>x.facility==='farmland').length!==20)throw new Error('full layout must place all 20 active Farmlands');
