@@ -349,10 +349,25 @@ function climateBadge(d){
 }
 function climateMapSvg(layout){
   if(layout?.status!=='overlap'||!layout.coolingField||!layout.heatField)return'';
-  const rects=[layout.coolingField,layout.heatField,...(layout.placements||[]),...(layout.utilities||[])],minX=Math.min(...rects.map(r=>r.x))-.6,minY=Math.min(...rects.map(r=>r.y))-.6,maxX=Math.max(...rects.map(r=>r.x+r.w))+.6,maxY=Math.max(...rects.map(r=>r.y+r.h))+.6,w=maxX-minX,h=maxY-minY,c=layout.coolingField,ht=layout.heatField,ix=Math.max(c.x,ht.x),iy=Math.max(c.y,ht.y),ir=Math.min(c.x+c.w,ht.x+ht.w),ib=Math.min(c.y+c.h,ht.y+ht.h),overlap=ir>ix&&ib>iy?{x:ix,y:iy,w:ir-ix,h:ib-iy}:null,mid=layout.mode==='hot'?'warm':'cool';
-  const placed=(layout.placements||[]).map(p=>`<rect class="climate-plot-building env-${String(p.env).toLowerCase()}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"><title>${esc(p.name)} · ${esc(p.env)}</title></rect>`).join('');
-  const utilities=(layout.utilities||[]).map(u=>`<g><rect class="climate-plot-utility" x="${u.x}" y="${u.y}" width="${u.w}" height="${u.h}"/><text x="${u.x+u.w/2}" y="${u.y+u.h/2+.16}" text-anchor="middle">${u.facility==='cooling-unit'?'C':'H'}</text></g>`).join('');
-  return `<svg class="climate-map" viewBox="${minX} ${minY} ${w} ${h}" role="img" aria-label="Suggested climate overlap placement"><rect class="climate-field cooling" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}"/><rect class="climate-field heating" x="${ht.x}" y="${ht.y}" width="${ht.w}" height="${ht.h}"/>${overlap?`<rect class="climate-field overlap env-${mid}" x="${overlap.x}" y="${overlap.y}" width="${overlap.w}" height="${overlap.h}"/>`:''}${placed}${utilities}</svg>`;
+  const rects=[layout.coolingField,layout.heatField,...(layout.placements||[]),...(layout.utilities||[])],minX=Math.floor(Math.min(...rects.map(r=>r.x))-.75),minY=Math.floor(Math.min(...rects.map(r=>r.y))-.75),maxX=Math.ceil(Math.max(...rects.map(r=>r.x+r.w))+.75),maxY=Math.ceil(Math.max(...rects.map(r=>r.y+r.h))+.75),w=maxX-minX,h=maxY-minY,c=layout.coolingField,ht=layout.heatField,ix=Math.max(c.x,ht.x),iy=Math.max(c.y,ht.y),ir=Math.min(c.x+c.w,ht.x+ht.w),ib=Math.min(c.y+c.h,ht.y+ht.h),overlap=ir>ix&&ib>iy?{x:ix,y:iy,w:ir-ix,h:ib-iy}:null,mid=layout.mode==='hot'?'warm':'cool';
+  const icon=(slug,r,cls='climate-plot-icon')=>{const fac=facilityMap.get(slug),src=asset(fac?.icon);if(!src)return'';const pad=Math.min(r.w,r.h)*.18,size=Math.max(.45,Math.min(r.w,r.h)-pad*2),x=r.x+r.w/2-size/2,y=r.y+r.h/2-size/2;return`<image class="${cls}" href="${src}" x="${x}" y="${y}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/>`;};
+  const placed=(layout.placements||[]).map(p=>`<g class="climate-building-group"><title>${esc(p.name)} #${p.copy} · ${esc(p.env)} · ${p.x},${p.y} · ${p.w}×${p.h}</title><rect class="climate-plot-building env-${String(p.env).toLowerCase()}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"/>${icon(p.facility,p)}</g>`).join('');
+  const utilities=(layout.utilities||[]).map(u=>`<g class="climate-utility-group"><title>${esc(facilityMap.get(u.facility)?.name||u.facility)} · ${u.x},${u.y}</title><rect class="climate-plot-utility" x="${u.x}" y="${u.y}" width="${u.w}" height="${u.h}"/>${icon(u.facility,u,'climate-plot-icon utility-icon')}</g>`).join('');
+  const dx=Number(layout.offset?.x||0),dy=Number(layout.offset?.y||0);
+  return`<svg class="climate-map" viewBox="${minX} ${minY} ${w} ${h}" role="img" aria-label="Suggested climate overlap placement">
+    <defs>
+      <pattern id="climate-grid-minor" width=".5" height=".5" patternUnits="userSpaceOnUse"><path d="M .5 0 L 0 0 0 .5" class="climate-grid-minor-line"/></pattern>
+      <pattern id="climate-grid-major" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M 1 0 L 0 0 0 1" class="climate-grid-major-line"/></pattern>
+    </defs>
+    <rect class="climate-field cooling" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}"/>
+    <rect class="climate-field heating" x="${ht.x}" y="${ht.y}" width="${ht.w}" height="${ht.h}"/>
+    ${overlap?`<rect class="climate-field overlap env-${mid}" x="${overlap.x}" y="${overlap.y}" width="${overlap.w}" height="${overlap.h}"/>`:''}
+    ${placed}${utilities}
+    <rect class="climate-grid-overlay minor" x="${minX}" y="${minY}" width="${w}" height="${h}" fill="url(#climate-grid-minor)"/>
+    <rect class="climate-grid-overlay major" x="${minX}" y="${minY}" width="${w}" height="${h}" fill="url(#climate-grid-major)"/>
+    <text class="climate-field-label cooling-label" x="${c.x+.18}" y="${c.y+.62}">COOLING 9×9</text>
+    <text class="climate-field-label heating-label" x="${ht.x+.18}" y="${ht.y+.62}">HEAT 9×9 · Δ ${dx>=0?'+':''}${dx}, ${dy>=0?'+':''}${dy}</text>
+  </svg>`;
 }
 function renderClimateLayout(){
   const host=$('#climate-panel');if(!host)return;

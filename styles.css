@@ -620,3 +620,18 @@
 .climate-demand.climate-adequate{border-color:#75683a}.climate-demand.climate-adequate b{color:#ead487}
 .climate-warning-mark{width:34px;height:30px;display:grid;place-items:center;border:1px solid #814052;background:#241118;color:#ff91a2;font-size:7px;font-weight:900;letter-spacing:.05em}
 @media(max-width:760px){.climate-layout-grid{grid-template-columns:1fr}.climate-layout-simple{display:grid}.climate-utility-line{align-items:flex-start;display:grid}}
+
+/* --- climate map readability: exact grid + structure icons --- */
+.climate-map-wrap{position:relative;background:#080c10}
+.climate-map{image-rendering:auto}
+.climate-grid-overlay{pointer-events:none}
+.climate-grid-minor-line{fill:none;stroke:rgba(216,230,240,.105);stroke-width:.035}
+.climate-grid-major-line{fill:none;stroke:rgba(228,239,247,.27);stroke-width:.055}
+.climate-plot-building{stroke:rgba(255,255,255,.52);stroke-width:.11}
+.climate-building-group:hover .climate-plot-building{stroke:#fff;stroke-width:.16}
+.climate-plot-icon{pointer-events:none;filter:drop-shadow(0 .08px .14px rgba(0,0,0,.85))}
+.climate-plot-icon.utility-icon{filter:drop-shadow(0 .08px .16px #000) drop-shadow(0 0 .12px rgba(255,255,255,.22))}
+.climate-plot-utility{fill:rgba(7,10,13,.92);stroke:#f5f7f9;stroke-width:.13}
+.climate-field-label{pointer-events:none;font-size:.34px!important;letter-spacing:.06em;paint-order:stroke;stroke:#071015;stroke-width:.08;stroke-linejoin:round}
+.climate-field-label.cooling-label{fill:#b8e8ff}
+.climate-field-label.heating-label{fill:#ffc0c8}
