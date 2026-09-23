@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="./assets/readme-hero.svg" alt="Aniimo Homeland Optimizer" width="100%">
-</p>
-
-<p align="center">
   <strong><a href="https://eisenrot.github.io/aniimo-homeland-optimizer/">Open the optimizer</a></strong>
   &nbsp;·&nbsp;
   <a href="#whats-inside">What's inside</a>
