@@ -64,3 +64,9 @@ console.log('AniIDEX Aniimo roster OK',{base:BASE_PALS.length,forms:FORM_PALS.le
 
 const css=fs.readFileSync(new URL('./styles.css',import.meta.url),'utf8');
 if(!css.includes("https://aniidex.com/images/aniimo/ui/hex-mask.webp")||!css.includes("https://aniidex.com/images/aniimo/ui/hex-bg.webp"))throw new Error('AniIDEX hex frame/mask styling missing');
+
+const css=fs.readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+const portraitCss=css.slice(css.indexOf('/* --- AniIDEX Aniimo hex portraits --- */'));
+if(/aniimo\/ui\/hex-mask\.webp/.test(portraitCss))throw new Error('AniIDEX portrait CSS must not depend on a cross-origin mask image');
+if(!portraitCss.includes('clip-path:polygon('))throw new Error('AniIDEX portrait local hex clipping is missing');
+if(!portraitCss.includes('.aniimo-hex.active .aniimo-hex-ring'))throw new Error('AniIDEX active colored ring styling is missing');

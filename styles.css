@@ -818,17 +818,17 @@
 .aniimo-hex-ring{
   position:absolute;
   z-index:0;
-  width:111%;
-  height:111%;
-  top:-5.5%;
+  width:116%;
+  height:116%;
+  top:-8%;
   left:50%;
   transform:translateX(-50%) scale(.94);
   background:var(--aniimo-theme);
   opacity:.08;
   pointer-events:none;
   transition:opacity .18s,transform .18s;
-  -webkit-mask:url('https://aniidex.com/images/aniimo/ui/hex-mask.webp') 50%/100% 100% no-repeat;
-  mask:url('https://aniidex.com/images/aniimo/ui/hex-mask.webp') 50%/100% 100% no-repeat;
+  -webkit-clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
+  clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
 }
 .aniimo-hex.active .aniimo-hex-ring{
   opacity:.88;
@@ -845,8 +845,8 @@
   position:absolute;
   inset:0;
   overflow:hidden;
-  -webkit-mask:url('https://aniidex.com/images/aniimo/ui/hex-mask.webp') 50%/100% 100% no-repeat;
-  mask:url('https://aniidex.com/images/aniimo/ui/hex-mask.webp') 50%/100% 100% no-repeat;
+  -webkit-clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
+  clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
 }
 .aniimo-hex-cut>img{
   position:absolute!important;
@@ -864,3 +864,17 @@
 .pal-ability-chip .aniimo-hex-ring{opacity:.72}
 .team-pal-chip .aniimo-hex-ring{opacity:.84}
 .ownership-aniimo,.living-aniimo,.chip-aniimo,.team-aniimo{isolation:isolate}
+
+/* AniIDEX portrait masks are intentionally reproduced as local clip geometry.
+   Remote CSS masks are subject to cross-origin mask restrictions and can render fully transparent. */
+.aniimo-hex.active .aniimo-hex-ring{
+  opacity:.92;
+  filter:drop-shadow(0 0 calc(var(--aniimo-size) * .075) color-mix(in srgb,var(--aniimo-theme) 72%,transparent));
+}
+.aniimo-hex-frame{
+  filter:drop-shadow(0 calc(var(--aniimo-size) * .025) calc(var(--aniimo-size) * .045) rgba(0,0,0,.72));
+}
+.aniimo-hex-cut>img{
+  z-index:2;
+  visibility:visible;
+}

@@ -300,9 +300,12 @@ function abilityIcon(name){return ABILITY_ICONS[name]||'';}
 const ANIIDEX_HEADS='https://aniidex.com/images/aniimo';
 const ANIIDEX_HEX_BG='https://aniidex.com/images/aniimo/ui/hex-bg.webp';
 const ANIIDEX_HEX_MASK='https://aniidex.com/images/aniimo/ui/hex-mask.webp';
-function palBaseHeadIcon(p){const id=String(p?.baseId??p?.id??'');return `${ANIIDEX_HEADS}/UI_PetHead_${id.slice(0,-2)}.webp`;}
-function palHeadIcon(p){if(p?.icon)return p.icon;const id=String(p?.id??'');return `${ANIIDEX_HEADS}/UI_PetHead_${p?.isForm?id:id.slice(0,-2)}.webp`;}
-function palImageError(p){const fallback=palBaseHeadIcon(p);return `if(this.src!=='${fallback}'){this.src='${fallback}';}else{this.onerror=null;this.style.visibility='hidden';}`;}
+function palHeadKey(p,base=false){const id=String(base?(p?.baseId??p?.id??''):(p?.id??''));return base||!p?.isForm?id.slice(0,-2):id;}
+function palRawHeadIcon(p,base=false){return `${ANIIDEX_HEADS}/UI_PetHead_${palHeadKey(p,base)}.webp`;}
+function palIpxHeadIcon(p,base=false){return `https://aniidex.com/_ipx/q_95&fit_inside&s_120x120/images/aniimo/UI_PetHead_${palHeadKey(p,base)}.webp`;}
+function palBaseHeadIcon(p){return palRawHeadIcon(p,true);}
+function palHeadIcon(p){if(p?.icon)return p.icon;return palRawHeadIcon(p,false);}
+function palImageError(p){const ipx=palIpxHeadIcon(p,false),base=palBaseHeadIcon(p),baseIpx=palIpxHeadIcon(p,true);return `if(!this.dataset.aniidexIpx){this.dataset.aniidexIpx='1';this.src='${ipx}';}else if(!this.dataset.aniidexBase){this.dataset.aniidexBase='1';this.src='${base}';}else if(!this.dataset.aniidexBaseIpx){this.dataset.aniidexBaseIpx='1';this.src='${baseIpx}';}else{this.onerror=null;this.style.visibility='hidden';}`;}
 function itemInline(qty,item){return `<span class="item-inline"><img src="${itemIcon(item)}" alt="" onerror="this.style.opacity='.15'"><span>${esc(qty)}× ${esc(itemName(DATA,item))}</span></span>`;}
 function coinValue(value,decimals=false){return `<span class="coin-value"><img src="${HOME_COIN_ICON}" alt=""><span>${decimals?fmt1(value):fmt(value)}</span></span>`;}
 function metricValue(icon,value){return `<span class="metric-value"><img src="${icon}" alt=""><span>${value}</span></span>`;}
