@@ -1,5 +1,5 @@
 import {GAME_DATA as DATA} from './src/data.js';
-import {climateAllows,evaluateClimateLayout,searchOverlapLayout} from './src/climate.js';
+import {climateAllows,evaluateClimateLayout,searchOverlapLayout,climateDemands,productionPlacementCounts} from './src/climate.js';
 import {optimizePlan} from './src/optimizer.js';
 
 const demand=(facility,env,count,w,h)=>({key:facility+'|'+env,facility,name:facility,env,count,units:count,w,h,canRotate:true});
@@ -85,3 +85,23 @@ if(!climateAware.climateLayout?.feasible)throw new Error('climate-aware optimize
 const hotUnits=climateAware.rows.find(r=>r.facility==='farmland')?.units||0,warmUnits=climateAware.rows.find(r=>r.facility==='woodland')?.units||0;
 if(!(hotUnits<=2.000001||warmUnits<=9.000001))throw new Error(`optimizer did not back off the impossible 3+10 layout: ${hotUnits} + ${warmUnits}`);
 console.log('climate optimizer branch',hotUnits,warmUnits,climateAware.scenarioLabel);
+
+
+const placementState={facilities:{farmland:{count:20,level:5},woodland:{count:10,level:3}}};
+const placementRows=[
+  {facility:'farmland',units:6.55,perHour:4865,recipe:{id:9101,env:'Adequate'}},
+  {facility:'farmland',units:6.51,perHour:2870,recipe:{id:9102}},
+  {facility:'farmland',units:1.35,perHour:908,recipe:{id:9103,env:'Scorching'}},
+  {facility:'farmland',units:3.65,perHour:539,recipe:{id:9104}},
+  {facility:'farmland',units:.94,perHour:239,recipe:{id:9105}},
+  {facility:'woodland',units:10,perHour:4285,recipe:{id:9201,env:'Warm'}}
+];
+const farmCounts=productionPlacementCounts('farmland',placementRows,placementState,DATA);
+const displayed=placementRows.filter(r=>r.facility==='farmland').map(r=>farmCounts.get(r)||0);
+if(displayed.join(',')!=='7,7,1,4,1')throw new Error(`whole-placement apportionment drifted: ${displayed.join(',')}`);
+const placementDemands=climateDemands({rows:placementRows},placementState,DATA);
+const demandKey=new Map(placementDemands.map(d=>[`${d.facility}|${d.env}`,d.count]));
+if(demandKey.get('farmland|Adequate')!==7)throw new Error(`Adequate climate count must match displayed Lavender 7x, got ${demandKey.get('farmland|Adequate')}`);
+if(demandKey.get('farmland|Scorching')!==1)throw new Error(`Scorching climate count must match displayed Sugarcane 1x, got ${demandKey.get('farmland|Scorching')}`);
+if(demandKey.get('woodland|Warm')!==10)throw new Error(`Warm climate count must match displayed Woodland 10x, got ${demandKey.get('woodland|Warm')}`);
+console.log('climate/display placement counts aligned',Object.fromEntries(demandKey));

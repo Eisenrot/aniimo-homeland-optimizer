@@ -6,7 +6,7 @@ import {
   diagnoseObjective,defaultRecipeEfficiencyPct
 } from './optimizer.js';
 import {fillHomelandForRV,progressionSummary} from './progression.js';
-import {evaluateClimateLayout} from './climate.js';
+import {evaluateClimateLayout,productionPlacementCounts} from './climate.js';
 
 const STORE='aniimoHomelandOptimizerStateV1',PERF_STORE='aniimoOptimizerPerformanceV1',HIDEOUT='https://www.hideoutgacha.com';
 const MAX_ANIIMO_BY_HOMELAND=[0,5,8,11,14,17,20,22,24,26,28,30,32,34,36,38,40,42,43,44,45];
@@ -376,18 +376,7 @@ function utilityChoiceMarkup(plan){
   if(s.generator)add('crackle-generator','Crackle Generator',GENERATOR_ICON);
   return items.length?items.join('<span class="utility-choice-sep">·</span>'):'<span class="utility-choice-none">No utility building used</span>';
 }
-function productionDisplayCounts(facility,rows){
-  const fac=facilityMap.get(facility);if(fac?.kind!=='production')return new Map();
-  const cap=Math.max(0,Number(state.facilities?.[facility]?.count||0)),total=rows.reduce((s,r)=>s+Math.max(0,Number(r.units||0)),0);
-  const target=Math.min(cap,Math.max(rows.length,Math.ceil(total-1e-7))),counts=new Map(rows.map(r=>[r,1]));
-  let left=Math.max(0,target-rows.length);
-  while(left-->0){
-    let pick=rows[0],best=-Infinity;
-    for(const row of rows){const deficit=Math.max(0,Number(row.units||0))-Number(counts.get(row)||0);if(deficit>best+1e-12){best=deficit;pick=row;}}
-    counts.set(pick,Number(counts.get(pick)||0)+1);
-  }
-  return counts;
-}
+function productionDisplayCounts(facility,rows){return productionPlacementCounts(facility,rows,state,DATA);}
 function groupedPlanRows(rows){
   const sorted=[...rows].sort((a,b)=>Number(b.perHour||0)-Number(a.perHour||0)),groups=new Map(),order=[];
   for(const row of sorted){if(!groups.has(row.facility)){groups.set(row.facility,[]);order.push(row.facility);}groups.get(row.facility).push(row);}
@@ -407,14 +396,11 @@ function climateMapSvg(layout){
   const icon=(slug,r,cls='climate-plot-icon')=>{const fac=facilityMap.get(slug),src=asset(fac?.icon);if(!src)return'';const pad=Math.min(r.w,r.h)*.18,size=Math.max(.45,Math.min(r.w,r.h)-pad*2),x=r.x+r.w/2-size/2,y=r.y+r.h/2-size/2;return`<image class="${cls}" href="${src}" x="${x}" y="${y}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/>`;};
   const placed=(layout.placements||[]).map(p=>`<g class="climate-building-group"><title>${esc(p.name)} #${p.copy} · ${esc(p.env)} · ${p.x},${p.y} · ${p.w}×${p.h}</title><rect class="climate-plot-building env-${String(p.env).toLowerCase()}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"/>${icon(p.facility,p)}</g>`).join('');
   const utilities=(layout.utilities||[]).map(u=>`<g class="climate-utility-group"><title>${esc(facilityMap.get(u.facility)?.name||u.facility)} · ${u.x},${u.y}</title><rect class="climate-plot-utility" x="${u.x}" y="${u.y}" width="${u.w}" height="${u.h}"/>${icon(u.facility,u,'climate-plot-icon utility-icon')}</g>`).join('');
-  const dx=Number(layout.offset?.x||0),dy=Number(layout.offset?.y||0);
   return`<svg class="climate-map" viewBox="${minX} ${minY} ${w} ${h}" role="img" aria-label="Suggested climate overlap placement">
     <rect class="climate-field cooling" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}"/>
     <rect class="climate-field heating" x="${ht.x}" y="${ht.y}" width="${ht.w}" height="${ht.h}"/>
     ${overlap?`<rect class="climate-field overlap env-${mid}" x="${overlap.x}" y="${overlap.y}" width="${overlap.w}" height="${overlap.h}"/>`:''}
     ${placed}${utilities}
-    <text class="climate-field-label cooling-label" x="${c.x+.18}" y="${c.y+.62}">COOLING 9×9</text>
-    <text class="climate-field-label heating-label" x="${ht.x+.18}" y="${ht.y+.62}">HEAT 9×9 · Δ ${dx>=0?'+':''}${dx}, ${dy>=0?'+':''}${dy}</text>
   </svg>`;
 }
 function renderClimateLayout(){

@@ -27,21 +27,43 @@ export function climateAllows(required,scenario={}){
   return false;
 }
 
+export function productionPlacementCounts(facility,rows,state,data){
+  const fac=data.facilities.find(f=>f.slug===facility);if(fac?.kind!=='production')return new Map();
+  const active=[...(rows||[])].filter(r=>r?.facility===facility&&Number(r.units||0)>1e-8).sort((a,b)=>Number(b.perHour||0)-Number(a.perHour||0)||Number(b.units||0)-Number(a.units||0)||Number(a.recipe?.id||0)-Number(b.recipe?.id||0));
+  if(!active.length)return new Map();
+  const cap=Math.max(0,Number(state.facilities?.[facility]?.count||0)),total=active.reduce((s,r)=>s+Math.max(0,Number(r.units||0)),0),target=Math.min(cap,Math.max(active.length,Math.ceil(total-1e-7))),counts=new Map(active.map(r=>[r,0]));
+  if(target<=0)return counts;
+  if(target<active.length){
+    for(const row of [...active].sort((a,b)=>Number(b.units||0)-Number(a.units||0)||Number(b.perHour||0)-Number(a.perHour||0)).slice(0,target))counts.set(row,1);
+    return counts;
+  }
+  for(const row of active)counts.set(row,1);
+  let left=target-active.length;
+  while(left-->0){
+    let pick=active[0],best=-Infinity;
+    for(const row of active){const deficit=Math.max(0,Number(row.units||0))-Number(counts.get(row)||0);if(deficit>best+1e-12){best=deficit;pick=row;}}
+    counts.set(pick,Number(counts.get(pick)||0)+1);
+  }
+  return counts;
+}
+
 export function climateDemands(plan,state,data){
-  const groups=new Map();
-  for(const row of plan?.rows||[]){
+  const groups=new Map(),rows=[...(plan?.rows||[])],byFacility=new Map();
+  for(const row of rows){const fac=data.facilities.find(f=>f.slug===row.facility);if(fac?.kind!=='production')continue;if(!byFacility.has(row.facility))byFacility.set(row.facility,[]);byFacility.get(row.facility).push(row);}
+  const placements=new Map();
+  for(const[facility,facilityRows]of byFacility)for(const[row,count]of productionPlacementCounts(facility,facilityRows,state,data))placements.set(row,count);
+  for(const row of rows){
     const env=row?.recipe?.env;if(!env)continue;
     const fac=data.facilities.find(f=>f.slug===row.facility);if(fac?.kind!=='production')continue;
     const fp=fac.footprint||{};if(!(Number(fp.w)>0&&Number(fp.h)>0))continue;
+    const count=Math.max(0,Number(placements.get(row)||0));if(count<=0)continue;
     const key=`${row.facility}|${env}`,rec=groups.get(key)||{
       key,facility:row.facility,name:fac.name||row.facility,env,units:0,count:0,
       w:Number(fp.w),h:Number(fp.h),canRotate:fac.canRotate!==false
     };
-    rec.units+=Math.max(0,Number(row.units||0));groups.set(key,rec);
+    rec.units+=Math.max(0,Number(row.units||0));rec.count+=count;groups.set(key,rec);
   }
-  const out=[...groups.values()];
-  for(const d of out)d.count=d.units>1e-8?Math.max(1,Math.ceil(d.units-1e-7)):0;
-  return out.filter(d=>d.count>0);
+  return[...groups.values()].filter(d=>d.count>0);
 }
 
 function utilityGeometry(dx=0,dy=0){
