@@ -59,7 +59,12 @@ if(!infer||infer.id!==1005503||infer.abilities.Dark!==4||infer.abilities.Fire!==
 const app=fs.readFileSync(new URL('./src/app.js',import.meta.url),'utf8');
 if(app.includes('/images/aniimo/heads/'))throw new Error('Hideout Aniimo head URL remains in app.js');
 if(app.includes('aniimoguide.com/images/aniimo'))throw new Error('AniimoGuide Aniimo artwork remains in app.js');
+if(app.includes("ANIIDEX_HEADS='https://aniidex.com/_ipx"))throw new Error('Aniimo head fallback still uses AniIDEX IPX instead of direct images');
+if(!app.includes('function aniimoHex('))throw new Error('shared AniIDEX hex portrait renderer missing');
 const data=fs.readFileSync(new URL('./src/data/pals.js',import.meta.url),'utf8');
 if(data.includes('aniimoguide.com'))throw new Error('AniimoGuide artwork remains in pals.js');
 if(data.includes('/_ipx/')&&data.includes('UI_PetHead_'))throw new Error('Aniimo heads should use direct AniIDEX image URLs, not the IPX proxy');
 console.log('AniIDEX Aniimo roster OK',{base:BASE_PALS.length,forms:FORM_PALS.length,prismana:FORM_PALS.filter(p=>p.isPrismana).length,total:PALS.length});
+
+const css=fs.readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+if(!css.includes("https://aniidex.com/images/aniimo/ui/hex-mask.webp")||!css.includes("https://aniidex.com/images/aniimo/ui/hex-bg.webp"))throw new Error('AniIDEX hex frame/mask styling missing');
