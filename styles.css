@@ -745,3 +745,22 @@
 .layout-structure-bg .layout-image-wash{opacity:.24;pointer-events:none}
 .layout-structure-bg .layout-image-shade{opacity:.34;pointer-events:none}
 .layout-structure-bg:hover>rect:first-of-type{opacity:.34}
+
+/* --- plot color visibility: per-plot tint + strong matching outline --- */
+.full-layout-map .layout-plot .layout-plot-fill{
+  fill:var(--plot-color)!important;
+  fill-opacity:var(--plot-fill-opacity)!important;
+  stroke:none!important;
+}
+.full-layout-map .layout-plot text{
+  fill:var(--plot-color)!important;
+  fill-opacity:var(--plot-text-opacity)!important;
+}
+.full-layout-map .layout-plot-outline{
+  fill:none!important;
+  stroke:var(--plot-color)!important;
+  stroke-opacity:var(--plot-outline-opacity)!important;
+  stroke-width:.19!important;
+  vector-effect:non-scaling-stroke;
+  pointer-events:none;
+}
