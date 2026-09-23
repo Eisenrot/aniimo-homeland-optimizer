@@ -6,9 +6,11 @@ import {
   diagnoseObjective,defaultRecipeEfficiencyPct
 } from './optimizer.js';
 import {fillHomelandForRV,progressionSummary} from './progression.js';
+import {readPlanCache,writePlanCache} from './plan-cache.js';
 import {evaluateClimateLayout,productionPlacementCounts} from './climate.js';
 
 const STORE='aniimoHomelandOptimizerStateV1',PERF_STORE='aniimoOptimizerPerformanceV1',HIDEOUT='https://www.hideoutgacha.com';
+const BUILD_ID=document.querySelector('meta[name="aniimo-build"]')?.content||'dev';
 const MAX_ANIIMO_BY_HOMELAND=[0,5,8,11,14,17,20,22,24,26,28,30,32,34,36,38,40,42,43,44,45];
 const maxAniimoForLevel=level=>MAX_ANIIMO_BY_HOMELAND[Math.min(20,Math.max(1,Number(level)||1))]||5;
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -80,11 +82,11 @@ function startPlanSolve(planState,{onProgress=null}={}){
   });
   return{promise,cancel:()=>{if(!settled){settled=true;worker.terminate();}}};
 }
-function optimizerEngineLabel(engine=perfSettings.engine){return engine==='main'?'Main thread':'Worker acceleration';}
+function optimizerEngineLabel(engine=perfSettings.engine){return engine==='cache'?'Cached result':engine==='main'?'Main thread':'Worker acceleration';}
 function optimizerProgressMarkup(p={},running=true){
-  const progress=Math.max(0,Math.min(1,Number(p.progress??(running?0:1)))),filled=Math.round(progress*20),segments=Array.from({length:20},(_,i)=>`<i class="${i<filled?'on':''}"></i>`).join(''),elapsed=Math.max(0,Number(p.elapsedMs||0))/1000,candidates=Math.max(0,Number(p.candidatePlans||0)),rate=Number(p.candidatesPerSecond||p.rate||0),scenarios=Math.max(0,Number(p.scenarioIndex??p.testedScenarios??0)),total=Math.max(0,Number(p.scenarioTotal||0)),phase=String(p.phase||'search').replace(/^./,x=>x.toUpperCase()),engine=optimizerEngineLabel(p.engine||perfSettings.engine);
-  const stats=[total?`${Math.min(scenarios,total)}/${total} scenarios`:'',candidates?`${candidates.toLocaleString()} candidates`:'',Number(p.climateOffsets||0)?`${Number(p.climateOffsets).toLocaleString()} geometry checks`:'',rate>0?`${fmt1(rate)}/s`:'',elapsed>0?`${elapsed.toFixed(elapsed<10?2:1)}s`:''].filter(Boolean).join(' · ');
-  return`<div id="optimizer-live-progress" class="optimizer-progress ${running?'running':'done'}"><div class="optimizer-progress-copy"><b>${running?phase:'Finished'} · ${esc(engine)}</b><span>${esc(stats||'Preparing search…')}</span></div><div class="optimizer-progress-track">${segments}</div></div>`;
+  const cacheHit=!!p.cacheHit,progress=cacheHit?1:Math.max(0,Math.min(1,Number(p.progress??(running?0:1)))),filled=Math.round(progress*20),segments=Array.from({length:20},(_,i)=>`<i class="${i<filled?'on':''}"></i>`).join(''),elapsed=Math.max(0,Number(p.elapsedMs||0))/1000,candidates=Math.max(0,Number(p.candidatePlans||0)),rate=cacheHit?0:Number(p.candidatesPerSecond||p.rate||0),scenarios=Math.max(0,Number(p.scenarioIndex??p.testedScenarios??0)),total=Math.max(0,Number(p.scenarioTotal||0)),phase=String(p.phase||'search').replace(/^./,x=>x.toUpperCase()),engine=optimizerEngineLabel(p.engine||perfSettings.engine);
+  const stats=cacheHit?'Exact plan state restored · optimization and climate placement skipped':[total?`${Math.min(scenarios,total)}/${total} scenarios`:'',candidates?`${candidates.toLocaleString()} candidates`:'',Number(p.climateOffsets||0)?`${Number(p.climateOffsets).toLocaleString()} geometry checks`:'',rate>0?`${fmt1(rate)}/s`:'',elapsed>0?`${elapsed.toFixed(elapsed<10?2:1)}s`:''].filter(Boolean).join(' · ');
+  return`<div id="optimizer-live-progress" class="optimizer-progress ${running?'running':'done'}"><div class="optimizer-progress-copy"><b>${cacheHit?'Cached':running?phase:'Finished'} · ${esc(engine)}</b><span>${esc(stats||'Preparing search…')}</span></div><div class="optimizer-progress-track">${segments}</div></div>`;
 }
 function showOptimizerProgress(p={}){
   if(!perfSettings.liveProgress)return;
@@ -364,7 +366,27 @@ function renderObjectiveDiagnostics(){
 }
 
 function scheduleCompute({keepTeamSpeeds=false,refreshFacilities=true}={}){if(!keepTeamSpeeds)clearTeamSpeedOverride(refreshFacilities);clearTimeout(recomputeTimer);recomputeTimer=setTimeout(()=>computePlan(),100);$('#team-panel').innerHTML=title('Real team optimizer')+`<div class="empty">Plan changed. Real-team speed calibration and its comparison baseline were cleared; the next analysis starts fresh.</div>`;}
-async function computePlan({keepTeam=false}={}){const serial=++computeSerial;activePlanSolve?.cancel?.();const planState=effectivePlanState(),started=performance.now();lastOptimizerStats=null;showOptimizerProgress({progress:0,phase:'starting',scenarioIndex:0,scenarioTotal:0,candidatePlans:0,elapsedMs:0,engine:perfSettings.engine});const solve=startPlanSolve(planState,{onProgress:p=>{if(serial!==computeSerial)return;showOptimizerProgress({...p,engine:perfSettings.engine});}});activePlanSolve=solve;try{const result=await solve.promise;if(serial!==computeSerial)return;currentPlan=result.plan;lastOptimizerStats={...(result.stats||currentPlan.optimizerStats||{}),engine:perfSettings.engine,elapsedMs:Number(result.stats?.elapsedMs??performance.now()-started),progress:1};currentModel=buildTeamModel(currentPlan,planState,DATA);renderPlan();renderClimateLayout();renderOutputs();renderAbilities();renderObjectiveDiagnostics();if(!state.manualSpeeds||teamSpeedOverride)renderFacilities();if(!keepTeam)renderTeamReady();}catch(e){if(serial!==computeSerial||e?.name==='AbortError')return;currentPlan={rows:[],ratePerHour:0,targetRate:0,infeasible:true,scenarioLabel:'Error'};$('#plan-panel').innerHTML=title('Best plan')+`<div class="empty warning">${esc(e.message||e)}</div>`;$('#climate-panel').hidden=true;$('#outputs-panel').innerHTML='';$('#abilities-panel').innerHTML='';if(!keepTeam)renderTeamReady();}finally{if(serial===computeSerial)activePlanSolve=null;}}
+async function computePlan({keepTeam=false}={}){
+  const serial=++computeSerial;activePlanSolve?.cancel?.();activePlanSolve=null;
+  const planState=effectivePlanState(),runOptions=optimizerRunOptions(),cacheable=!teamSpeedOverride&&!teamAppliedPlan,cached=cacheable?readPlanCache(localStorage,planState,runOptions,BUILD_ID):null;
+  if(cached){
+    currentPlan=cached.plan;lastOptimizerStats={...(cached.stats||currentPlan.optimizerStats||{}),engine:'cache',cacheHit:true,elapsedMs:0,progress:1};
+    try{
+      currentModel=buildTeamModel(currentPlan,planState,DATA);renderPlan();renderClimateLayout();renderOutputs();renderAbilities();renderObjectiveDiagnostics();if(!state.manualSpeeds||teamSpeedOverride)renderFacilities();if(!keepTeam)renderTeamReady();
+      return;
+    }catch(e){console.warn('Cached plan restore failed; recomputing.',e);}
+  }
+  const started=performance.now();lastOptimizerStats=null;showOptimizerProgress({progress:0,phase:'starting',scenarioIndex:0,scenarioTotal:0,candidatePlans:0,elapsedMs:0,engine:perfSettings.engine});
+  const solve=startPlanSolve(planState,{onProgress:p=>{if(serial!==computeSerial)return;showOptimizerProgress({...p,engine:perfSettings.engine});}});activePlanSolve=solve;
+  try{
+    const result=await solve.promise;if(serial!==computeSerial)return;currentPlan=result.plan;lastOptimizerStats={...(result.stats||currentPlan.optimizerStats||{}),engine:perfSettings.engine,elapsedMs:Number(result.stats?.elapsedMs??performance.now()-started),progress:1};
+    currentModel=buildTeamModel(currentPlan,planState,DATA);
+    if(cacheable&&!currentPlan?.infeasible&&!currentPlan?.realTeamApplied)writePlanCache(localStorage,planState,runOptions,BUILD_ID,currentPlan,lastOptimizerStats);
+    renderPlan();renderClimateLayout();renderOutputs();renderAbilities();renderObjectiveDiagnostics();if(!state.manualSpeeds||teamSpeedOverride)renderFacilities();if(!keepTeam)renderTeamReady();
+  }catch(e){
+    if(serial!==computeSerial||e?.name==='AbortError')return;currentPlan={rows:[],ratePerHour:0,targetRate:0,infeasible:true,scenarioLabel:'Error'};$('#plan-panel').innerHTML=title('Best plan')+`<div class="empty warning">${esc(e.message||e)}</div>`;$('#climate-panel').hidden=true;$('#outputs-panel').innerHTML='';$('#abilities-panel').innerHTML='';if(!keepTeam)renderTeamReady();
+  }finally{if(serial===computeSerial)activePlanSolve=null;}
+}
 function objectiveName(){return state.target==='coin'?'Home Coin':itemName(DATA,state.target);}
 const GENERATOR_ICON='https://aniipedia.com/items/10400021.webp';
 function utilityChoiceMarkup(plan){
