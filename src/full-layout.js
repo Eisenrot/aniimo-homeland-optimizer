@@ -1,7 +1,7 @@
 import {productionPlacementCounts} from './climate.js';
 import {stableStringify} from './plan-cache.js';
 
-export const FULL_LAYOUT_VERSION=1;
+export const FULL_LAYOUT_VERSION=2;
 export const FULL_LAYOUT_STORE='aniimoOptimizerFullLayoutV1';
 export const LAYOUT_SETTINGS_STORE='aniimoOptimizerLayoutSettingsV1';
 export const PLOT_WIDTH=20;
@@ -25,12 +25,12 @@ export function unlockedPlotNumbers(homelandLevel){
   const n=Math.max(1,Math.min(16,Math.floor(Number(homelandLevel)||1)));return Array.from({length:n},(_,i)=>i+1);
 }
 export function normalizeLayoutSettings(raw={},homelandLevel=1){
-  const disabled=[...new Set((raw.disabledPlots||[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=16))].sort((a,b)=>a-b);
+  const disabled=[...new Set((raw.disabledPlots||[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=16))].sort((a,b)=>a-b),storageRaw=raw.storageUnits==null?1:Number(raw.storageUnits),storageCount=Number.isFinite(storageRaw)?Math.floor(storageRaw):1;
   return{
     compact:raw.compact!==false,
     shape:SHAPES.has(raw.shape)?raw.shape:'auto',
     allowRotate:raw.allowRotate!==false,
-    storageUnits:homelandLevel>=2?Math.max(0,Math.min(24,Math.floor(Number(raw.storageUnits)||0))):0,
+    storageUnits:homelandLevel>=2?Math.max(0,Math.min(24,storageCount)):0,
     disabledPlots:disabled
   };
 }
@@ -108,13 +108,48 @@ function scanPositions(plot,w,h,shape){
 function facilityAnchor(placed,facility){
   const same=placed.filter(p=>p.facility===facility);if(!same.length)return null;return{x:same.reduce((s,p)=>s+p.x+p.w/2,0)/same.length,y:same.reduce((s,p)=>s+p.y+p.h/2,0)/same.length};
 }
+function rectCenter(r){return{x:r.x+r.w/2,y:r.y+r.h/2};}
+function pointDistance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function storageAssignments(placed){
+  const storages=placed.filter(p=>p.kind==='storage'),loads=Array(storages.length).fill(0);if(!storages.length)return{storages,loads};
+  for(const p of placed){if(p.kind==='storage'||p.kind==='utility')continue;const pc=rectCenter(p);let pick=0,best=Infinity;for(let i=0;i<storages.length;i++){const d=pointDistance(pc,rectCenter(storages[i]));if(d<best){best=d;pick=i;}}loads[pick]++;}
+  return{storages,loads};
+}
+function storagePlacementPenalty(rect,placed){
+  const{storages,loads}=storageAssignments(placed);if(!storages.length)return 0;const c=rectCenter(rect);let pick=0,best=Infinity;for(let i=0;i<storages.length;i++){const d=pointDistance(c,rectCenter(storages[i]));if(d<best){best=d;pick=i;}}
+  const minLoad=Math.min(...loads,0),loadPenalty=Math.max(0,(loads[pick]||0)-minLoad);return best*3+loadPenalty*5;
+}
+function storageCandidates(plots,w=2,h=2,fixed=[]){
+  const out=[],step=1;
+  for(const plot of plots)for(let y=plot.y;y<=plot.y+plot.h-h+EPS;y+=step)for(let x=plot.x;x<=plot.x+plot.w-w+EPS;x+=step){const rect={x:roundStep(x),y:roundStep(y),w,h};if(overlapsPlaced(rect,fixed))continue;out.push(rect);}
+  return out;
+}
+function placeStorageAnchors(items,fixedPlaced,plots){
+  if(!items.length)return[];const candidates=storageCandidates(plots,items[0].w,items[0].h,fixedPlaced);if(!candidates.length)return null;
+  const board=bboxOf(plots),center={x:board.x+board.w/2,y:board.y+board.h/2},chosen=[];
+  for(let n=0;n<items.length;n++){
+    let best=null,bestScore=Infinity;
+    for(const c of candidates){
+      if(chosen.some(s=>intersects(c,s)))continue;
+      const cc=rectCenter(c),centerDistance=pointDistance(cc,center);
+      let score=centerDistance;
+      if(chosen.length){
+        const minSpread=Math.min(...chosen.map(s=>pointDistance(cc,rectCenter(s)))),avgSpread=chosen.reduce((sum,s)=>sum+pointDistance(cc,rectCenter(s)),0)/chosen.length;
+        score=centerDistance*.30-minSpread*1.15-avgSpread*.12;
+      }
+      if(score<bestScore){best=c;bestScore=score;}
+    }
+    if(!best)return null;chosen.push({...items[n],...best,storageAnchor:true});
+  }
+  return chosen;
+}
 function candidateScore(rect,placed,settings,item){
   if(!placed.length)return rect.y*1000+rect.x;
-  const shape=settings.shape==='auto'?(settings.compact?'compact':'clusters'):settings.shape,before=bboxOf(placed),after=bboxOf([...placed,rect]),bboxPenalty=after.w*after.h-before.w*before.h;
-  if(shape==='rows')return rect.y*10000+rect.x;
-  if(shape==='spread'){const min=Math.min(...placed.map(p=>Math.hypot(rect.x+rect.w/2-(p.x+p.w/2),rect.y+rect.h/2-(p.y+p.h/2))));return-min;}
-  if(shape==='clusters'){const anchor=facilityAnchor(placed,item.facility);if(anchor)return Math.hypot(rect.x+rect.w/2-anchor.x,rect.y+rect.h/2-anchor.y)*20+bboxPenalty;}
-  return bboxPenalty*50+Math.hypot(rect.x+rect.w/2-(before.x+before.w/2),rect.y+rect.h/2-(before.y+before.h/2));
+  const shape=settings.shape==='auto'?(settings.compact?'compact':'clusters'):settings.shape,before=bboxOf(placed),after=bboxOf([...placed,rect]),bboxPenalty=after.w*after.h-before.w*before.h,storagePenalty=item?.kind==='storage'?0:storagePlacementPenalty(rect,placed);
+  if(shape==='rows')return rect.y*10000+rect.x+storagePenalty*5;
+  if(shape==='spread'){const min=Math.min(...placed.map(p=>Math.hypot(rect.x+rect.w/2-(p.x+p.w/2),rect.y+rect.h/2-(p.y+p.h/2))));return-min+storagePenalty*2;}
+  if(shape==='clusters'){const anchor=facilityAnchor(placed,item.facility);if(anchor)return Math.hypot(rect.x+rect.w/2-anchor.x,rect.y+rect.h/2-anchor.y)*20+bboxPenalty+storagePenalty*5;}
+  return bboxPenalty*50+Math.hypot(rect.x+rect.w/2-(before.x+before.w/2),rect.y+rect.h/2-(before.y+before.h/2))+storagePenalty*6;
 }
 function placeOne(item,placed,plots,settings){
   const shape=settings.shape==='auto'?(settings.compact?'compact':'clusters'):settings.shape,plotOrder=plotDistanceOrder(plots,shape),dims=[[item.w,item.h]];
@@ -208,7 +243,10 @@ function buildFullBaseLayoutVariant(plan,state,data,settings){
     if(!result)return{feasible:false,reason:`Climate cluster ${cluster.id} does not fit inside the enabled plots.`,placements:placed,fields,plots,settings,unplaced:[...cluster.members,...remaining]};
     placed.push(...result.placements);fields.push(...result.fields);
   }
-  remaining=[...remaining].sort((a,b)=>area(b)-area(a)||a.facility.localeCompare(b.facility));
+  const storageItems=remaining.filter(x=>x.kind==='storage'),ordinary=remaining.filter(x=>x.kind!=='storage'),storagePlacements=placeStorageAnchors(storageItems,placed,plots);
+  if(storageItems.length&&!storagePlacements)return{feasible:false,reason:'The requested Storage Units cannot be distributed inside the enabled plots.',placements:placed,fields,plots,settings,unplaced:[...storageItems,...ordinary]};
+  if(storagePlacements?.length)placed.push(...storagePlacements);
+  remaining=[...ordinary].sort((a,b)=>area(b)-area(a)||a.facility.localeCompare(b.facility));
   for(let index=0;index<remaining.length;index++){
     const item=remaining[index],p=placeOne(item,placed,plots,settings);
     if(!p)return{feasible:false,reason:`${item.name} does not fit inside the enabled plots.`,placements:placed,fields,plots,settings,unplaced:[item,...remaining.slice(index+1)]};

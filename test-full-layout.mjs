@@ -7,6 +7,8 @@ if(plotRect(1).x!==40||plotRect(1).y!==45||plotRect(16).x!==60||plotRect(16).y!=
 if(PLOT_WIDTH!==20||PLOT_HEIGHT!==15)throw new Error('plot geometry must remain 20x15');
 const s=normalizeLayoutSettings({disabledPlots:[2,10,99],storageUnits:3},9);
 if(s.disabledPlots.join(',')!=='2,10'||s.storageUnits!==3)throw new Error('layout settings normalization failed');
+if(normalizeLayoutSettings({},9).storageUnits!==1)throw new Error('Storage Units should default to 1 once unlocked');
+if(normalizeLayoutSettings({},1).storageUnits!==0)throw new Error('Storage Units must stay unavailable at RV1');
 if(enabledPlotNumbers(s,9).join(',')!=='1,3,4,5,6,7,8,9')throw new Error('enabled plot set failed');
 
 const state={homelandLevel:9,oneRecipePerFacility:true,facilities:{farmland:{count:20,level:5},woodland:{count:10,level:3},mine:{count:5,level:3},'crafting-table':{count:1,level:4}},climateOptions:{}};
@@ -36,3 +38,13 @@ if(!layoutStillFitsPlots(built,{disabledPlots:[]},9))throw new Error('fresh layo
 const used=built.usedPlots[0];if(used&&layoutStillFitsPlots(built,{disabledPlots:[used]},9))throw new Error('disabling a used plot must invalidate the layout');
 if(fullLayoutSignature(plan,state,{compact:true},'a')===fullLayoutSignature(plan,state,{compact:false},'a'))throw new Error('layout settings must invalidate layout cache');
 console.log('full base auto-layout OK',{items:built.itemCount,plots:built.usedPlots,bounds:built.bounds});
+
+const storageBuilt=buildFullBaseLayout(plan,state,DATA,{compact:true,shape:'auto',allowRotate:true,storageUnits:3,disabledPlots:[]});
+if(!storageBuilt.feasible)throw new Error('3-storage layout should fit: '+storageBuilt.reason);
+const stores=storageBuilt.placements.filter(x=>x.kind==='storage');
+if(stores.length!==3)throw new Error('storage optimizer lost a requested unit');
+const centerOf=r=>({x:r.x+r.w/2,y:r.y+r.h/2}),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+let minStorageDistance=Infinity;for(let i=0;i<stores.length;i++)for(let j=i+1;j<stores.length;j++)minStorageDistance=Math.min(minStorageDistance,dist(centerOf(stores[i]),centerOf(stores[j])));
+if(!(minStorageDistance>=8))throw new Error(`storage anchors are not meaningfully distributed: min distance ${minStorageDistance}`);
+if(fullLayoutSignature(plan,state,{storageUnits:1},'a')===fullLayoutSignature(plan,state,{storageUnits:3},'a'))throw new Error('storage count must invalidate layout cache');
+console.log('storage distribution OK',{stores:stores.map(x=>[x.x,x.y]),minStorageDistance});
