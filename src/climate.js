@@ -137,7 +137,7 @@ export function searchOverlapLayout(demands,mode,{maxOffset=9}={}){
         {facility:'cooling-unit',...convert(g.coolingUnit)},
         {facility:'heat-furnace',...convert(g.heatUnit)}
       ],
-      placements:placed.map(p=>({facility:p.facility,name:p.name,env:p.env,copy:p.copy,...convert(p.rect)})
+      placements:placed.map(p=>({facility:p.facility,name:p.name,env:p.env,copy:p.copy,...convert(p.rect)}))
     };
   }
   return{feasible:false,mode,triedOffsets:tried,placements:[]};
