@@ -567,3 +567,17 @@
 .coverage.permanent-coverage .coverage-chip{border-color:#3b5e75;background:rgba(58,112,148,.09)}
 .coverage.permanent-coverage .coverage-chip.full{border-color:#2f6b49;background:rgba(52,133,79,.1);color:var(--green)}
 .coverage.burst-coverage .coverage-chip{border-style:dashed}
+
+
+/* --- burst workload / headroom --- */
+.coverage.burst-coverage{align-items:stretch}
+.coverage .burst-load-chip{display:grid;grid-template-columns:20px auto auto;align-items:center;column-gap:6px;row-gap:3px;min-width:205px;padding:6px 8px}
+.coverage .burst-load-chip>img{width:20px;height:20px;object-fit:contain;grid-row:1/3}
+.coverage .burst-load-chip>.coverage-name{border:0;padding:0;color:#c8d0d7}
+.coverage .burst-load-chip>b{justify-self:end}
+.coverage .burst-load-chip>.burst-metric{grid-column:2/4;border:0;padding:0;color:#83909b;font-size:7.5px;white-space:nowrap}
+.coverage .burst-load-chip>.burst-metric em{font-style:normal;text-transform:uppercase;letter-spacing:.08em;color:#65717d;margin-right:3px}
+.coverage .burst-load-chip>.burst-metric.healthy{color:#78d99a}
+.coverage .burst-load-chip>.burst-metric.strained{color:#e6b85c}
+.coverage .burst-load-chip.partial{border-color:#725c2d}
+.burst-help{margin-top:5px}

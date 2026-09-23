@@ -224,11 +224,15 @@ function palFallbackColors(p){const cs=Object.keys(p.abilities||{}).map(a=>DATA.
 function palAbilityChip(p,ability){const[a,b]=palFallbackColors(p),src=palHeadIcon(p);return `<span class="pal-ability-chip" data-palette-src="${src}" style="--pal-a:${a};--pal-b:${b}"><img src="${src}" alt="" onerror="this.style.visibility='hidden'"><span><b>${esc(p.name)}</b> · Lv.${p.abilities[ability]}</span></span>`;}
 function teamPalChip(member,inner=''){const p=member.pal||member,[a,b]=palFallbackColors(p),src=palHeadIcon(p);return `<span class="pal-ability-chip team-pal-chip" data-palette-src="${src}" style="--pal-a:${a};--pal-b:${b}"><img src="${src}" alt="" onerror="this.style.visibility='hidden'"><span class="team-pal-copy"><b>${esc(p.name)}</b>${inner}</span></span>`;}
 function coverageChip(f,v){const fac=facilityMap.get(f),name=fac?.name||f;return `<span class="coverage-chip ${v.hit===v.total?'full':''}">${fac?.icon?`<img src="${asset(fac.icon)}" alt="">`:''}<span>${esc(name)}</span><b>${v.hit}/${v.total}</b></span>`;}
+function burstCoverageChip(f,v){
+  const fac=facilityMap.get(f),name=fac?.name||f,ratio=Number(v.capacityRatio||0),load=Number(v.demandHours||0),full=v.hit===v.total&&ratio>=1-.001,capacity=ratio>=10?`${fmt1(ratio)}×`:ratio>0?`${ratio.toFixed(2)}×`:'0×',headroom=ratio>=1?`+${Math.round((ratio-1)*100)}%`:`${Math.round(ratio*100)}% covered`,title=`Current burst labour: ${load.toFixed(2)} Aniimo-h/h · independent service capacity: ${capacity} this load · ${v.eligibleWorkers||0} compatible free worker${Number(v.eligibleWorkers||0)===1?'':'s'} after permanent reservations.`;
+  return`<span class="coverage-chip burst-load-chip ${full?'full':ratio>0?'partial':''}" title="${esc(title)}">${fac?.icon?`<img src="${asset(fac.icon)}" alt="">`:''}<span class="coverage-name">${esc(name)}</span><b>${v.hit}/${v.total}</b><span class="burst-metric"><em>load</em> ${load.toFixed(2)} h/h</span><span class="burst-metric ${ratio>=1?'healthy':'strained'}"><em>capacity</em> ${capacity} · ${headroom}</span></span>`;
+}
 function staffingCoverageMarkup(summary){
   if(!summary)return'';
   const permanent=[...(summary.permanentByFacility||new Map())],burst=[...(summary.burstByFacility||new Map())],parts=[];
   if(permanent.length)parts.push(`<div class="subhead">Permanent 24/7 coverage</div><div class="coverage permanent-coverage">${permanent.map(([f,v])=>coverageChip(f,v)).join('')}</div>`);
-  if(burst.length)parts.push(`<div class="subhead">Burst / restart coverage</div><div class="coverage burst-coverage">${burst.map(([f,v])=>coverageChip(f,v)).join('')}</div>`);
+  if(burst.length)parts.push(`<div class="subhead">Burst / restart coverage</div><div class="coverage burst-coverage">${burst.map(([f,v])=>burstCoverageChip(f,v)).join('')}</div><p class="micro burst-help">Ability coverage is reusable across sequential crop/tree jobs. Load is the current plan's real manual labour demand; capacity is each facility family's independent headroom after permanent workers are reserved.</p>`);
   return parts.join('');
 }
 function applyPalGradients(){

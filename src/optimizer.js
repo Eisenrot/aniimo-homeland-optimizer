@@ -515,7 +515,36 @@ export function staffingCoverageMatch(model,team,rows=model.plan.rows){
     }
     if(pick>=0)assignments.push({worker:pick,slot});
   }
-  return{coverageWeight:assignments.reduce((s,x)=>s+x.slot.weight,0),totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments,slots,permanentWorkers:[...permanentUsed]};
+  const base={coverageWeight:assignments.reduce((s,x)=>s+x.slot.weight,0),totalWeight:slots.reduce((s,x)=>s+x.weight,0),assignments,slots,permanentWorkers:[...permanentUsed]};
+  const burstLoadByFacility=burstLoadSummary(model,team,rows,base),ratios=[...burstLoadByFacility.values()].map(x=>Number(x.capacityRatio||0));
+  return{...base,burstLoadByFacility,burstResilienceScore:ratios.length?Math.min(...ratios):0};
+}
+export function burstLoadSummary(model,team,rows=model.plan.rows,match=null){
+  const active=rows||[],reserved=new Set(match?.permanentWorkers||staffingCoverageMatch(model,team,active).permanentWorkers||[]),free=team.map((_,i)=>i).filter(i=>!reserved.has(i)),byFacility=new Map();
+  for(const base of active){
+    if(!BURST_STAFFING.has(base.facility))continue;
+    const row=model.rows.find(x=>x.recipe.id===base.recipe.id)||{...base,work:splitRecipeWork(base.recipe,model.state,model.scenario)},batches=Math.max(0,Number(base.batchesPerHour||0));
+    if(batches<=1e-9)continue;
+    const rec=byFacility.get(base.facility)||{tasks:new Map(),demandSeconds:0};
+    for(const task of taskObjects(row)){
+      const demand=Math.max(0,Number(task.seconds||0))*batches;if(demand<=1e-9)continue;
+      const key=`${task.ability}|${task.level}|${task.family||''}`,prev=rec.tasks.get(key);
+      if(prev)prev.demandSeconds+=demand;else rec.tasks.set(key,{task:{...task,facility:base.facility},demandSeconds:demand});
+      rec.demandSeconds+=demand;
+    }
+    byFacility.set(base.facility,rec);
+  }
+  const out=new Map();
+  for(const[facility,rec]of byFacility){
+    const tasks=[...rec.tasks.values()],edges=[];
+    for(const entry of tasks)for(const w of free)if(palCanDo(team[w].pal,entry.task))edges.push({entry,w,ratio:Math.max(.0001,workerTaskRelativeSpeed(model,team[w].pal,entry.task))});
+    const N=edges.length+1,z=edges.length,objective=Array(N).fill(0);objective[z]=1;const A=[],b=[];
+    for(const w of free){const row=Array(N).fill(0);edges.forEach((e,i)=>{if(e.w===w)row[i]=1;});A.push(row);b.push(3600);}
+    for(const entry of tasks){const row=Array(N).fill(0);row[z]=entry.demandSeconds;edges.forEach((e,i)=>{if(e.entry===entry)row[i]-=e.ratio;});A.push(row);b.push(0);}
+    const solved=tasks.length&&free.length?solveLp(objective,A,b):null,capacityRatio=Math.max(0,Number(solved?.x?.[z]||0)),demandHours=rec.demandSeconds/3600,eligibleWorkers=new Set(edges.map(e=>e.w)).size;
+    out.set(facility,{demandHours,capacityRatio,capacityHours:demandHours*capacityRatio,headroomHours:demandHours*Math.max(0,capacityRatio-1),eligibleWorkers,freeWorkers:free.length});
+  }
+  return out;
 }
 export function burstSlots(model,rows=model.plan.rows){return staffingCoverageSlots(model,rows).filter(x=>x.mode==='burst');}
 export function burstMatch(model,team,rows=model.plan.rows){return staffingCoverageMatch(model,team,rows);}
@@ -528,8 +557,10 @@ export async function findBestTeams(model,state,data,{limit=4,onProgress}={}){
   for(let mode=0;mode<8;mode++){const team=[];while(team.length<workers){let best=null,bestScore=-Infinity;for(let i=0;i<searchPool.length;i++){const spec=searchPool[(i+mode)%searchPool.length],cand=nextCopy(spec,team);if(!cand)continue;const score=relevance(model,cand.pal)*1000-i*.001;if(score>bestScore){bestScore=score;best=cand;}}if(!best)break;team.push(best);}if(team.length===workers)seeds.push(normalizeTeam(team));}
   for(let off=0;off<Math.min(6,searchPool.length);off++){const team=[];let cursor=off,guard=0;while(team.length<workers&&guard++<workers*searchPool.length*3){const spec=searchPool[cursor%searchPool.length],cand=nextCopy(spec,team);if(cand)team.push(cand);cursor++;}if(team.length===workers)seeds.push(normalizeTeam(team));}
   const unique=new Map(seeds.map(t=>[teamKey(t),t])),candidates=[];let si=0;for(const team of unique.values()){si++;onProgress?.(`Seed ${si}/${unique.size}`);const ev=exact(team),burst=burstMatch(model,team,ev.rows);candidates.push({team,eval:ev,burst});if(si%2===0)await new Promise(r=>setTimeout(r,0));}
-  candidates.sort((a,b)=>b.eval.objectiveRate-a.eval.objectiveRate||b.burst.coverageWeight-a.burst.coverageWeight);let beam=candidates.slice(0,4);
-  for(let round=0;round<3;round++){const next=[];let improved=false;for(let ci=0;ci<beam.length;ci++){let best=beam[ci];for(let pos=0;pos<best.team.length;pos++){const reduced=best.team.filter((_,i)=>i!==pos);for(const spec of swapPool){const cand=nextCopy(spec,reduced);if(!cand)continue;const test=normalizeTeam([...reduced,cand]),ev=exact(test),bm=burstMatch(model,test,ev.rows);const better=ev.objectiveRate>best.eval.objectiveRate+.0001||(Math.abs(ev.objectiveRate-best.eval.objectiveRate)<=.0001&&bm.coverageWeight>best.burst.coverageWeight+.0001);if(better){best={team:test,eval:ev,burst:bm};improved=true;}}}next.push(best);onProgress?.(`Refine ${ci+1}/${beam.length} · round ${round+1}`);await new Promise(r=>setTimeout(r,0));}const d=new Map();for(const x of[...beam,...next]){const k=teamKey(x.team),old=d.get(k);if(!old||x.eval.objectiveRate>old.eval.objectiveRate+.0001||(Math.abs(x.eval.objectiveRate-old.eval.objectiveRate)<=.0001&&x.burst.coverageWeight>old.burst.coverageWeight))d.set(k,x);}beam=[...d.values()].sort((a,b)=>b.eval.objectiveRate-a.eval.objectiveRate||b.burst.coverageWeight-a.burst.coverageWeight).slice(0,4);if(!improved)break;}
+  const teamCompare=(a,b)=>b.eval.objectiveRate-a.eval.objectiveRate||b.burst.coverageWeight-a.burst.coverageWeight||Number(b.burst.burstResilienceScore||0)-Number(a.burst.burstResilienceScore||0);
+  const teamBetter=(a,b)=>a.eval.objectiveRate>b.eval.objectiveRate+.0001||(Math.abs(a.eval.objectiveRate-b.eval.objectiveRate)<=.0001&&(a.burst.coverageWeight>b.burst.coverageWeight+.0001||(Math.abs(a.burst.coverageWeight-b.burst.coverageWeight)<=.0001&&Number(a.burst.burstResilienceScore||0)>Number(b.burst.burstResilienceScore||0)+.0001)));
+  candidates.sort(teamCompare);let beam=candidates.slice(0,4);
+  for(let round=0;round<3;round++){const next=[];let improved=false;for(let ci=0;ci<beam.length;ci++){let best=beam[ci];for(let pos=0;pos<best.team.length;pos++){const reduced=best.team.filter((_,i)=>i!==pos);for(const spec of swapPool){const cand=nextCopy(spec,reduced);if(!cand)continue;const test=normalizeTeam([...reduced,cand]),ev=exact(test),bm=burstMatch(model,test,ev.rows),candidate={team:test,eval:ev,burst:bm};if(teamBetter(candidate,best)){best=candidate;improved=true;}}}next.push(best);onProgress?.(`Refine ${ci+1}/${beam.length} · round ${round+1}`);await new Promise(r=>setTimeout(r,0));}const d=new Map();for(const x of[...beam,...next]){const k=teamKey(x.team),old=d.get(k);if(!old||teamBetter(x,old))d.set(k,x);}beam=[...d.values()].sort(teamCompare).slice(0,4);if(!improved)break;}
   return beam.slice(0,limit);
 }
 
@@ -546,7 +577,8 @@ export function antiStallSummary(model,full,core,rows=null){
     byFacility.get(a.slot.facility).hit++;
     (a.slot.mode==='permanent'?permanentByFacility:burstByFacility).get(a.slot.facility).hit++;
   }
-  return{reserves,match,byFacility,permanentByFacility,burstByFacility};
+  for(const[facility,metrics]of match.burstLoadByFacility||[])Object.assign(burstByFacility.get(facility)||{},metrics);
+  return{reserves,match,byFacility,permanentByFacility,burstByFacility,burstResilienceScore:match.burstResilienceScore||0};
 }
 
 function profileHas(p,l){return!!p&&!!l&&String(p).includes(l);}
