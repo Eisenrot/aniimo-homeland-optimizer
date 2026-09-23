@@ -57,8 +57,6 @@
 .optimizer-setting-row select{height:34px;border:1px solid #354454;background:#0b1015;color:#d6dde4;padding:0 8px;font-size:9px}
 .optimizer-setting-check{display:grid;grid-template-columns:18px 1fr;gap:8px;align-items:start;border-top:1px solid #252d35;padding:10px 0;cursor:pointer}
 .optimizer-setting-check input{margin-top:2px;accent-color:#68aaf0}
-.optimizer-engine-note{border:1px solid #2b3947;background:rgba(69,117,163,.07);padding:8px 9px;margin-top:4px;display:grid;gap:3px}
-.optimizer-engine-note b{font-size:8px;color:#9fc7ef}.optimizer-engine-note span{font-size:8px;color:#788692;line-height:1.5}
 .optimizer-progress{border:1px solid #2c3946;background:linear-gradient(90deg,rgba(63,118,175,.08),#0b0f13 55%);padding:7px 8px;margin:0 0 9px;display:grid;gap:5px}
 .optimizer-progress.done{border-color:#2f4d39;background:linear-gradient(90deg,rgba(69,150,94,.07),#0b0f13 55%)}
 .optimizer-progress-copy{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:8px}

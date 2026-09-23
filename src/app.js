@@ -106,7 +106,6 @@ function ensureOptimizerSettingsUi(){
         <div class="optimizer-setting-row"><div><b>Compute engine</b><small>Worker mode is the stable default. Main thread exists for compatibility.</small></div><select id="optimizer-engine"><option value="worker">Worker acceleration (stable)</option><option value="main">Main thread / compatibility</option></select></div>
         <div class="optimizer-setting-row"><div><b>Climate branch budget</b><small>How many rejected-plan variants each utility scenario may explore.</small></div><select id="optimizer-climate-budget"><option value="12">Quick · 12</option><option value="28">Balanced · 28</option><option value="56">Exhaustive · 56</option></select></div>
         <label class="optimizer-setting-check"><input id="optimizer-live-toggle" type="checkbox"><span><b>Live search telemetry</b><small>Show scenario progress, candidate count and search throughput in Best plan.</small></span></label>
-        <div class="optimizer-engine-note"><b>Why no fake “GPU” switch?</b><span>Fribbels can map relic permutations to a uniform WebGPU arithmetic kernel. Homeland uses LP solves, branching and rectangle packing; moving it off-thread is immediately useful, while a GPU port would require a different solver rather than a cosmetic toggle.</span></div>
       </div>
     </div>
   `);
@@ -404,22 +403,16 @@ function climateBadge(d){
 }
 function climateMapSvg(layout){
   if(layout?.status!=='overlap'||!layout.coolingField||!layout.heatField)return'';
-  const rects=[layout.coolingField,layout.heatField,...(layout.placements||[]),...(layout.utilities||[])],minX=Math.floor(Math.min(...rects.map(r=>r.x))-.75),minY=Math.floor(Math.min(...rects.map(r=>r.y))-.75),maxX=Math.ceil(Math.max(...rects.map(r=>r.x+r.w))+.75),maxY=Math.ceil(Math.max(...rects.map(r=>r.y+r.h))+.75),w=maxX-minX,h=maxY-minY,c=layout.coolingField,ht=layout.heatField,ix=Math.max(c.x,ht.x),iy=Math.max(c.y,ht.y),ir=Math.min(c.x+c.w,ht.x+ht.w),ib=Math.min(c.y+c.h,ht.y+ht.h),overlap=ir>ix&&ib>iy?{x:ix,y:iy,w:ir-ix,h:ib-iy}:null,mid=layout.mode==='hot'?'warm':'cool';
+  const rects=[layout.coolingField,layout.heatField,...(layout.placements||[]),...(layout.utilities||[])],minX=Math.floor(Math.min(...rects.map(r=>r.x))-.35),minY=Math.floor(Math.min(...rects.map(r=>r.y))-.35),maxX=Math.ceil(Math.max(...rects.map(r=>r.x+r.w))+.35),maxY=Math.ceil(Math.max(...rects.map(r=>r.y+r.h))+.35),w=maxX-minX,h=maxY-minY,c=layout.coolingField,ht=layout.heatField,ix=Math.max(c.x,ht.x),iy=Math.max(c.y,ht.y),ir=Math.min(c.x+c.w,ht.x+ht.w),ib=Math.min(c.y+c.h,ht.y+ht.h),overlap=ir>ix&&ib>iy?{x:ix,y:iy,w:ir-ix,h:ib-iy}:null,mid=layout.mode==='hot'?'warm':'cool';
   const icon=(slug,r,cls='climate-plot-icon')=>{const fac=facilityMap.get(slug),src=asset(fac?.icon);if(!src)return'';const pad=Math.min(r.w,r.h)*.18,size=Math.max(.45,Math.min(r.w,r.h)-pad*2),x=r.x+r.w/2-size/2,y=r.y+r.h/2-size/2;return`<image class="${cls}" href="${src}" x="${x}" y="${y}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/>`;};
   const placed=(layout.placements||[]).map(p=>`<g class="climate-building-group"><title>${esc(p.name)} #${p.copy} · ${esc(p.env)} · ${p.x},${p.y} · ${p.w}×${p.h}</title><rect class="climate-plot-building env-${String(p.env).toLowerCase()}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"/>${icon(p.facility,p)}</g>`).join('');
   const utilities=(layout.utilities||[]).map(u=>`<g class="climate-utility-group"><title>${esc(facilityMap.get(u.facility)?.name||u.facility)} · ${u.x},${u.y}</title><rect class="climate-plot-utility" x="${u.x}" y="${u.y}" width="${u.w}" height="${u.h}"/>${icon(u.facility,u,'climate-plot-icon utility-icon')}</g>`).join('');
   const dx=Number(layout.offset?.x||0),dy=Number(layout.offset?.y||0);
   return`<svg class="climate-map" viewBox="${minX} ${minY} ${w} ${h}" role="img" aria-label="Suggested climate overlap placement">
-    <defs>
-      <pattern id="climate-grid-minor" width=".5" height=".5" patternUnits="userSpaceOnUse"><path d="M .5 0 L 0 0 0 .5" class="climate-grid-minor-line"/></pattern>
-      <pattern id="climate-grid-major" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M 1 0 L 0 0 0 1" class="climate-grid-major-line"/></pattern>
-    </defs>
     <rect class="climate-field cooling" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}"/>
     <rect class="climate-field heating" x="${ht.x}" y="${ht.y}" width="${ht.w}" height="${ht.h}"/>
     ${overlap?`<rect class="climate-field overlap env-${mid}" x="${overlap.x}" y="${overlap.y}" width="${overlap.w}" height="${overlap.h}"/>`:''}
     ${placed}${utilities}
-    <rect class="climate-grid-overlay minor" x="${minX}" y="${minY}" width="${w}" height="${h}" fill="url(#climate-grid-minor)"/>
-    <rect class="climate-grid-overlay major" x="${minX}" y="${minY}" width="${w}" height="${h}" fill="url(#climate-grid-major)"/>
     <text class="climate-field-label cooling-label" x="${c.x+.18}" y="${c.y+.62}">COOLING 9×9</text>
     <text class="climate-field-label heating-label" x="${ht.x+.18}" y="${ht.y+.62}">HEAT 9×9 · Δ ${dx>=0?'+':''}${dx}, ${dy>=0?'+':''}${dy}</text>
   </svg>`;
@@ -430,14 +423,85 @@ function renderClimateLayout(){
   if(currentPlan?.rows?.length&&!layout)layout=evaluateClimateLayout(currentPlan,effectivePlanState(),DATA);
   if(!layout||layout.status==='none'){host.hidden=true;host.innerHTML='';return;}
   host.hidden=false;
-  const demands=(layout.demands||[]).map(climateBadge).join(''),settings=utilityChoiceMarkup(currentPlan),tested=Number(layout.triedOffsets||0),aside=layout.feasible?(layout.status==='overlap'?`${tested} overlap offsets checked`:'physical climate check passed'):'climate placement blocked';
+  const demands=(layout.demands||[]).map(climateBadge).join(''),settings=utilityChoiceMarkup(currentPlan),tested=Number(layout.triedOffsets||0),aside=layout.feasible?(layout.status==='overlap'?\`${tested} overlap offsets checked\`:'physical climate check passed'):'climate placement blocked';
   const body=layout.status==='overlap'
-    ? `<div class="climate-layout-grid"><div class="climate-map-wrap">${climateMapSvg(layout)}</div><div class="climate-layout-copy"><div class="climate-status good">PLACEMENT FOUND</div><p>${esc(layout.message||'Buildable climate placement found.')}</p><div class="climate-demand-list">${demands}</div></div></div>`
+    ? \`<div class="climate-layout-grid">
+        <div class="climate-map-panel">
+          <div class="climate-map-toolbar">
+            <button type="button" class="climate-map-btn" data-climate-action="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+            <span class="climate-map-zoom" id="climate-map-zoom">100%</span>
+            <button type="button" class="climate-map-btn" data-climate-action="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+            <button type="button" class="climate-map-btn center" data-climate-action="center" title="Center optimized layout">◎ Center</button>
+          </div>
+          <div class="climate-map-wrap">
+            <div class="climate-map-viewport" id="climate-map-viewport">
+              <div class="climate-map-stage" id="climate-map-stage">${climateMapSvg(layout)}</div>
+              <div class="climate-infinite-grid" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+        <div class="climate-layout-copy compact">
+          <div class="climate-status good">PLACEMENT FOUND</div>
+          <div class="climate-info-box">${esc(layout.message||'Buildable climate placement found.')}</div>
+          <div class="climate-demand-list compact">${demands}</div>
+        </div>
+      </div>\`
     : layout.feasible
-      ? `<div class="climate-layout-simple"><div><div class="climate-status good">NO CONFLICT</div><p>${esc(layout.message||'These zones can be separated.')}</p></div><div class="climate-demand-list">${demands}</div></div>`
-      : `<div class="climate-layout-simple failed"><div><div class="climate-status bad">NO VALID PLACEMENT</div><p>${esc(layout.message||'The requested climate mix cannot be placed with the available utility fields.')}</p></div><div class="climate-demand-list">${demands}</div></div>`;
-  host.innerHTML=title('Climate layout',aside)+`<div class="climate-utility-line"><b>Utility settings</b><div class="chosen utility-choice">${settings}</div></div>${body}`;
+      ? \`<div class="climate-layout-simple"><div><div class="climate-status good">NO CONFLICT</div><p>${esc(layout.message||'These zones can be separated.')}</p></div><div class="climate-demand-list">${demands}</div></div>\`
+      : \`<div class="climate-layout-simple failed"><div><div class="climate-status bad">NO VALID PLACEMENT</div><p>${esc(layout.message||'The requested climate mix cannot be placed with the available utility fields.')}</p></div><div class="climate-demand-list">${demands}</div></div>\`;
+  host.innerHTML=title('Climate layout',aside)+\`<div class="climate-utility-line"><b>Utility settings</b><div class="chosen utility-choice">${settings}</div></div>${body}\`;
+  if(layout.status==='overlap')setupClimateMapViewer(host);
 }
+function setupClimateMapViewer(root=document){
+  const viewport=root.querySelector('#climate-map-viewport'),stage=root.querySelector('#climate-map-stage'),grid=root.querySelector('.climate-infinite-grid'),svg=stage?.querySelector('svg'),zoomLabel=root.querySelector('#climate-map-zoom');
+  if(!viewport||!stage||!grid||!svg)return;
+  const vb=svg.viewBox?.baseVal;if(!vb?.width||!vb?.height)return;
+  const BASE_UNIT=32,baseW=vb.width*BASE_UNIT,baseH=vb.height*BASE_UNIT,minScale=.18,maxScale=7;
+  stage.style.width=\`${baseW}px\`;stage.style.height=\`${baseH}px\`;svg.style.width='100%';svg.style.height='100%';
+  let homeScale=1,scale=1,tx=0,ty=0,dragging=false,dragStartX=0,dragStartY=0,pinchStartDistance=0,pinchStartScale=1,pinchStartTx=0,pinchStartTy=0,pinchCenterStart=null;
+  const pointers=new Map(),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function updateGrid(){
+    const unit=BASE_UNIT*scale,originX=tx+(-vb.x)*unit,originY=ty+(-vb.y)*unit;
+    viewport.style.setProperty('--climate-grid-minor',\`${Math.max(2,unit/2)}px\`);
+    viewport.style.setProperty('--climate-grid-major',\`${Math.max(4,unit)}px\`);
+    viewport.style.setProperty('--climate-grid-x',\`${originX}px\`);
+    viewport.style.setProperty('--climate-grid-y',\`${originY}px\`);
+  }
+  function apply(){
+    stage.style.transform=\`translate(${tx}px,${ty}px) scale(${scale})\`;
+    updateGrid();
+    if(zoomLabel)zoomLabel.textContent=\`${Math.round((scale/Math.max(.0001,homeScale))*100)}%\`;
+  }
+  function center(){
+    const vw=viewport.clientWidth,vh=viewport.clientHeight;if(!vw||!vh)return;
+    homeScale=clamp(Math.min(vw/baseW,vh/baseH)*.9,minScale,maxScale);
+    scale=homeScale;tx=(vw-baseW*scale)/2;ty=(vh-baseH*scale)/2;apply();
+  }
+  function zoomAt(clientX,clientY,dir){
+    const r=viewport.getBoundingClientRect(),px=clientX-r.left,py=clientY-r.top,old=scale,next=clamp(scale*(dir>0?1.16:1/1.16),minScale,maxScale);
+    if(Math.abs(next-old)<1e-8)return;
+    const wx=(px-tx)/old,wy=(py-ty)/old;scale=next;tx=px-wx*scale;ty=py-wy*scale;apply();
+  }
+  viewport.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,e.deltaY<0?1:-1);},{passive:false});
+  viewport.addEventListener('pointerdown',e=>{
+    viewport.setPointerCapture?.(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pointers.size===1){dragging=true;viewport.classList.add('dragging');dragStartX=e.clientX-tx;dragStartY=e.clientY-ty;}
+    else if(pointers.size===2){const pts=[...pointers.values()];pinchStartDistance=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y);pinchStartScale=scale;pinchStartTx=tx;pinchStartTy=ty;pinchCenterStart={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};dragging=false;viewport.classList.remove('dragging');}
+  });
+  viewport.addEventListener('pointermove',e=>{
+    if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pointers.size===2){const pts=[...pointers.values()],dist=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y),mid={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};if(pinchStartDistance>0){const r=viewport.getBoundingClientRect(),sx=pinchCenterStart.x-r.left,sy=pinchCenterStart.y-r.top,mx=mid.x-r.left,my=mid.y-r.top,next=clamp(pinchStartScale*(dist/pinchStartDistance),minScale,maxScale),ratio=next/pinchStartScale;scale=next;tx=mx-(sx-pinchStartTx)*ratio;ty=my-(sy-pinchStartTy)*ratio;apply();}return;}
+    if(dragging){tx=e.clientX-dragStartX;ty=e.clientY-dragStartY;apply();}
+  });
+  const endPointer=e=>{pointers.delete(e.pointerId);if(!pointers.size){dragging=false;viewport.classList.remove('dragging');}};
+  viewport.addEventListener('pointerup',endPointer);viewport.addEventListener('pointercancel',endPointer);viewport.addEventListener('lostpointercapture',endPointer);
+  root.querySelector('[data-climate-action="zoom-in"]')?.addEventListener('click',()=>{const r=viewport.getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,1);});
+  root.querySelector('[data-climate-action="zoom-out"]')?.addEventListener('click',()=>{const r=viewport.getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,-1);});
+  root.querySelector('[data-climate-action="center"]')?.addEventListener('click',center);
+  viewport.addEventListener('dblclick',center);
+  requestAnimationFrame(center);
+}
+
 function duration(s){if(!Number.isFinite(s))return'—';if(s>=3600)return`${(s/3600).toFixed(s%3600?1:0)}h`;if(s>=60)return`${Math.round(s/60)} min`;return`${Math.round(s)}s`;}
 function durationHours(h){if(!Number.isFinite(h)||h<=0)return'—';if(h>=48)return`${(h/24).toFixed(1)}d`;if(h>=1)return`${h.toFixed(1)}h`;return`${Math.ceil(h*60)}m`;}
 function materialFlows(plan){const map=new Map();for(const row of plan?.rows||[]){const b=Number(row.batchesPerHour||0);for(const o of row.recipe.outputs||[]){const id=Number(o.item),r=map.get(id)||{produced:0,consumed:0};r.produced+=Number(o.qty||0)*b;map.set(id,r);}for(const i of row.recipe.inputs||[]){const id=Number(i.item),r=map.get(id)||{produced:0,consumed:0};r.consumed+=Number(i.qty||0)*b;map.set(id,r);}}return map;}

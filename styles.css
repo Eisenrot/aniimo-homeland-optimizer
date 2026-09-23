@@ -635,3 +635,46 @@
 .climate-field-label{pointer-events:none;font-size:.34px!important;letter-spacing:.06em;paint-order:stroke;stroke:#071015;stroke-width:.08;stroke-linejoin:round}
 .climate-field-label.cooling-label{fill:#b8e8ff}
 .climate-field-label.heating-label{fill:#ffc0c8}
+
+/* --- climate map viewport: pan / zoom / infinite grid --- */
+.climate-layout-grid{grid-template-columns:minmax(0,1fr) 255px;gap:12px;align-items:start}
+.climate-map-panel{min-width:0;display:grid;grid-template-rows:auto minmax(470px,1fr);gap:7px}
+.climate-map-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-height:30px}
+.climate-map-btn{height:28px;min-width:32px;border:1px solid #334250;background:#0c1116;color:#cdd9e5;padding:0 9px;font:700 9px/1 inherit;cursor:pointer;transition:.12s}
+.climate-map-btn:hover{border-color:#5d84ab;color:#fff;background:#111922}
+.climate-map-btn.center{min-width:72px}
+.climate-map-zoom{min-width:46px;height:28px;display:grid;place-items:center;border:1px solid #29333d;background:#090e12;color:#91a2b3;font-size:8px;font-variant-numeric:tabular-nums}
+.climate-map-wrap{position:relative;min-height:470px;height:clamp(470px,52vh,650px);padding:0;overflow:hidden;background:#060a0e}
+.climate-map-viewport{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab;background:#070b0f;user-select:none}
+.climate-map-viewport.dragging{cursor:grabbing}
+.climate-map-stage{position:absolute;left:0;top:0;z-index:2;transform-origin:0 0;will-change:transform}
+.climate-map-stage .climate-map{display:block;min-width:0;min-height:0;width:100%;height:100%}
+.climate-infinite-grid{position:absolute;inset:0;z-index:4;pointer-events:none;background-image:
+  linear-gradient(to right,rgba(222,235,246,.10) 1px,transparent 1px),
+  linear-gradient(to bottom,rgba(222,235,246,.10) 1px,transparent 1px),
+  linear-gradient(to right,rgba(231,241,249,.25) 1px,transparent 1px),
+  linear-gradient(to bottom,rgba(231,241,249,.25) 1px,transparent 1px);
+  background-size:
+    var(--climate-grid-minor,16px) var(--climate-grid-minor,16px),
+    var(--climate-grid-minor,16px) var(--climate-grid-minor,16px),
+    var(--climate-grid-major,32px) var(--climate-grid-major,32px),
+    var(--climate-grid-major,32px) var(--climate-grid-major,32px);
+  background-position:
+    var(--climate-grid-x,0) var(--climate-grid-y,0),
+    var(--climate-grid-x,0) var(--climate-grid-y,0),
+    var(--climate-grid-x,0) var(--climate-grid-y,0),
+    var(--climate-grid-x,0) var(--climate-grid-y,0)}
+.climate-grid-overlay{display:none}
+.climate-layout-copy.compact{width:255px;max-width:100%;padding:9px;display:grid;gap:7px;align-self:start;background:#0b1014}
+.climate-layout-copy.compact .climate-status{margin:0}
+.climate-info-box{border:1px solid #29343e;background:#0f151a;color:#85929d;padding:6px 7px;font-size:7.5px;line-height:1.45}
+.climate-demand-list.compact{display:grid;gap:5px}
+.climate-demand-list.compact .climate-demand{width:100%;box-sizing:border-box;padding:4px 6px 4px 4px}
+.climate-demand-list.compact .climate-demand span{white-space:nowrap}
+.climate-demand-list.compact .climate-demand b{margin-left:auto}
+@media(max-width:900px){
+  .climate-layout-grid{grid-template-columns:1fr}
+  .climate-layout-copy.compact{width:100%}
+  .climate-map-panel{grid-template-rows:auto minmax(390px,1fr)}
+  .climate-map-wrap{height:440px;min-height:390px}
+}
