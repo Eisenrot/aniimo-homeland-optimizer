@@ -1,7 +1,7 @@
 import {productionPlacementCounts} from './climate.js';
 import {stableStringify} from './plan-cache.js';
 
-export const FULL_LAYOUT_VERSION=2;
+export const FULL_LAYOUT_VERSION=3;
 export const FULL_LAYOUT_STORE='aniimoOptimizerFullLayoutV1';
 export const LAYOUT_SETTINGS_STORE='aniimoOptimizerLayoutSettingsV1';
 export const PLOT_WIDTH=20;
@@ -124,24 +124,34 @@ function storageCandidates(plots,w=2,h=2,fixed=[]){
   for(const plot of plots)for(let y=plot.y;y<=plot.y+plot.h-h+EPS;y+=step)for(let x=plot.x;x<=plot.x+plot.w-w+EPS;x+=step){const rect={x:roundStep(x),y:roundStep(y),w,h};if(overlapsPlaced(rect,fixed))continue;out.push(rect);}
   return out;
 }
-function placeStorageAnchors(items,fixedPlaced,plots){
+function preliminaryOrdinaryLayout(items,fixedPlaced,plots,settings){
+  const preview=[...fixedPlaced],ordered=[...items].sort((a,b)=>area(b)-area(a)||a.facility.localeCompare(b.facility));
+  for(const item of ordered){const p=placeOne(item,preview,plots,{...settings,compact:true,shape:settings.shape==='spread'?'clusters':settings.shape});if(!p)return preview;preview.push(p);}
+  return preview;
+}
+function storageSetScore(rects,demandPoints,demandBounds,compact){
+  if(!rects.length)return Infinity;
+  const centers=rects.map(rectCenter),loads=Array(centers.length).fill(0),distances=[];
+  for(const p of demandPoints){let pick=0,best=Infinity;for(let i=0;i<centers.length;i++){const d=pointDistance(p,centers[i]);if(d<best){best=d;pick=i;}}loads[pick]++;distances.push(best);}
+  const avg=distances.length?distances.reduce((s,d)=>s+d,0)/distances.length:0,max=distances.length?Math.max(...distances):0,loadSpread=loads.length?Math.max(...loads)-Math.min(...loads):0;
+  let minPair=0;if(centers.length>1){minPair=Infinity;for(let i=0;i<centers.length;i++)for(let j=i+1;j<centers.length;j++)minPair=Math.min(minPair,pointDistance(centers[i],centers[j]));}
+  const dbCenter={x:demandBounds.x+demandBounds.w/2,y:demandBounds.y+demandBounds.h/2},anchorCenter={x:centers.reduce((s,p)=>s+p.x,0)/centers.length,y:centers.reduce((s,p)=>s+p.y,0)/centers.length},centerDrift=pointDistance(dbCenter,anchorCenter),storageBounds=bboxOf(rects),union=bboxOf([{x:demandBounds.x,y:demandBounds.y,w:demandBounds.w,h:demandBounds.h},...rects]),expansion=Math.max(0,union.w*union.h-demandBounds.w*demandBounds.h);
+  return max*2.1+avg*1.25+loadSpread*2.8+centerDrift*.28-minPair*.18+(compact?expansion*.24:expansion*.05);
+}
+function placeStorageAnchors(items,fixedPlaced,plots,demandPlaced,settings){
   if(!items.length)return[];const candidates=storageCandidates(plots,items[0].w,items[0].h,fixedPlaced);if(!candidates.length)return null;
-  const board=bboxOf(plots),center={x:board.x+board.w/2,y:board.y+board.h/2},chosen=[];
+  const demandRects=(demandPlaced||[]).filter(p=>p.kind!=='storage'&&p.kind!=='utility'),fallback=bboxOf(plots),demandBounds=demandRects.length?bboxOf(demandRects):fallback,demandPoints=demandRects.length?demandRects.map(rectCenter):[{x:fallback.x+fallback.w/2,y:fallback.y+fallback.h/2}],chosen=[];
+  const margin=settings.compact?6:Infinity,nearDemand=candidates.filter(c=>{if(!Number.isFinite(margin))return true;const cc=rectCenter(c);return cc.x>=demandBounds.x-margin&&cc.x<=demandBounds.x+demandBounds.w+margin&&cc.y>=demandBounds.y-margin&&cc.y<=demandBounds.y+demandBounds.h+margin;}),pool=nearDemand.length>=items.length?nearDemand:candidates;
   for(let n=0;n<items.length;n++){
     let best=null,bestScore=Infinity;
-    for(const c of candidates){
+    for(const c of pool){
       if(chosen.some(s=>intersects(c,s)))continue;
-      const cc=rectCenter(c),centerDistance=pointDistance(cc,center);
-      let score=centerDistance;
-      if(chosen.length){
-        const minSpread=Math.min(...chosen.map(s=>pointDistance(cc,rectCenter(s)))),avgSpread=chosen.reduce((sum,s)=>sum+pointDistance(cc,rectCenter(s)),0)/chosen.length;
-        score=centerDistance*.30-minSpread*1.15-avgSpread*.12;
-      }
-      if(score<bestScore){best=c;bestScore=score;}
+      const trial=[...chosen,c],score=storageSetScore(trial,demandPoints,demandBounds,settings.compact);
+      if(score<bestScore-1e-9){best=c;bestScore=score;}
     }
-    if(!best)return null;chosen.push({...items[n],...best,storageAnchor:true});
+    if(!best)return null;chosen.push(best);
   }
-  return chosen;
+  return chosen.map((r,i)=>({...items[i],...r,storageAnchor:true}));
 }
 function candidateScore(rect,placed,settings,item){
   if(!placed.length)return rect.y*1000+rect.x;
@@ -243,7 +253,7 @@ function buildFullBaseLayoutVariant(plan,state,data,settings){
     if(!result)return{feasible:false,reason:`Climate cluster ${cluster.id} does not fit inside the enabled plots.`,placements:placed,fields,plots,settings,unplaced:[...cluster.members,...remaining]};
     placed.push(...result.placements);fields.push(...result.fields);
   }
-  const storageItems=remaining.filter(x=>x.kind==='storage'),ordinary=remaining.filter(x=>x.kind!=='storage'),storagePlacements=placeStorageAnchors(storageItems,placed,plots);
+  const storageItems=remaining.filter(x=>x.kind==='storage'),ordinary=remaining.filter(x=>x.kind!=='storage'),preview=preliminaryOrdinaryLayout(ordinary,placed,plots,settings),storagePlacements=placeStorageAnchors(storageItems,placed,plots,preview,settings);
   if(storageItems.length&&!storagePlacements)return{feasible:false,reason:'The requested Storage Units cannot be distributed inside the enabled plots.',placements:placed,fields,plots,settings,unplaced:[...storageItems,...ordinary]};
   if(storagePlacements?.length)placed.push(...storagePlacements);
   remaining=[...ordinary].sort((a,b)=>area(b)-area(a)||a.facility.localeCompare(b.facility));

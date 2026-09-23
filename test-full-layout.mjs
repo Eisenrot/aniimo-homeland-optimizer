@@ -48,3 +48,9 @@ let minStorageDistance=Infinity;for(let i=0;i<stores.length;i++)for(let j=i+1;j<
 if(!(minStorageDistance>=8))throw new Error(`storage anchors are not meaningfully distributed: min distance ${minStorageDistance}`);
 if(fullLayoutSignature(plan,state,{storageUnits:1},'a')===fullLayoutSignature(plan,state,{storageUnits:3},'a'))throw new Error('storage count must invalidate layout cache');
 console.log('storage distribution OK',{stores:stores.map(x=>[x.x,x.y]),minStorageDistance});
+
+const oneStore=buildFullBaseLayout(plan,state,DATA,{compact:true,shape:'auto',allowRotate:true,storageUnits:1,disabledPlots:[]});
+if(!oneStore.feasible)throw new Error('1-storage compact baseline should fit');
+const areaOf=b=>(b?.w||0)*(b?.h||0),oneArea=areaOf(oneStore.bounds),threeArea=areaOf(storageBuilt.bounds);
+if(threeArea>oneArea*1.45)throw new Error(`3 storage units exploded compact layout: ${threeArea.toFixed(1)} vs baseline ${oneArea.toFixed(1)}`);
+console.log('storage compactness OK',{oneArea,threeArea});
