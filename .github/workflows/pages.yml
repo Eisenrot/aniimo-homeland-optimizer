@@ -43,6 +43,7 @@ jobs:
           node test-app-parse.mjs
           node test.mjs
           node test-team.mjs
+          node test-pals.mjs
           node test-climate.mjs
           node test-plan-cache.mjs
           node test-full-layout.mjs
