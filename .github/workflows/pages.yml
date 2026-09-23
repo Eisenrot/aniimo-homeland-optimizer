@@ -36,6 +36,7 @@ jobs:
           node --check src/super.js
           node --check src/progression.js
           node --check src/climate.js
+          node --check src/optimizer-worker.js
           node test-app-parse.mjs
           node test.mjs
           node test-team.mjs

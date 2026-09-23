@@ -117,9 +117,9 @@ function tryGreedyOffset(demands,mode,dx,dy){
   return null;
 }
 
-export function searchOverlapLayout(demands,mode,{maxOffset=9}={}){
+export function searchOverlapLayout(demands,mode,{maxOffset=9,onProgress=null}={}){
   const cacheKey=mode+'|'+[...(demands||[])].map(d=>[d.facility,d.env,d.count,d.w,d.h,d.canRotate?1:0].join(':')).sort().join(';')+'|'+maxOffset;
-  if(OVERLAP_CACHE.has(cacheKey))return OVERLAP_CACHE.get(cacheKey);
+  if(OVERLAP_CACHE.has(cacheKey)){const cached=OVERLAP_CACHE.get(cacheKey);onProgress?.({testedOffsets:cached.triedOffsets||0,totalOffsets:cached.triedOffsets||0,delta:0,cached:true});return cached;}
   const halfMax=Math.round(maxOffset*SCALE),attempts=[];
   for(let dx=0;dx<=halfMax;dx++)for(let dy=0;dy<=dx;dy++){
     if(!validUtilityOffset(dx,dy))continue;
@@ -127,12 +127,13 @@ export function searchOverlapLayout(demands,mode,{maxOffset=9}={}){
   }
   // Compact layouts first; this also makes the visual result nicer.
   attempts.sort((a,b)=>(a[0]*a[0]+a[1]*a[1])-(b[0]*b[0]+b[1]*b[1])||a[0]-b[0]||a[1]-b[1]);
-  let tried=0;
+  let tried=0,lastReported=0;
   for(const[dx,dy]of attempts){
-    tried++;
+    tried++;if(onProgress&&(tried===1||tried%4===0)){onProgress({testedOffsets:tried,totalOffsets:attempts.length,delta:tried-lastReported});lastReported=tried;}
     const placed=tryGreedyOffset(demands,mode,dx,dy);
     if(!placed)continue;
     const g=utilityGeometry(dx,dy),convert=r=>({x:r.x/SCALE,y:r.y/SCALE,w:r.w/SCALE,h:r.h/SCALE});
+    if(onProgress&&tried>lastReported)onProgress({testedOffsets:tried,totalOffsets:attempts.length,delta:tried-lastReported});
     const result={
       feasible:true,mode,triedOffsets:tried,offset:{x:dx/SCALE,y:dy/SCALE},
       coolingField:convert(g.coolingField),heatField:convert(g.heatField),
@@ -143,7 +144,7 @@ export function searchOverlapLayout(demands,mode,{maxOffset=9}={}){
       placements:placed.map(p=>({facility:p.facility,name:p.name,env:p.env,copy:p.copy,...convert(p.rect)}))
     };OVERLAP_CACHE.set(cacheKey,result);return result;
   }
-  const result={feasible:false,mode,triedOffsets:tried,placements:[]};OVERLAP_CACHE.set(cacheKey,result);return result;
+  if(onProgress&&tried>lastReported)onProgress({testedOffsets:tried,totalOffsets:attempts.length,delta:tried-lastReported});const result={feasible:false,mode,triedOffsets:tried,placements:[]};OVERLAP_CACHE.set(cacheKey,result);return result;
 }
 
 function singleZoneCandidates(d){
@@ -174,7 +175,7 @@ function searchAdequateLayout(demands){
   return{feasible:false,placements:[]};
 }
 
-export function evaluateClimateLayout(plan,state,data){
+export function evaluateClimateLayout(plan,state,data,options={}){
   const demands=climateDemands(plan,state,data),scenario=plan?.scenario||{};
   if(!demands.length)return{feasible:true,status:'none',demands:[],branchDemands:[],message:'No climate-sensitive production is active.'};
 
@@ -211,7 +212,7 @@ export function evaluateClimateLayout(plan,state,data){
   };
 
   const relevant=nonAdequate.filter(d=>envClassFor(mode,d.env));
-  const overlap=searchOverlapLayout(relevant,mode);
+  const overlap=searchOverlapLayout(relevant,mode,{maxOffset:Math.max(1,Number(options.maxOffset||9)),onProgress:options.onProgress});
   if(!overlap.feasible)return{
     feasible:false,status:'overlap-pack',mode,demands,branchDemands:relevant,adequateLayout,
     triedOffsets:overlap.triedOffsets,

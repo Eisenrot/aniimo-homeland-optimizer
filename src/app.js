@@ -8,13 +8,13 @@ import {
 import {fillHomelandForRV,progressionSummary} from './progression.js';
 import {evaluateClimateLayout} from './climate.js';
 
-const STORE='aniimoHomelandOptimizerStateV1',HIDEOUT='https://www.hideoutgacha.com';
+const STORE='aniimoHomelandOptimizerStateV1',PERF_STORE='aniimoOptimizerPerformanceV1',HIDEOUT='https://www.hideoutgacha.com';
 const MAX_ANIIMO_BY_HOMELAND=[0,5,8,11,14,17,20,22,24,26,28,30,32,34,36,38,40,42,43,44,45];
 const maxAniimoForLevel=level=>MAX_ANIIMO_BY_HOMELAND[Math.min(20,Math.max(1,Number(level)||1))]||5;
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const asset=path=>path?.startsWith('http')?path:`${HIDEOUT}${path||''}`,fmt=n=>Math.round(Number(n||0)).toLocaleString(),fmt1=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:1}),pct=n=>`${(Number(n||0)*100).toFixed(2)}%`,clone=x=>JSON.parse(JSON.stringify(x));
 const facilityMap=new Map(DATA.facilities.map(x=>[x.slug,x]));
-let state=loadState(),currentPlan=null,currentModel=null,recomputeTimer=null,undoSnapshot=null,undoTimer=null,teamSpeedOverride=null,teamAnalysisBaseline=null,teamAppliedPlan=false;
+let state=loadState(),perfSettings=loadPerfSettings(),currentPlan=null,currentModel=null,recomputeTimer=null,undoSnapshot=null,undoTimer=null,teamSpeedOverride=null,teamAnalysisBaseline=null,teamAppliedPlan=false,activePlanSolve=null,computeSerial=0,lastOptimizerStats=null;
 function diffCount(a,b){if(a===b)return 0;if(a==null||b==null||typeof a!=='object'||typeof b!=='object')return 1;const keys=new Set([...Object.keys(a),...Object.keys(b)]);let n=0;for(const k of keys){n+=diffCount(a[k],b[k]);if(n>=2)return n;}return n;}
 function ensureUndoBar(){if($('#change-undo'))return;document.body.insertAdjacentHTML('beforeend',`<div id="change-undo" class="change-undo"><span><b>Detected a change.</b> Revert?</span><div><button id="undo-change" class="undo-action">REVERT</button><button id="close-undo" class="undo-action muted">CLOSE</button></div></div>`);$('#undo-change').onclick=()=>{if(!undoSnapshot)return;state=normalizeState(undoSnapshot);undoSnapshot=null;saveState();hideUndo();renderAll();history.replaceState(null,'',shareUrl());};$('#close-undo').onclick=hideUndo;}
 function hideUndo(){clearTimeout(undoTimer);$('#change-undo')?.classList.remove('show');}
@@ -62,6 +62,61 @@ function normalizeState(s){
 }
 function loadState(){try{return normalizeState(JSON.parse(localStorage.getItem(STORE)||'null'));}catch{return normalizeState(null);}}
 function saveState(){localStorage.setItem(STORE,JSON.stringify(state));}
+function loadPerfSettings(){try{const x=JSON.parse(localStorage.getItem(PERF_STORE)||'null')||{};return{engine:['worker','main'].includes(x.engine)?x.engine:'worker',climateVariants:[12,28,56].includes(Number(x.climateVariants))?Number(x.climateVariants):28,liveProgress:x.liveProgress!==false};}catch{return{engine:'worker',climateVariants:28,liveProgress:true};}}
+function savePerfSettings(){localStorage.setItem(PERF_STORE,JSON.stringify(perfSettings));}
+function optimizerRunOptions(){return{maxClimateVariants:perfSettings.climateVariants,maxClimateOffset:9};}
+function startPlanSolve(planState,{onProgress=null}={}){
+  const options=optimizerRunOptions();
+  if(perfSettings.engine==='main'||typeof Worker==='undefined'){
+    let cancelled=false;
+    const promise=new Promise((resolve,reject)=>setTimeout(()=>{if(cancelled)return reject(Object.assign(new Error('Cancelled'),{name:'AbortError'}));try{const started=performance.now(),plan=optimizePlan(planState,DATA,{...options,onProgress});plan.optimizerStats={...(plan.optimizerStats||{}),engine:'main',elapsedMs:Number(plan.optimizerStats?.elapsedMs??performance.now()-started)};resolve({plan,stats:plan.optimizerStats});}catch(e){reject(e);}},0));
+    return{promise,cancel:()=>{cancelled=true;}};
+  }
+  const worker=new Worker(new URL('./optimizer-worker.js',import.meta.url),{type:'module'});let settled=false;
+  const promise=new Promise((resolve,reject)=>{
+    worker.onmessage=e=>{const msg=e.data||{};if(msg.type==='progress'){onProgress?.(msg.progress||{});return;}if(msg.type==='result'){settled=true;worker.terminate();resolve({plan:msg.plan,stats:msg.stats||msg.plan?.optimizerStats||{}});}else if(msg.type==='error'){settled=true;worker.terminate();reject(new Error(msg.message||'Optimizer worker failed.'));}};
+    worker.onerror=e=>{if(settled)return;settled=true;worker.terminate();reject(new Error(e.message||'Optimizer worker crashed.'));};
+    worker.postMessage({type:'optimize',state:planState,options});
+  });
+  return{promise,cancel:()=>{if(!settled){settled=true;worker.terminate();}}};
+}
+function optimizerEngineLabel(engine=perfSettings.engine){return engine==='main'?'Main thread':'Worker acceleration';}
+function optimizerProgressMarkup(p={},running=true){
+  const progress=Math.max(0,Math.min(1,Number(p.progress??(running?0:1)))),filled=Math.round(progress*20),segments=Array.from({length:20},(_,i)=>`<i class="${i<filled?'on':''}"></i>`).join(''),elapsed=Math.max(0,Number(p.elapsedMs||0))/1000,candidates=Math.max(0,Number(p.candidatePlans||0)),rate=Number(p.candidatesPerSecond||p.rate||0),scenarios=Math.max(0,Number(p.scenarioIndex??p.testedScenarios??0)),total=Math.max(0,Number(p.scenarioTotal||0)),phase=String(p.phase||'search').replace(/^./,x=>x.toUpperCase()),engine=optimizerEngineLabel(p.engine||perfSettings.engine);
+  const stats=[total?`${Math.min(scenarios,total)}/${total} scenarios`:'',candidates?`${candidates.toLocaleString()} candidates`:'',Number(p.climateOffsets||0)?`${Number(p.climateOffsets).toLocaleString()} geometry checks`:'',rate>0?`${fmt1(rate)}/s`:'',elapsed>0?`${elapsed.toFixed(elapsed<10?2:1)}s`:''].filter(Boolean).join(' · ');
+  return`<div id="optimizer-live-progress" class="optimizer-progress ${running?'running':'done'}"><div class="optimizer-progress-copy"><b>${running?phase:'Finished'} · ${esc(engine)}</b><span>${esc(stats||'Preparing search…')}</span></div><div class="optimizer-progress-track">${segments}</div></div>`;
+}
+function showOptimizerProgress(p={}){
+  if(!perfSettings.liveProgress)return;
+  const panel=$('#plan-panel'),html=optimizerProgressMarkup(p,true),old=$('#optimizer-live-progress');
+  if(old){old.outerHTML=html;return;}
+  const heading=panel.querySelector('.section-title');if(heading)heading.insertAdjacentHTML('afterend',html);else panel.innerHTML=title('Best plan')+html+`<div class="empty">Searching legal production, climate and geometry candidates…</div>`;
+}
+function ensureOptimizerSettingsUi(){
+  if($('#optimizer-settings-btn'))return;
+  document.body.insertAdjacentHTML('beforeend',`
+    <button id="optimizer-settings-btn" class="optimizer-settings-btn" title="Optimizer settings" aria-label="Optimizer settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.7 2h2.6l.5 2.1c.6.2 1.1.4 1.6.7l1.9-1.1 1.8 1.8-1.1 1.9c.3.5.5 1 .7 1.6l2.1.5v2.6l-2.1.5c-.2.6-.4 1.1-.7 1.6l1.1 1.9-1.8 1.8-1.9-1.1c-.5.3-1 .5-1.6.7l-.5 2.1h-2.6l-.5-2.1c-.6-.2-1.1-.4-1.6-.7l-1.9 1.1-1.8-1.8 1.1-1.9c-.3-.5-.5-1-.7-1.6l-2.1-.5V9.5L5.3 9c.2-.6.4-1.1.7-1.6L4.9 5.5l1.8-1.8 1.9 1.1c.5-.3 1-.5 1.6-.7L10.7 2Zm1.3 6.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2Z"/></svg>
+    </button>
+    <div id="optimizer-settings-overlay" class="optimizer-settings-overlay" aria-hidden="true">
+      <div class="optimizer-settings-modal" role="dialog" aria-modal="true" aria-label="Optimizer settings">
+        <button id="optimizer-settings-close" class="modal-close" aria-label="Close">×</button>
+        <div class="super-title">Optimizer settings <span>ENGINE</span></div>
+        <p>Heavy plan and climate searches can run outside the page's main thread. This keeps the interface responsive while the solver explores alternatives.</p>
+        <div class="optimizer-setting-row"><div><b>Compute engine</b><small>Worker mode is the stable default. Main thread exists for compatibility.</small></div><select id="optimizer-engine"><option value="worker">Worker acceleration (stable)</option><option value="main">Main thread / compatibility</option></select></div>
+        <div class="optimizer-setting-row"><div><b>Climate branch budget</b><small>How many rejected-plan variants each utility scenario may explore.</small></div><select id="optimizer-climate-budget"><option value="12">Quick · 12</option><option value="28">Balanced · 28</option><option value="56">Exhaustive · 56</option></select></div>
+        <label class="optimizer-setting-check"><input id="optimizer-live-toggle" type="checkbox"><span><b>Live search telemetry</b><small>Show scenario progress, candidate count and search throughput in Best plan.</small></span></label>
+        <div class="optimizer-engine-note"><b>Why no fake “GPU” switch?</b><span>Fribbels can map relic permutations to a uniform WebGPU arithmetic kernel. Homeland uses LP solves, branching and rectangle packing; moving it off-thread is immediately useful, while a GPU port would require a different solver rather than a cosmetic toggle.</span></div>
+      </div>
+    </div>
+  `);
+  const overlay=$('#optimizer-settings-overlay'),setOpen=open=>{overlay.classList.toggle('open',open);overlay.setAttribute('aria-hidden',open?'false':'true');};
+  $('#optimizer-settings-btn').onclick=()=>setOpen(true);$('#optimizer-settings-close').onclick=()=>setOpen(false);overlay.onclick=e=>{if(e.target===overlay)setOpen(false);};
+  $('#optimizer-engine').value=perfSettings.engine;$('#optimizer-climate-budget').value=String(perfSettings.climateVariants);$('#optimizer-live-toggle').checked=perfSettings.liveProgress;
+  $('#optimizer-engine').onchange=e=>{perfSettings.engine=e.target.value;savePerfSettings();};
+  $('#optimizer-climate-budget').onchange=e=>{perfSettings.climateVariants=Number(e.target.value)||28;savePerfSettings();scheduleCompute();};
+  $('#optimizer-live-toggle').onchange=e=>{perfSettings.liveProgress=e.target.checked;savePerfSettings();if(!perfSettings.liveProgress)$('#optimizer-live-progress')?.remove();};
+}
 
 function parseFacilities(raw){const out={};for(const tok of String(raw||'').split('_')){if(!tok.includes(':'))continue;const[slug,val]=tok.split(':',2),dot=val.lastIndexOf('.'),count=Number(dot>=0?val.slice(0,dot):val),level=Number(dot>=0?val.slice(dot+1):1);if(slug&&Number.isFinite(count)&&Number.isFinite(level))out[slug]={count,level};}return out;}
 function parseSimple(raw){const out={};for(const tok of String(raw||'').split('_')){if(!tok.includes(':'))continue;const[k,v]=tok.split(':',2),n=Number(v);if(k&&Number.isFinite(n))out[k]=n;}return out;}
@@ -310,7 +365,7 @@ function renderObjectiveDiagnostics(){
 }
 
 function scheduleCompute({keepTeamSpeeds=false,refreshFacilities=true}={}){if(!keepTeamSpeeds)clearTeamSpeedOverride(refreshFacilities);clearTimeout(recomputeTimer);recomputeTimer=setTimeout(()=>computePlan(),100);$('#team-panel').innerHTML=title('Real team optimizer')+`<div class="empty">Plan changed. Real-team speed calibration and its comparison baseline were cleared; the next analysis starts fresh.</div>`;}
-function computePlan({keepTeam=false}={}){try{const planState=effectivePlanState();currentPlan=optimizePlan(planState,DATA);currentModel=buildTeamModel(currentPlan,planState,DATA);renderPlan();renderClimateLayout();renderOutputs();renderAbilities();renderObjectiveDiagnostics();if(!state.manualSpeeds||teamSpeedOverride)renderFacilities();if(!keepTeam)renderTeamReady();}catch(e){currentPlan={rows:[],ratePerHour:0,targetRate:0,infeasible:true,scenarioLabel:'Error'};$('#plan-panel').innerHTML=title('Best plan')+`<div class="empty warning">${esc(e.message||e)}</div>`;$('#climate-panel').hidden=true;$('#outputs-panel').innerHTML='';$('#abilities-panel').innerHTML='';if(!keepTeam)renderTeamReady();}}
+async function computePlan({keepTeam=false}={}){const serial=++computeSerial;activePlanSolve?.cancel?.();const planState=effectivePlanState(),started=performance.now();lastOptimizerStats=null;showOptimizerProgress({progress:0,phase:'starting',scenarioIndex:0,scenarioTotal:0,candidatePlans:0,elapsedMs:0,engine:perfSettings.engine});const solve=startPlanSolve(planState,{onProgress:p=>{if(serial!==computeSerial)return;showOptimizerProgress({...p,engine:perfSettings.engine});}});activePlanSolve=solve;try{const result=await solve.promise;if(serial!==computeSerial)return;currentPlan=result.plan;lastOptimizerStats={...(result.stats||currentPlan.optimizerStats||{}),engine:perfSettings.engine,elapsedMs:Number(result.stats?.elapsedMs??performance.now()-started),progress:1};currentModel=buildTeamModel(currentPlan,planState,DATA);renderPlan();renderClimateLayout();renderOutputs();renderAbilities();renderObjectiveDiagnostics();if(!state.manualSpeeds||teamSpeedOverride)renderFacilities();if(!keepTeam)renderTeamReady();}catch(e){if(serial!==computeSerial||e?.name==='AbortError')return;currentPlan={rows:[],ratePerHour:0,targetRate:0,infeasible:true,scenarioLabel:'Error'};$('#plan-panel').innerHTML=title('Best plan')+`<div class="empty warning">${esc(e.message||e)}</div>`;$('#climate-panel').hidden=true;$('#outputs-panel').innerHTML='';$('#abilities-panel').innerHTML='';if(!keepTeam)renderTeamReady();}finally{if(serial===computeSerial)activePlanSolve=null;}}
 function objectiveName(){return state.target==='coin'?'Home Coin':itemName(DATA,state.target);}
 const GENERATOR_ICON='https://aniipedia.com/items/10400021.webp';
 function utilityChoiceMarkup(plan){
@@ -339,7 +394,7 @@ function groupedPlanRows(rows){
   for(const row of sorted){if(!groups.has(row.facility)){groups.set(row.facility,[]);order.push(row.facility);}groups.get(row.facility).push(row);}
   return order.flatMap(facility=>{const group=groups.get(facility).sort((a,b)=>Number(b.perHour||0)-Number(a.perHour||0)),display=productionDisplayCounts(facility,group);return group.map((row,i)=>({row,continued:i>0,displayCount:display.get(row)||null}));});
 }
-function renderPlan(){const rawRows=[...(currentPlan.rows||[])],rows=groupedPlanRows(rawRows),targetRate=state.target==='coin'?currentPlan.ratePerHour:currentPlan.targetRate;let labor=currentPlan.utilityWorkers||0;for(const r of rawRows)labor+=r.recipe.pet?r.units:(r.manualSeconds||0)*r.batchesPerHour/3600;const aside=currentPlan.realTeamApplied?`${rawRows.length} assignments · exact real-team + personalities`:`${rawRows.length} assignments · ${currentPlan.testedScenarios||1} utility scenarios tested`;$('#plan-panel').innerHTML=title('Best plan',aside)+`
+function renderPlan(){const rawRows=[...(currentPlan.rows||[])],rows=groupedPlanRows(rawRows),targetRate=state.target==='coin'?currentPlan.ratePerHour:currentPlan.targetRate;let labor=currentPlan.utilityWorkers||0;for(const r of rawRows)labor+=r.recipe.pet?r.units:(r.manualSeconds||0)*r.batchesPerHour/3600;const aside=currentPlan.realTeamApplied?`${rawRows.length} assignments · exact real-team + personalities`:`${rawRows.length} assignments · ${currentPlan.testedScenarios||1} utility scenarios tested`,progress=lastOptimizerStats?optimizerProgressMarkup({...lastOptimizerStats,scenarioIndex:lastOptimizerStats.scenarioTotal||currentPlan.testedScenarios||0,scenarioTotal:lastOptimizerStats.scenarioTotal||currentPlan.testedScenarios||0,progress:1,candidatesPerSecond:Number(lastOptimizerStats.candidatePlans||0)/(Math.max(1,Number(lastOptimizerStats.elapsedMs||0))/1000)},false):'';$('#plan-panel').innerHTML=title('Best plan',aside)+progress+`
   <div class="metric-grid"><div class="metric"><small>${esc(objectiveName())} / hour</small><strong>${metricValue(itemIcon(state.target==='coin'?'coin':state.target),fmt1(targetRate))}</strong><span>${(state.guarantees||[]).some(g=>g.enabled!==false&&g.maximize)?'jointly maximised':'maximised output'}</span></div><div class="metric"><small>Home Coin / hour</small><strong>${metricValue(HOME_COIN_ICON,fmt(currentPlan.ratePerHour))}</strong><span>${fmt(currentPlan.ratePerHour*24)} / day</span></div></div>
   <div class="scenario-bar"><div><b>Utility choice</b><div class="chosen utility-choice">${utilityChoiceMarkup(currentPlan)}</div></div><span>${currentPlan.utilityWorkers||0} dedicated station slot${currentPlan.utilityWorkers===1?'':'s'} · ${state.oneRecipePerFacility?'walk-away recipes':'mixed recipes'} · ${state.collectHours?`collect every ${state.collectHours}h`:'no collection cap'}</span></div>
   ${currentPlan.infeasible?`<div class="empty warning">No feasible plan satisfies the current requirements.</div>`:rows.length?`<table class="plan-table"><thead><tr><th>Facility</th><th>Produce</th><th>Needs</th><th class="num">Cycle</th><th class="num coin-head"><img src="${HOME_COIN_ICON}" alt="">Coin/h</th></tr></thead><tbody>${rows.map(x=>planRow(x.row,x.continued,x.displayCount)).join('')}</tbody></table><p class="micro">Estimated active labour: ${labor.toFixed(2)} Aniimo-hours per hour, including resident and utility assignments.</p>`:`<div class="empty">No runnable production chain with the current settings.</div>`}`;}
@@ -437,8 +492,8 @@ function speedCalibrationMarkup(s){const rows=Object.entries(s?.ev?.speedProfile
 function renderSpecial(s,baseline=teamAnalysisBaseline){const cmp=comparisonForEval(s.ev,baseline),actual=state.target==='coin'?s.ev.rate:s.ev.targetRate,deltaText=cmp.delta==null?'':` · ${cmp.delta>=0?'+':''}${fmt1(cmp.delta)}/h`;return`<div class="result-card special"><div class="result-label">Special #1 · ideal legal personalities for the real team</div><div class="result-rate">${fmt1(actual)} ${esc(objectiveName())}/h</div><div class="result-delta">${pct(cmp.ratio)} ${esc(cmp.label)}${deltaText} · ${fmt(s.ev.rate)} coin/h</div><div class="chips team-chip-grid">${s.team.map((x,i)=>teamPalChip(x,traitMarkup(s.ev.traitHints?.[i]))).join('')}</div>${speedCalibrationMarkup(s)}${staffingCoverageMarkup(s.coverage)}<p class="micro"><span style="color:var(--green)">Green</span> letters belong to the worker's primary assigned structure and are kept mandatory. <span style="color:var(--amber)">Yellow</span> letters improve other plan jobs that Aniimo can cover. Hover a letter to see the exact structure receiving <b>+20%</b>. <b>o</b> means the pair is irrelevant.</p></div>`;}
 function renderTeamCard(x,index,staff,baseline=teamAnalysisBaseline){const cmp=comparisonForEval(x.eval,baseline),actual=state.target==='coin'?x.eval.rate:x.eval.targetRate,deltaText=cmp.delta==null?'':` · ${cmp.delta>=0?'+':''}${fmt1(cmp.delta)}/h`;let extra='';if(staff){const{core,anti}=staff;extra+=`<div class="subhead">Essential core · ${core.length}</div><div class="chips team-chip-grid">${core.map(teamPalChip).join('')}</div>`;if(anti.reserves.length)extra+=`<div class="subhead">Anti-stall / spare coverage · ${anti.reserves.length}</div><div class="chips team-chip-grid">${anti.reserves.map(teamPalChip).join('')}</div>`;extra+=staffingCoverageMarkup(anti);}return`<div class="result-card ${index===0?'best':''}"><div class="result-label">${index===0?'Best actual roster plan':`Alternative ${index+1}`}</div><div class="result-rate">${fmt1(actual)} ${esc(objectiveName())}/h</div><div class="result-delta">${pct(cmp.ratio)} ${esc(cmp.label)}${deltaText} · ${fmt(x.eval.rate)} coin/h</div><div class="chips team-chip-grid">${x.team.map(teamPalChip).join('')}</div><div class="subhead">Plan rebalanced for this team · ${x.eval.rows.length} assignments</div>${extra}</div>`;}
 
-function renderAll(){teamSpeedOverride=null;teamAnalysisBaseline=null;teamAppliedPlan=false;renderObjectives();renderGeneral();renderFacilities();renderModules();renderNotes();renderLiving();renderOwnership();computePlan();}
-window.__aniimoOptimizerBridge={getState:()=>clone(state),normalizeState,applyAtomicState,maxAniimoForLevel,shareUrl,analyzeTeam:()=>analyzeTeam()};
+function renderAll(){teamSpeedOverride=null;teamAnalysisBaseline=null;teamAppliedPlan=false;ensureOptimizerSettingsUi();renderObjectives();renderGeneral();renderFacilities();renderModules();renderNotes();renderLiving();renderOwnership();computePlan();}
+window.__aniimoOptimizerBridge={getState:()=>clone(state),normalizeState,applyAtomicState,maxAniimoForLevel,shareUrl,analyzeTeam:()=>analyzeTeam(),getPerformanceSettings:()=>({...perfSettings}),optimizePlanAsync:async(planState,onProgress=null)=>{const solve=startPlanSolve(planState,{onProgress});return(await solve.promise).plan;}};
 function setOwnershipOpen(open){const overlay=$('#ownership-overlay'),toggle=$('#ownership-toggle');overlay.classList.toggle('open',open);overlay.setAttribute('aria-hidden',open?'false':'true');toggle.setAttribute('aria-expanded',open?'true':'false');if(open)setTimeout(()=>$('#pal-search')?.focus(),0);}
 $('#ownership-toggle').onclick=()=>setOwnershipOpen(!$('#ownership-overlay').classList.contains('open'));
 $('#ownership-close').onclick=()=>setOwnershipOpen(false);

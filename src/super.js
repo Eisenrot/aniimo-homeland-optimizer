@@ -86,7 +86,7 @@ async function run(){
 
     spinner('Establishing one common objective scale…');
     const referenceState=api.normalizeState({...autoBase,workerSlots:cap,teamSlots:Math.min(maxReal,autoBase.teamSlots)});
-    const referencePlan=optimizePlan(referenceState,DATA);
+    const referencePlan=api.optimizePlanAsync?await api.optimizePlanAsync(referenceState,p=>{if(p?.scenarioTotal)spinner(`Objective scale · ${p.scenarioIndex||0}/${p.scenarioTotal} scenarios · ${fmt1(p.candidatesPerSecond||0)} candidates/s`);}):optimizePlan(referenceState,DATA);
     if(referencePlan.infeasible)throw new Error('The current hard requirements are not feasible even at the Homeland Aniimo cap.');
     const weights=referencePlan.objectiveWeights?.length
       ? referencePlan.objectiveWeights
@@ -96,7 +96,7 @@ async function run(){
     for(let n=1;n<=cap;n++){
       spinner(`Theoretical pass · ${n}/${cap} Aniimo`);
       const trial=api.normalizeState({...autoBase,workerSlots:n,teamSlots:Math.min(maxReal,Math.max(1,autoBase.teamSlots))});
-      const plan=optimizePlan(trial,DATA);
+      const plan=api.optimizePlanAsync?await api.optimizePlanAsync(trial,p=>{if(p?.scenarioTotal)spinner(`Theoretical ${n}/${cap} · scenario ${p.scenarioIndex||0}/${p.scenarioTotal} · ${fmt1(p.candidatesPerSecond||0)} candidates/s`);}):optimizePlan(trial,DATA);
       if(!plan.infeasible){
         const genericScore=scoreRows(plan.rows,plan.ratePerHour,weights);
         theoretical.push({n,plan,genericScore});
