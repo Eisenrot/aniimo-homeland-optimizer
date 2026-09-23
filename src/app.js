@@ -57,7 +57,7 @@ function speedOverrideFromSpecial(special){
   return Object.keys(facilities).length?{facilities,recipes,details}:null;
 }
 
-function defaultOwned(){const out={};for(const p of DATA.pals)out[String(p.id)]={enabled:!p.isForm,count:1};return out;}
+function defaultOwned(){const out={};for(const p of DATA.pals)out[String(p.id)]={enabled:!p.isForm&&!p.unavailable,count:1};return out;}
 function normalizeState(s){
   const x={...clone(DEFAULT_STATE),...clone(s||{})};
   x.facilities={...clone(DEFAULT_STATE.facilities),...(s?.facilities||{})};x.modules={...clone(DEFAULT_STATE.modules),...(s?.modules||{})};x.speeds={...clone(DEFAULT_STATE.speeds),...(s?.speeds||{})};
@@ -67,7 +67,7 @@ function normalizeState(s){
   x.recipeNotes={...(s?.recipeNotes||{})};x.guarantees=Array.isArray(s?.guarantees)?s.guarantees.map(g=>({item:String(g.item||''),perHour:Math.max(0,Number(g.perHour||0)),maximize:!!g.maximize,enabled:g.enabled!==false})):[];x.target=String(x.target||'coin');
   if(!x.owned||!Object.keys(x.owned).length)x.owned=defaultOwned();
   else for(const [legacy,current] of LEGACY_FORM_IDS){if(x.owned[legacy]&&!x.owned[current])x.owned[current]={...x.owned[legacy]};if(legacy!==current)delete x.owned[legacy];}
-  for(const p of DATA.pals)if(!x.owned[String(p.id)])x.owned[String(p.id)]={enabled:!p.isForm,count:1};
+  for(const p of DATA.pals)if(!x.owned[String(p.id)])x.owned[String(p.id)]={enabled:!p.isForm&&!p.unavailable,count:1};
   return x;
 }
 function loadState(){try{return normalizeState(JSON.parse(localStorage.getItem(STORE)||'null'));}catch{return normalizeState(null);}}
@@ -262,7 +262,7 @@ function palMatchesOwnershipFilter(p,raw){
   return true;
 }
 function renderOwnership(){const enabled=DATA.pals.filter(p=>state.owned[String(p.id)]?.enabled),copies=enabled.reduce((s,p)=>s+Number(state.owned[String(p.id)]?.count||1),0),formCount=enabled.filter(p=>p.isForm).length,baseCount=enabled.length-formCount;$('#ownership-panel').innerHTML=title('Aniimo you own',`${baseCount} base · ${formCount} forms · ${copies} copies`)+`<div class="ownership-tools"><input id="pal-search" placeholder="Name, form, ability or level… e.g. Prismana, Light, <3" title="Examples: Prismana · Nighttime · Light · 4 · Light, >=2"><button id="own-all" class="ghost">All</button><button id="own-none" class="ghost">None</button></div><div class="ownership-filter-hint">Filter by species, form, ability, or level · <b>Prismana</b> · <b>Nighttime</b> · <b>Light, &lt;3</b></div><div class="ownership-grid" id="ownership-grid">${DATA.pals.map(p=>palRow(p)).join('')}</div><div class="summary-line"><span>Each form is independent: checkbox = usable copy pool, number = copies available to the real-team search.</span><span>${enabled.length}/${DATA.pals.length}</span></div>`;bindOwnership();}
-function palRow(p){const rec=state.owned[String(p.id)]||{enabled:!p.isForm,count:1},abilities=Object.entries(p.abilities||{}).map(([a,l])=>abilityPill(a,l,true)).join(''),form=p.isForm?`<em class="pal-form-badge ${p.isPrismana?'prismana':''}">${esc(p.form)}</em>`:'';return`<label class="pal-row ${rec.enabled?'':'off'} ${p.isForm?'form-entry':''}" data-id="${p.id}" data-name="${esc(p.name.toLowerCase())}"><input class="pal-enabled" type="checkbox" ${rec.enabled?'checked':''}><img src="${palHeadIcon(p)}" onerror="${palImageError(p)}" alt=""><span class="pal-info"><b>${esc(p.speciesName||p.name)} ${form}</b><span class="pal-abilities">${abilities}</span></span><input class="pal-count" type="number" min="1" max="99" value="${rec.count||1}" title="Copies"></label>`;}
+function palRow(p){const rec=state.owned[String(p.id)]||{enabled:!p.isForm&&!p.unavailable,count:1},abilities=Object.entries(p.abilities||{}).map(([a,l])=>abilityPill(a,l,true)).join(''),form=p.isForm?`<em class="pal-form-badge ${p.isPrismana?'prismana':''}">${esc(p.form)}</em>`:'',status=p.unavailable?'<em class="pal-form-badge unavailable">Unavailable</em>':'';return`<label class="pal-row ${rec.enabled?'':'off'} ${p.isForm?'form-entry':''} ${p.unavailable?'unavailable-entry':''}" data-id="${p.id}" data-name="${esc(p.name.toLowerCase())}"><input class="pal-enabled" type="checkbox" ${rec.enabled?'checked':''}><img src="${palHeadIcon(p)}" onerror="${palImageError(p)}" alt=""><span class="pal-info"><b>${esc(p.speciesName||p.name)} ${form}${status}</b><span class="pal-abilities">${abilities}</span></span><input class="pal-count" type="number" min="1" max="99" value="${rec.count||1}" title="Copies"></label>`;}
 function bindOwnership(){
   const search=$('#pal-search');
   search.oninput=e=>{const q=e.target.value;document.querySelectorAll('.pal-row').forEach(row=>{const p=DATA.pals.find(x=>String(x.id)===String(row.dataset.id));row.style.display=p&&palMatchesOwnershipFilter(p,q)?'grid':'none';});};

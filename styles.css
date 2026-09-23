@@ -799,3 +799,6 @@
 .pal-info>b{display:flex;align-items:center;gap:5px}
 .pal-form-badge{display:inline-flex;align-items:center;max-width:105px;padding:2px 4px;border:1px solid #44515e;background:#111820;color:#93a7ba;font-size:6.5px;font-style:normal;font-weight:800;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pal-form-badge.prismana{border-color:#74558e;background:linear-gradient(90deg,rgba(103,70,142,.22),rgba(92,122,160,.13));color:#d6b9ef}
+
+.pal-form-badge.unavailable{border-color:#5a4347;background:rgba(111,61,70,.12);color:#b9848e}
+.pal-row.unavailable-entry{background:linear-gradient(105deg,rgba(111,61,70,.035),#0c0f13 42%)}
