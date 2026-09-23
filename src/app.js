@@ -55,7 +55,7 @@ function speedOverrideFromSpecial(special){
   return Object.keys(facilities).length?{facilities,recipes,details}:null;
 }
 
-function defaultOwned(){const out={};for(const p of DATA.pals)out[String(p.id)]={enabled:true,count:1};return out;}
+function defaultOwned(){const out={};for(const p of DATA.pals)out[String(p.id)]={enabled:!p.isForm,count:1};return out;}
 function normalizeState(s){
   const x={...clone(DEFAULT_STATE),...clone(s||{})};
   x.facilities={...clone(DEFAULT_STATE.facilities),...(s?.facilities||{})};x.modules={...clone(DEFAULT_STATE.modules),...(s?.modules||{})};x.speeds={...clone(DEFAULT_STATE.speeds),...(s?.speeds||{})};
@@ -63,7 +63,7 @@ function normalizeState(s){
   if(s?.climate?.enabled&&!s?.climateOptions){const t=s.climate.temperature;if(t==='Cool'||t==='Freeze')x.climateOptions.cooling=true;else if(t==='Warm'||t==='Scorching')x.climateOptions.heat=true;else if(t==='Adequate')x.climateOptions.sunlamp=true;}
   x.homelandLevel=Math.min(20,Math.max(1,Number(x.homelandLevel)||1));const maxSlots=maxAniimoForLevel(x.homelandLevel);x.workerSlots=Math.min(maxSlots,Math.max(1,Number(x.workerSlots)||1));x.teamSlots=Math.min(maxSlots,Math.max(1,Number(s?.teamSlots??s?.workerSlots??x.teamSlots)||1));x.collectHours=Math.max(0,Number(x.collectHours||0));x.oneRecipePerFacility=!!x.oneRecipePerFacility;x.generatorAvailable=!!x.generatorAvailable;x.hungry=!!x.hungry;x.manualSpeeds=!!x.manualSpeeds;
   x.recipeNotes={...(s?.recipeNotes||{})};x.guarantees=Array.isArray(s?.guarantees)?s.guarantees.map(g=>({item:String(g.item||''),perHour:Math.max(0,Number(g.perHour||0)),maximize:!!g.maximize,enabled:g.enabled!==false})):[];x.target=String(x.target||'coin');
-  if(!x.owned||!Object.keys(x.owned).length)x.owned=defaultOwned();for(const p of DATA.pals)if(!x.owned[String(p.id)])x.owned[String(p.id)]={enabled:true,count:1};
+  if(!x.owned||!Object.keys(x.owned).length)x.owned=defaultOwned();for(const p of DATA.pals)if(!x.owned[String(p.id)])x.owned[String(p.id)]={enabled:!p.isForm,count:1};
   return x;
 }
 function loadState(){try{return normalizeState(JSON.parse(localStorage.getItem(STORE)||'null'));}catch{return normalizeState(null);}}
@@ -257,8 +257,8 @@ function palMatchesOwnershipFilter(p,raw){
   if(globalTests.length)return Object.values(abilities).some(value=>Number(value||0)>0&&passes(Number(value),globalTests));
   return true;
 }
-function renderOwnership(){const enabled=DATA.pals.filter(p=>state.owned[String(p.id)]?.enabled),copies=enabled.reduce((s,p)=>s+Number(state.owned[String(p.id)]?.count||1),0);$('#ownership-panel').innerHTML=title('Aniimo you own',`${enabled.length} species · ${copies} copies`)+`<div class="ownership-tools"><input id="pal-search" placeholder="Name, ability or level… e.g. Light, <3" title="Examples: Light · 4 · Light, >=2 · Fire, <=3"><button id="own-all" class="ghost">All</button><button id="own-none" class="ghost">None</button></div><div class="ownership-filter-hint">Filter by name, ability, or ability level · <b>Light</b> · <b>4</b> · <b>Light, &lt;3</b></div><div class="ownership-grid" id="ownership-grid">${DATA.pals.map(p=>palRow(p)).join('')}</div><div class="summary-line"><span>Checkbox = usable species. Number = copies available to the real-team search.</span><span>${enabled.length}/${DATA.pals.length}</span></div>`;bindOwnership();}
-function palRow(p){const rec=state.owned[String(p.id)]||{enabled:true,count:1},abilities=Object.entries(p.abilities||{}).map(([a,l])=>abilityPill(a,l,true)).join('');return`<label class="pal-row ${rec.enabled?'':'off'}" data-id="${p.id}" data-name="${esc(p.name.toLowerCase())}"><input class="pal-enabled" type="checkbox" ${rec.enabled?'checked':''}><img src="${palHeadIcon(p)}" onerror="this.style.visibility='hidden'" alt=""><span class="pal-info"><b>${esc(p.name)}</b><span class="pal-abilities">${abilities}</span></span><input class="pal-count" type="number" min="1" max="99" value="${rec.count||1}" title="Copies"></label>`;}
+function renderOwnership(){const enabled=DATA.pals.filter(p=>state.owned[String(p.id)]?.enabled),copies=enabled.reduce((s,p)=>s+Number(state.owned[String(p.id)]?.count||1),0),formCount=enabled.filter(p=>p.isForm).length,baseCount=enabled.length-formCount;$('#ownership-panel').innerHTML=title('Aniimo you own',`${baseCount} base · ${formCount} forms · ${copies} copies`)+`<div class="ownership-tools"><input id="pal-search" placeholder="Name, form, ability or level… e.g. Prismana, Light, <3" title="Examples: Prismana · Nighttime · Light · 4 · Light, >=2"><button id="own-all" class="ghost">All</button><button id="own-none" class="ghost">None</button></div><div class="ownership-filter-hint">Filter by species, form, ability, or level · <b>Prismana</b> · <b>Nighttime</b> · <b>Light, &lt;3</b></div><div class="ownership-grid" id="ownership-grid">${DATA.pals.map(p=>palRow(p)).join('')}</div><div class="summary-line"><span>Each form is independent: checkbox = usable copy pool, number = copies available to the real-team search.</span><span>${enabled.length}/${DATA.pals.length}</span></div>`;bindOwnership();}
+function palRow(p){const rec=state.owned[String(p.id)]||{enabled:!p.isForm,count:1},abilities=Object.entries(p.abilities||{}).map(([a,l])=>abilityPill(a,l,true)).join(''),form=p.isForm?`<em class="pal-form-badge ${p.isPrismana?'prismana':''}">${esc(p.form)}</em>`:'';return`<label class="pal-row ${rec.enabled?'':'off'} ${p.isForm?'form-entry':''}" data-id="${p.id}" data-name="${esc(p.name.toLowerCase())}"><input class="pal-enabled" type="checkbox" ${rec.enabled?'checked':''}><img src="${palHeadIcon(p)}" onerror="${palImageError(p)}" alt=""><span class="pal-info"><b>${esc(p.speciesName||p.name)} ${form}</b><span class="pal-abilities">${abilities}</span></span><input class="pal-count" type="number" min="1" max="99" value="${rec.count||1}" title="Copies"></label>`;}
 function bindOwnership(){
   const search=$('#pal-search');
   search.oninput=e=>{const q=e.target.value;document.querySelectorAll('.pal-row').forEach(row=>{const p=DATA.pals.find(x=>String(x.id)===String(row.dataset.id));row.style.display=p&&palMatchesOwnershipFilter(p,q)?'grid':'none';});};
@@ -293,14 +293,16 @@ const ABILITY_ICONS={
   Perfumery:'https://aniidex.com/_ipx/q_95&s_34x34/images/homeland/UI_Img_Ability_Incense_Making.webp'
 };
 function abilityIcon(name){return ABILITY_ICONS[name]||'';}
-function palHeadIcon(p){return `${HIDEOUT}/images/aniimo/heads/${String(p.id).slice(0,-2)}.webp`;}
+function palBaseHeadIcon(p){const id=String(p?.baseId??p?.id??'');return `${HIDEOUT}/images/aniimo/heads/${id.slice(0,-2)}.webp`;}
+function palHeadIcon(p){return p?.icon||palBaseHeadIcon(p);}
+function palImageError(p){return `this.onerror=null;this.src='${palBaseHeadIcon(p)}'`;}
 function itemInline(qty,item){return `<span class="item-inline"><img src="${itemIcon(item)}" alt="" onerror="this.style.opacity='.15'"><span>${esc(qty)}× ${esc(itemName(DATA,item))}</span></span>`;}
 function coinValue(value,decimals=false){return `<span class="coin-value"><img src="${HOME_COIN_ICON}" alt=""><span>${decimals?fmt1(value):fmt(value)}</span></span>`;}
 function metricValue(icon,value){return `<span class="metric-value"><img src="${icon}" alt=""><span>${value}</span></span>`;}
 function abilityPill(name,level,mini=false){const c=DATA.abilities[name]?.color||'#7f8994';return `<span class="ability-pill ${mini?'mini':''}" style="--ability:${c}"><img src="${abilityIcon(name)}" alt=""><span>${esc(name)}</span><b>Lv.${level}</b></span>`;}
 function palFallbackColors(p){const cs=Object.keys(p.abilities||{}).map(a=>DATA.abilities[a]?.color).filter(Boolean);return[cs[0]||'#56616c',cs[1]||cs[0]||'#313943'];}
-function palAbilityChip(p,ability){const[a,b]=palFallbackColors(p),src=palHeadIcon(p);return `<span class="pal-ability-chip" data-palette-src="${src}" style="--pal-a:${a};--pal-b:${b}"><img src="${src}" alt="" onerror="this.style.visibility='hidden'"><span><b>${esc(p.name)}</b> · Lv.${p.abilities[ability]}</span></span>`;}
-function teamPalChip(member,inner=''){const p=member.pal||member,[a,b]=palFallbackColors(p),src=palHeadIcon(p);return `<span class="pal-ability-chip team-pal-chip" data-palette-src="${src}" style="--pal-a:${a};--pal-b:${b}"><img src="${src}" alt="" onerror="this.style.visibility='hidden'"><span class="team-pal-copy"><b>${esc(p.name)}</b>${inner}</span></span>`;}
+function palAbilityChip(p,ability){const[a,b]=palFallbackColors(p),src=palHeadIcon(p);return `<span class="pal-ability-chip" data-palette-src="${src}" style="--pal-a:${a};--pal-b:${b}"><img src="${src}" alt="" onerror="${palImageError(p)}"><span><b>${esc(p.name)}</b> · Lv.${p.abilities[ability]}</span></span>`;}
+function teamPalChip(member,inner=''){const p=member.pal||member,[a,b]=palFallbackColors(p),src=palHeadIcon(p);return `<span class="pal-ability-chip team-pal-chip" data-palette-src="${src}" style="--pal-a:${a};--pal-b:${b}"><img src="${src}" alt="" onerror="${palImageError(p)}"><span class="team-pal-copy"><b>${esc(p.name)}</b>${inner}</span></span>`;}
 
 function utilityCandidatePals(task,limit=3){
   return DATA.pals.filter(p=>{const rec=state.owned?.[String(p.id)];return rec?.enabled&&Number(rec.count||0)>0&&Number(p.abilities?.[task.ability]||0)>=Number(task.level||0);}).sort((a,b)=>Number(a.abilities?.[task.ability]||0)-Number(b.abilities?.[task.ability]||0)||a.name.localeCompare(b.name)).slice(0,limit);

@@ -791,3 +791,11 @@
 .utility-staffing .team-pal-copy small{display:block;font-size:6.5px;color:#73c995;font-weight:600;margin-top:1px}
 .utility-coverage{border-color:#3d6f8d;background:rgba(58,114,151,.055)}
 @media(max-width:760px){.utility-staff-card{grid-template-columns:28px 1fr}.utility-staff-worker{grid-column:1/-1;justify-content:flex-start}}
+
+/* --- regional / Prismana Aniimo forms --- */
+.pal-row.form-entry{background:linear-gradient(105deg,rgba(87,104,122,.055),#0c0f13 42%)}
+.pal-row.form-entry:not(.off){border-color:#34404c}
+.pal-row.form-entry>img{border-radius:5px;object-fit:contain;background:linear-gradient(145deg,#171d23,#0b0e12)}
+.pal-info>b{display:flex;align-items:center;gap:5px}
+.pal-form-badge{display:inline-flex;align-items:center;max-width:105px;padding:2px 4px;border:1px solid #44515e;background:#111820;color:#93a7ba;font-size:6.5px;font-style:normal;font-weight:800;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pal-form-badge.prismana{border-color:#74558e;background:linear-gradient(90deg,rgba(103,70,142,.22),rgba(92,122,160,.13));color:#d6b9ef}
