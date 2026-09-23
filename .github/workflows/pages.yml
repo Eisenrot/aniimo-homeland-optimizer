@@ -37,12 +37,14 @@ jobs:
           node --check src/progression.js
           node --check src/climate.js
           node --check src/plan-cache.js
+          node --check src/full-layout.js
           node --check src/optimizer-worker.js
           node test-app-parse.mjs
           node test.mjs
           node test-team.mjs
           node test-climate.mjs
           node test-plan-cache.mjs
+          node test-full-layout.mjs
           node test-progression.mjs
           node test-speed.mjs
           node test-recipe-notes.mjs
