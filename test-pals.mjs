@@ -69,4 +69,7 @@ const cssPortrait=fs.readFileSync(new URL('./styles.css',import.meta.url),'utf8'
 const portraitCss=cssPortrait.slice(cssPortrait.indexOf('/* --- AniIDEX Aniimo hex portraits --- */'));
 if(/aniimo\/ui\/hex-mask\.webp/.test(portraitCss))throw new Error('AniIDEX portrait CSS must not depend on a cross-origin mask image');
 if(!portraitCss.includes('clip-path:polygon('))throw new Error('AniIDEX portrait local hex clipping is missing');
-if(!portraitCss.includes('.aniimo-hex.active .aniimo-hex-ring'))throw new Error('AniIDEX active colored ring styling is missing');
+if(!portraitCss.includes("https://aniidex.com/images/aniimo/ui/hex-frame.webp"))throw new Error('AniIDEX standard frame image styling is missing');
+if(!portraitCss.includes("https://aniidex.com/images/aniimo/ui/hex-frame-rainbow.webp"))throw new Error('AniIDEX Prismana frame image styling is missing');
+if(!portraitCss.includes('.aniimo-hex.prismana .aniimo-hex-ring'))throw new Error('Prismana Aniimo are not selecting the rainbow frame');
+if(portraitCss.includes('background:#515364'))throw new Error('legacy flat gray Aniimo border is still present');

@@ -817,21 +817,18 @@
 }
 .aniimo-hex-ring{
   position:absolute;
-  z-index:0;
-  width:calc(100% + 4px);
-  height:calc(100% + 4px);
-  top:-2px;
-  left:50%;
-  transform:translateX(-50%);
-  background:#515364;
-  opacity:.92;
+  z-index:3;
+  inset:0;
+  background:url('https://aniidex.com/images/aniimo/ui/hex-frame.webp') 50%/100% 100% no-repeat;
+  opacity:1;
   pointer-events:none;
   transition:opacity .18s;
-  -webkit-clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
-  clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
+}
+.aniimo-hex.prismana .aniimo-hex-ring{
+  background-image:url('https://aniidex.com/images/aniimo/ui/hex-frame-rainbow.webp');
 }
 .aniimo-hex.active .aniimo-hex-ring{
-  opacity:.92;
+  opacity:1;
 }
 .aniimo-hex-frame{
   position:absolute;
@@ -860,13 +857,13 @@
   background:transparent!important;
 }
 .pal-row.off .aniimo-hex-ring,.living-card.locked .aniimo-hex-ring{opacity:.32}
-.pal-ability-chip .aniimo-hex-ring,.team-pal-chip .aniimo-hex-ring{opacity:.92}
+.pal-ability-chip .aniimo-hex-ring,.team-pal-chip .aniimo-hex-ring{opacity:1}
 .ownership-aniimo,.living-aniimo,.chip-aniimo,.team-aniimo{isolation:isolate}
 
 /* AniIDEX portrait masks are intentionally reproduced as local clip geometry.
    Remote CSS masks are subject to cross-origin mask restrictions and can render fully transparent. */
 .aniimo-hex.active .aniimo-hex-ring{
-  opacity:.92;
+  opacity:1;
   filter:none;
 }
 .aniimo-hex-frame{
