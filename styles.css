@@ -837,15 +837,13 @@
   display:block;
   overflow:hidden;
   background:url('https://aniidex.com/images/aniimo/ui/hex-bg.webp') 50%/100% 100% no-repeat;
-  -webkit-clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
-  clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
+  -webkit-mask:url('https://aniidex.com/images/aniimo/ui/hex-bg.webp') 50%/100% 100% no-repeat;
+  mask:url('https://aniidex.com/images/aniimo/ui/hex-bg.webp') 50%/100% 100% no-repeat;
 }
 .aniimo-hex-cut{
   position:absolute;
   inset:0;
   overflow:hidden;
-  -webkit-clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
-  clip-path:polygon(24.5% 5.5%,75.5% 5.5%,100% 50%,75.5% 94.5%,24.5% 94.5%,0 50%);
 }
 .aniimo-hex-cut>img{
   position:absolute!important;
@@ -863,8 +861,8 @@
 .pal-ability-chip .aniimo-hex-ring,.team-pal-chip .aniimo-hex-ring{opacity:1}
 .ownership-aniimo,.living-aniimo,.chip-aniimo,.team-aniimo{isolation:isolate}
 
-/* AniIDEX portrait masks are intentionally reproduced as local clip geometry.
-   Remote CSS masks are subject to cross-origin mask restrictions and can render fully transparent. */
+/* The AniIDEX hex background is also the portrait mask.
+   Using its alpha channel keeps the artwork inside the exact rendered hex silhouette. */
 .aniimo-hex.active .aniimo-hex-ring{
   opacity:1;
   filter:none;
