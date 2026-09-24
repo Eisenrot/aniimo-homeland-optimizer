@@ -1,7 +1,7 @@
 import {productionPlacementCounts} from './climate.js';
 import {stableStringify} from './plan-cache.js';
 
-export const FULL_LAYOUT_VERSION=3;
+export const FULL_LAYOUT_VERSION=4;
 export const FULL_LAYOUT_STORE='aniimoOptimizerFullLayoutV1';
 export const LAYOUT_SETTINGS_STORE='aniimoOptimizerLayoutSettingsV1';
 export const PLOT_WIDTH=20;
@@ -193,21 +193,26 @@ function clusterMembersFromClimate(plan,items){
   }
   return{clusters,remaining:available};
 }
-function placeCluster(cluster,placed,plots,settings){
+function placeCluster(cluster,placed,plots,settings,occupiedFields=[]){
   if(!cluster.members.length)return{placements:[],fields:[]};
   for(let i=0;i<cluster.members.length;i++)for(let j=i+1;j<cluster.members.length;j++)if(intersects({x:cluster.members[i].lx,y:cluster.members[i].ly,w:cluster.members[i].w,h:cluster.members[i].h},{x:cluster.members[j].lx,y:cluster.members[j].ly,w:cluster.members[j].w,h:cluster.members[j].h}))return null;
   const localBox=bboxOf(cluster.members.map(m=>({x:m.lx,y:m.ly,w:m.w,h:m.h}))),board=bboxOf(plots),shape=settings.shape==='auto'?(settings.compact?'compact':'clusters'):settings.shape;
   let best=null,bestScore=Infinity;
   for(let ty=board.y-localBox.y;ty<=board.y+board.h-(localBox.y+localBox.h)+EPS;ty+=STEP)for(let tx=board.x-localBox.x;tx<=board.x+board.w-(localBox.x+localBox.w)+EPS;tx+=STEP){
-    const members=cluster.members.map(m=>({...m,x:roundStep(m.lx+tx),y:roundStep(m.ly+ty)}));
+    const members=cluster.members.map(m=>({...m,x:roundStep(m.lx+tx),y:roundStep(m.ly+ty)})),clusterFields=(cluster.fields||[]).map(f=>({...f,x:f.x+tx,y:f.y+ty}));
     if(members.some(m=>!coveredByPlots(m,plots)||overlapsPlaced(m,placed)))continue;
+    // Separate climate clusters must remain genuinely separate. An accidental
+    // field overlap changes the produced climate, and a structure from one
+    // cluster must not drift into another cluster's influence area either.
+    if(clusterFields.some(f=>occupiedFields.some(o=>intersects(f,o))||placed.some(p=>intersects(f,p))))continue;
+    if(members.some(m=>occupiedFields.some(f=>intersects(m,f))))continue;
     const bb=bboxOf(members),score=shape==='rows'?bb.y*10000+bb.x:settings.compact?candidateScore(bb,placed,settings,{facility:cluster.id}):bb.y*1000+bb.x;
-    if(score<bestScore){best={placements:members,fields:(cluster.fields||[]).map(f=>({...f,x:f.x+tx,y:f.y+ty}))};bestScore=score;}
+    if(score<bestScore){best={placements:members,fields:clusterFields};bestScore=score;}
   }
   return best;
 }
 function singleFieldMembers(matching,utility){
-  const field={x:0,y:0,w:9,h:9},placed=[{...utility,lx:4,ly:4}],occupied=[{x:4,y:4,w:utility.w,h:utility.h}];
+  const field={x:0,y:0,w:9,h:9},ux=roundStep((field.w-utility.w)/2),uy=roundStep((field.h-utility.h)/2),placed=[{...utility,lx:ux,ly:uy}],occupied=[{x:ux,y:uy,w:utility.w,h:utility.h}];
   const ordered=[...matching].sort((a,b)=>area(b)-area(a)||a.facility.localeCompare(b.facility));
   for(const item of ordered){
     const dims=[[item.w,item.h]],candidates=[];
@@ -224,7 +229,7 @@ function singleFieldMembers(matching,utility){
   return placed;
 }
 function directClimateClusters(plan,items){
-  const layout=plan?.climateLayout,scenario=plan?.scenario||{};if(!layout?.feasible||layout.status==='overlap')return[];
+  const layout=plan?.climateLayout,scenario=plan?.scenario||{};if(!layout?.feasible||layout.status==='overlap')return{clusters:[],used:new Set()};
   const demands=layout.demands||[],out=[],used=new Set();
   const add=(type,facility,env)=>{
     const group=demands.filter(d=>d.env===env);if(!group.length)return;
@@ -244,13 +249,19 @@ function buildFullBaseLayoutVariant(plan,state,data,settings){
   if(!plots.length)return{feasible:false,reason:'No unlocked plots are enabled.',placements:[],fields:[],plots:[],settings};
   const allItems=planPhysicalItems(plan,state,data,settings),placed=[],fields=[];
   const climate=clusterMembersFromClimate(plan,allItems),clusters=[...(climate.clusters||[])];let remaining=climate.remaining||allItems;
-  if(!clusters.length){
-    const direct=directClimateClusters(plan,remaining);
-    if(direct?.clusters?.length){clusters.push(...direct.clusters);remaining=remaining.filter((_,i)=>!direct.used.has(i));}
-  }
+  const direct=directClimateClusters(plan,remaining);
+  if(direct?.clusters?.length){clusters.push(...direct.clusters);remaining=remaining.filter((_,i)=>!direct.used.has(i));}
+  // Climate is a hard geometry constraint, not a packing preference. If a new
+  // climate-sensitive recipe is ever added without a matching cluster rule,
+  // fail visibly instead of placing it somewhere invalid.
+  const strandedClimate=remaining.filter(x=>x.kind==='plan'&&x.env);
+  if(strandedClimate.length)return{feasible:false,reason:`Climate-sensitive structures escaped climate clustering: ${[...new Set(strandedClimate.map(x=>x.env+' '+x.name))].join(', ')}.`,placements:placed,fields,plots,settings,unplaced:remaining};
+  // Largest climate groups first: a nine-Woodland cooling zone should not lose
+  // the useful central space because a tiny Sunlamp group happened to be listed first.
+  clusters.sort((a,b)=>b.members.reduce((s,x)=>s+area(x),0)-a.members.reduce((s,x)=>s+area(x),0)||a.id.localeCompare(b.id));
   for(const cluster of clusters){
-    const result=placeCluster(cluster,placed,plots,settings);
-    if(!result)return{feasible:false,reason:`Climate cluster ${cluster.id} does not fit inside the enabled plots.`,placements:placed,fields,plots,settings,unplaced:[...cluster.members,...remaining]};
+    const result=placeCluster(cluster,placed,plots,settings,fields);
+    if(!result)return{feasible:false,reason:`Climate cluster ${cluster.id} does not fit inside the enabled plots without corrupting another climate zone.`,placements:placed,fields,plots,settings,unplaced:[...cluster.members,...remaining]};
     placed.push(...result.placements);fields.push(...result.fields);
   }
   const storageItems=remaining.filter(x=>x.kind==='storage'),ordinary=remaining.filter(x=>x.kind!=='storage'),preview=preliminaryOrdinaryLayout(ordinary,placed,plots,settings),storagePlacements=placeStorageAnchors(storageItems,placed,plots,preview,settings);

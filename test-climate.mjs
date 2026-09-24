@@ -105,3 +105,31 @@ if(demandKey.get('farmland|Adequate')!==7)throw new Error(`Adequate climate coun
 if(demandKey.get('farmland|Scorching')!==1)throw new Error(`Scorching climate count must match displayed Sugarcane 1x, got ${demandKey.get('farmland|Scorching')}`);
 if(demandKey.get('woodland|Warm')!==10)throw new Error(`Warm climate count must match displayed Woodland 10x, got ${demandKey.get('woodland|Warm')}`);
 console.log('climate/display placement counts aligned',Object.fromEntries(demandKey));
+
+
+const expectedCropClimate={
+  'Rose':'Cool',
+  'Strawberry':'Cool',
+  'Lavender':'Adequate',
+  'Sugarcane':'Scorching',
+  'Cherry Blossom':'Warm',
+  'Apple':'Cool',
+  'Maple Syrup':'Freeze',
+  'Ginseng':'Cool',
+  'Grapes':'Adequate',
+  'Cranberry':'Freeze',
+  'Agave':'Scorching',
+  'Palm Bark':'Scorching',
+  'Chestnut':'Warm',
+  'Walnut':'Adequate',
+  'Natural Rubber':'Scorching',
+  'Coconut':'Scorching',
+  'Cocoa':'Scorching',
+  'Orange Flower':'Adequate'
+};
+for(const [name,env] of Object.entries(expectedCropClimate)){
+  const matching=DATA.recipes.filter(r=>['farmland','woodland'].includes(r.facility)&&(r.outputs||[]).some(o=>DATA.items?.[String(o.item)]?.name===name));
+  if(!matching.length)throw new Error(`missing climate recipe for ${name}`);
+  if(matching.some(r=>r.env!==env))throw new Error(`${name} climate drifted: expected ${env}, got ${[...new Set(matching.map(r=>r.env||'none'))].join(', ')}`);
+}
+console.log('all climate crop/tree metadata OK',expectedCropClimate);

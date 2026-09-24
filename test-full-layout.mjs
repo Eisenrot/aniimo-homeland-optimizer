@@ -54,3 +54,33 @@ if(!oneStore.feasible)throw new Error('1-storage compact baseline should fit');
 const areaOf=b=>(b?.w||0)*(b?.h||0),oneArea=areaOf(oneStore.bounds),threeArea=areaOf(storageBuilt.bounds);
 if(threeArea>oneArea*1.45)throw new Error(`3 storage units exploded compact layout: ${threeArea.toFixed(1)} vs baseline ${oneArea.toFixed(1)}`);
 console.log('storage compactness OK',{oneArea,threeArea});
+
+
+const mixedClimateState={
+  homelandLevel:9,oneRecipePerFacility:true,
+  facilities:{farmland:{count:6,level:7},woodland:{count:2,level:6}},
+  climateOptions:{cooling:true,heat:true,sunlamp:true}
+};
+const mixedClimatePlan={
+  scenario:{cooling:'Cool',heat:'Scorching',sunlamp:true,generator:false},
+  rows:[
+    {facility:'farmland',units:2,perHour:100,recipe:{id:8101,env:'Cool',outputs:[{item:4001005,qty:8}]}},
+    {facility:'woodland',units:2,perHour:100,recipe:{id:8102,env:'Cool',outputs:[{item:4001033,qty:8}]}},
+    {facility:'farmland',units:2,perHour:100,recipe:{id:8103,env:'Adequate',outputs:[{item:4001007,qty:7}]}},
+    {facility:'farmland',units:2,perHour:100,recipe:{id:8104,env:'Scorching',outputs:[{item:4001001,qty:6}]}}
+  ]
+};
+mixedClimatePlan.climateLayout=evaluateClimateLayout(mixedClimatePlan,mixedClimateState,DATA);
+if(!mixedClimatePlan.climateLayout.feasible||mixedClimatePlan.climateLayout.status!=='separate')throw new Error('mixed direct + Adequate climate fixture should be a feasible separate-zone plan');
+const mixedBuilt=buildFullBaseLayout(mixedClimatePlan,mixedClimateState,DATA,{compact:true,shape:'auto',allowRotate:true,storageUnits:0,disabledPlots:[]});
+if(!mixedBuilt.feasible)throw new Error('mixed direct + Adequate full layout should fit: '+mixedBuilt.reason);
+const fieldOf=type=>mixedBuilt.fields.find(f=>f.type===type),coolField=fieldOf('cooling'),heatField=fieldOf('heating'),adequateField=fieldOf('adequate');
+if(!coolField||!heatField||!adequateField)throw new Error('full layout lost one of the required Cool / Scorching / Adequate fields');
+const hit=(r,f)=>Math.max(0,Math.min(r.x+r.w,f.x+f.w)-Math.max(r.x,f.x))*Math.max(0,Math.min(r.y+r.h,f.y+f.h)-Math.max(r.y,f.y))>1e-7;
+for(const p of mixedBuilt.placements.filter(x=>x.kind==='plan'&&x.env)){
+  const own=p.env==='Cool'?coolField:p.env==='Scorching'?heatField:p.env==='Adequate'?adequateField:null;
+  if(!own||!hit(p,own))throw new Error(`${p.env} ${p.name} escaped its required climate field`);
+  for(const other of [coolField,heatField,adequateField])if(other!==own&&hit(p,other))throw new Error(`${p.env} ${p.name} leaked into another climate field`);
+}
+for(const [a,b] of [[coolField,heatField],[coolField,adequateField],[heatField,adequateField]])if(hit(a,b))throw new Error('separate climate influence fields must not overlap');
+console.log('mixed climate full-layout zones OK',{fields:mixedBuilt.fields.map(f=>f.type),placements:mixedBuilt.placements.filter(p=>p.env).map(p=>[p.facility,p.env,p.x,p.y])});
