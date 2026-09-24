@@ -84,3 +84,51 @@ const utilityCoverage=staffingCoverageMatch(coverageModel,utilityTeam,[]);
 if(utilityCoverage.slots.filter(x=>x.mode==='utility').length!==3)throw new Error('utility coverage slots missing from team staffing');
 if(utilityCoverage.assignments.filter(x=>x.slot.mode==='utility').length!==3)throw new Error('utility staffing coverage did not assign all climate stations');
 console.log('dedicated utility workers OK',utilityMatch.assignments.map(a=>({facility:a.task.facility,ability:a.task.ability,worker:utilityTeam[a.worker].pal.name})));
+
+
+const cheapUtilityModel={
+  tasks:[
+    {key:'Light|1||sunlamp',ability:'Light',level:1,fixed:true,facility:'sunlamp'},
+    {key:'Water|1||well',ability:'Water',level:1,fixed:false,facility:'well'}
+  ],
+  baselineDemandSeconds:new Map([['Light|1||sunlamp',3600],['Water|1||well',3600]]),
+  state:{manualSpeeds:false},
+  rows:[]
+};
+const cheapUtilityTeam=[
+  {pal:{id:9920001,name:'Glacy-like generalist',abilities:{Light:3,Water:4}}},
+  {pal:{id:9920002,name:'Lunara-like specialist',abilities:{Light:3}}},
+  {pal:{id:9920003,name:'Water worker',abilities:{Water:2}}}
+];
+const cheapUtility=assignUtilityWorkers(cheapUtilityModel,cheapUtilityTeam);
+if(!cheapUtility.feasible)throw new Error('cheap utility specialist fixture should be feasible');
+const lightAssignment=cheapUtility.assignments.find(a=>a.task.ability==='Light');
+if(cheapUtilityTeam[lightAssignment.worker].pal.name!=='Lunara-like specialist')throw new Error('utility assignment should preserve the higher-value production worker when an equally valid specialist exists');
+console.log('utility opportunity cost preserves production specialists',cheapUtilityTeam[lightAssignment.worker].pal.name);
+
+const searchRecipe={id:9930001,facility:'well',level:1,inputs:[],outputs:[{item:1,qty:1}],workload:3600,steps:[{name:'Gather',ability:'Water',level:1}]};
+const distractors=Array.from({length:50},(_,i)=>({id:9931000+i,name:`A Worker ${String(i+1).padStart(2,'0')}`,abilities:{Water:1}}));
+const searchPals=[
+  {id:9930002,name:'Glacy-like Prismana',abilities:{Light:3,Water:4}},
+  ...distractors,
+  {id:9930003,name:'Lunara-like Utility',abilities:{Light:3}}
+];
+const searchData={
+  items:{'1':{name:'Test Water',value:100}},
+  facilities:[{slug:'well',name:'Well',kind:'production',outputLimit:{1:99}}],
+  recipes:[searchRecipe],pals:searchPals,abilities:{}
+};
+const searchState={
+  teamSlots:3,workerSlots:3,target:'coin',guarantees:[],oneRecipePerFacility:true,manualSpeeds:false,hungry:false,collectHours:0,
+  facilities:{well:{count:1,level:1}},owned:Object.fromEntries(searchPals.map(p=>[String(p.id),{enabled:true,count:1}]))
+};
+const searchPlan={scenario:{sunlamp:true},rows:[{facility:'well',recipe:searchRecipe,batchesPerHour:1,units:1,perHour:100,targetPerHour:100}],runnableRecipes:[searchRecipe],ratePerHour:100,targetRate:100,objectiveRate:100};
+const searchModel=buildTeamModel(searchPlan,searchState,searchData);
+const searchTeams=await findBestTeams(searchModel,searchState,searchData,{limit:1,onProgress:()=>{}});
+if(!searchTeams.length)throw new Error('utility-aware team search fixture returned no team');
+const searchNames=new Set(searchTeams[0].team.map(x=>x.pal.name));
+if(!searchNames.has('Lunara-like Utility')||!searchNames.has('Glacy-like Prismana'))throw new Error(`utility-aware search failed to preserve the cheap utility specialist and Lv.4 production worker: ${[...searchNames].join(', ')}`);
+const searchUtility=searchTeams[0].eval.utilityAssignments.find(a=>a.task.ability==='Light');
+if(searchTeams[0].team[searchUtility.worker].pal.name!=='Lunara-like Utility')throw new Error('real-team search wasted the Lv.4 production worker on Sunlamp');
+if(!(searchTeams[0].eval.objectiveRate>100.01))throw new Error(`Lv.4 worker speed did not improve concrete-team throughput: ${searchTeams[0].eval.objectiveRate}`);
+console.log('utility-aware Prismana search OK',{team:[...searchNames],rate:searchTeams[0].eval.objectiveRate});

@@ -490,15 +490,16 @@ function workerTaskRelativeSpeed(model,pal,task){
   return actual>0?actual/baseline:0;
 }
 
-function utilityOpportunityCost(model,pal){
+function taskDemandHours(model,task){return Math.max(0,Number(model.baselineDemandSeconds?.get?.(task.key)||0))/3600;}
+function productionRelevance(model,pal){
   let score=0;
   for(const task of model.tasks||[]){
     if(task.fixed||!palCanDo(pal,task))continue;
-    const demand=Math.max(0,Number(model.baselineDemandSeconds?.get?.(task.key)||0))/3600,over=Math.max(0,Number(pal?.abilities?.[task.ability]||0)-Number(task.level||0));
-    score+=demand*(1+over*.04);
+    score+=taskDemandHours(model,task)*Math.max(.0001,workerTaskRelativeSpeed(model,pal,task));
   }
   return score;
 }
+function utilityOpportunityCost(model,pal){return productionRelevance(model,pal);}
 function hungarianUtilityAssignment(cost){
   const n=cost.length,m=cost[0]?.length||0;if(!n)return[];if(m<n)return null;
   const u=Array(n+1).fill(0),v=Array(m+1).fill(0),p=Array(m+1).fill(0),way=Array(m+1).fill(0);
@@ -529,32 +530,80 @@ export function assignUtilityWorkers(model,team){
   return{feasible:true,assignments,workers:[...new Set(assignments.map(a=>a.worker))],uncovered:[]};
 }
 
-function addTeamFacilityConstraints(A,b,N,rows,model){
+function estimatedTeamOccupancySeconds(model,row,team,reserved){
+  if(model.state.manualSpeeds||!recipeUsesMeasuredEfficiency(row.recipe))return Number(row.cycleSeconds||0);
+  const tasks=taskObjects(row);if(tasks.length!==1)return Number(row.cycleSeconds||0);
+  const task=tasks[0];let best=Infinity;
+  for(let w=0;w<team.length;w++){
+    if(reserved.has(w)||!palCanDo(team[w].pal,task))continue;
+    const abilityLevel=Number(team[w].pal.abilities?.[task.ability]||0),parts=workerCycleParts(row.recipe,model.state,model.scenario,abilityLevel,false);
+    if(Number.isFinite(parts.cycle)&&parts.cycle>0)best=Math.min(best,parts.cycle);
+  }
+  return Number.isFinite(best)?best:Number(row.cycleSeconds||0);
+}
+function addTeamFacilityConstraints(A,b,N,rows,model,occupancySeconds=null){
   const state=model.state,data=model.data,scenario=model.scenario,slugs=[...new Set(rows.map(r=>r.facility))];
-  for(const slug of slugs){const stacks=facilityStacks(state,slug);if(!stacks.length)continue;const thresholds=[...new Set(rows.filter(r=>r.facility===slug).map(r=>Number(r.recipe.level||1)))].sort((a,b)=>a-b);for(const lvl of thresholds){const cap=stacks.filter(x=>x.level>=lvl).reduce((s,x)=>s+x.count,0),row=Array(N).fill(0);let used=false;rows.forEach((r,i)=>{if(r.facility===slug&&Number(r.recipe.level||1)>=lvl){row[i]=r.cycleSeconds/3600;used=true;}});if(used){A.push(row);b.push(cap);}const collect=Number(state.collectHours||0);if(collect>0){const batchCap=stacks.filter(x=>x.level>=lvl).reduce((s,x)=>s+x.count*facilityOutputLimit(data,slug,x.level),0);if(batchCap>0){const cr=Array(N).fill(0);let cu=false;rows.forEach((r,i)=>{if(r.facility===slug&&Number(r.recipe.level||1)>=lvl){cr[i]=collect;cu=true;}});if(cu){A.push(cr);b.push(batchCap);}}}}}
+  for(const slug of slugs){const stacks=facilityStacks(state,slug);if(!stacks.length)continue;const thresholds=[...new Set(rows.filter(r=>r.facility===slug).map(r=>Number(r.recipe.level||1)))].sort((a,b)=>a-b);for(const lvl of thresholds){const cap=stacks.filter(x=>x.level>=lvl).reduce((s,x)=>s+x.count,0),row=Array(N).fill(0);let used=false;rows.forEach((r,i)=>{if(r.facility===slug&&Number(r.recipe.level||1)>=lvl){row[i]=Number(occupancySeconds?.[i]??r.cycleSeconds)/3600;used=true;}});if(used){A.push(row);b.push(cap);}const collect=Number(state.collectHours||0);if(collect>0){const batchCap=stacks.filter(x=>x.level>=lvl).reduce((s,x)=>s+x.count*facilityOutputLimit(data,slug,x.level),0);if(batchCap>0){const cr=Array(N).fill(0);let cu=false;rows.forEach((r,i)=>{if(r.facility===slug&&Number(r.recipe.level||1)>=lvl){cr[i]=collect;cu=true;}});if(cu){A.push(cr);b.push(batchCap);}}}}}
 }
 
 export function evaluateConcreteTeam(model,team){
   const utility=assignUtilityWorkers(model,team);if(!utility.feasible)return{rate:0,targetRate:0,objectiveRate:-Infinity,rows:[],workerTaskSeconds:Array.from({length:team.length},()=>new Map()),utilityAssignments:[],utilityWorkers:0,infeasible:true,utilityInfeasible:true};
-  const reserved=new Set(utility.workers),activeTasks=model.tasks.filter(t=>!t.fixed),R=model.rows.length,Q=activeTasks.length,edges=[];
+  const reserved=new Set(utility.workers),activeTasks=model.tasks.filter(t=>!t.fixed),R=model.rows.length,Q=activeTasks.length,edges=[],occupancySeconds=model.rows.map(row=>estimatedTeamOccupancySeconds(model,row,team,reserved));
   for(let w=0;w<team.length;w++){if(reserved.has(w))continue;for(let q=0;q<Q;q++)if(palCanDo(team[w].pal,activeTasks[q]))edges.push({w,q,ratio:workerTaskRelativeSpeed(model,team[w].pal,activeTasks[q]),idx:R+edges.length});}
   const N=R+edges.length;
   if(!N){const workerTaskSeconds=Array.from({length:team.length},()=>new Map());for(const a of utility.assignments)workerTaskSeconds[a.worker].set(a.task.key,3600);return{rate:0,targetRate:0,objectiveRate:0,rows:[],workerTaskSeconds,utilityAssignments:utility.assignments,utilityWorkers:utility.assignments.length,infeasible:false};}
-  const objective=Array(N).fill(0);for(let r=0;r<R;r++)objective[r]=model.rows[r].objective;const A=[],b=[];addTeamFacilityConstraints(A,b,N,model.rows,model);
+  const objective=Array(N).fill(0);for(let r=0;r<R;r++)objective[r]=model.rows[r].objective;const A=[],b=[];addTeamFacilityConstraints(A,b,N,model.rows,model,occupancySeconds);
   for(const item of model.internalItems){const row=Array(N).fill(0);for(let r=0;r<R;r++)row[r]=-recipeNetItem(model.rows[r].recipe,item);A.push(row);b.push(0);}
   for(const g of model.state.guarantees||[]){if(g.enabled===false||g.maximize)continue;const item=Number(g.item),minimum=Math.max(0,Number(g.perHour||0));if(!item||minimum<=0)continue;const row=Array(N).fill(0);for(let r=0;r<R;r++)row[r]=-recipeNetItem(model.rows[r].recipe,item);A.push(row);b.push(-minimum);}
   for(let w=0;w<team.length;w++){const row=Array(N).fill(0);for(const e of edges)if(e.w===w)row[e.idx]=1;A.push(row);b.push(reserved.has(w)?0:3600);}
   for(let q=0;q<Q;q++){const row=Array(N).fill(0),key=activeTasks[q].key;for(let r=0;r<R;r++)row[r]=Number(model.rows[r].work.get(key)||0);for(const e of edges)if(e.q===q)row[e.idx]=-Math.max(.0001,e.ratio||1);A.push(row);b.push(0);}
   const solved=solveLp(objective,A,b);if(!solved)return{rate:0,targetRate:0,objectiveRate:-Infinity,rows:[],workerTaskSeconds:[],utilityAssignments:utility.assignments,utilityWorkers:utility.assignments.length,infeasible:true};
-  const recipeBatches=solved.x.slice(0,R),rows=[];let rate=0,target=0,obj=0;for(let r=0;r<R;r++){const batches=Number(recipeBatches[r]||0);if(batches<=1e-8)continue;const base=model.rows[r],coin=base.netValue*batches,targ=model.state.target&&model.state.target!=='coin'?recipeNetItem(base.recipe,model.state.target)*batches:coin;rate+=coin;target+=targ;obj+=base.objective*batches;rows.push({...base,batchesPerHour:batches,units:batches*base.cycleSeconds/3600,perHour:coin,targetPerHour:targ});}
+  const recipeBatches=solved.x.slice(0,R),rows=[];let rate=0,target=0,obj=0;for(let r=0;r<R;r++){const batches=Number(recipeBatches[r]||0);if(batches<=1e-8)continue;const base=model.rows[r],cycle=Number(occupancySeconds[r]||base.cycleSeconds||0),coin=base.netValue*batches,targ=model.state.target&&model.state.target!=='coin'?recipeNetItem(base.recipe,model.state.target)*batches:coin;rate+=coin;target+=targ;obj+=base.objective*batches;rows.push({...base,batchesPerHour:batches,units:batches*cycle/3600,cycleSeconds:cycle,perHour:coin,targetPerHour:targ});}
   const workerTaskSeconds=Array.from({length:team.length},()=>new Map());for(const a of utility.assignments)workerTaskSeconds[a.worker].set(a.task.key,3600);for(const e of edges){const sec=Number(solved.x[e.idx]||0);if(sec>1e-7)workerTaskSeconds[e.w].set(activeTasks[e.q].key,sec);}
   return{rate,targetRate:target,objectiveRate:obj,rows,recipeBatches,workerTaskSeconds,utilityAssignments:utility.assignments,utilityWorkers:utility.assignments.length,x:solved.x,infeasible:false};
 }
-function relevance(model,pal){let s=0;for(const t of model.tasks)if(palCanDo(pal,t)){const d=Number(model.baselineDemandSeconds.get(t.key)||0)/3600,over=Math.max(0,Number(pal.abilities?.[t.ability]||0)-t.level);s+=d*(1+over*.03);}return s;}
+function relevance(model,pal){
+  let s=productionRelevance(model,pal);
+  // Utility overlevel does not make a 24/7 station "more staffed"; eligibility
+  // matters, while the worker's production potential is handled separately.
+  for(const task of model.tasks||[])if(task.fixed&&palCanDo(pal,task))s+=taskDemandHours(model,task)*.5;
+  return s;
+}
 function normalizeTeam(team){const seen=new Map();return team.map(x=>{const id=Number(x.pal.id),n=(seen.get(id)||0)+1;seen.set(id,n);return{...x,key:`${id}#${n}`,copy:n,label:x.pal.name};});}
 function teamKey(team){return team.map(x=>x.key).sort().join('|');}
 export function ownedSpecies(state,data){const list=[];for(const pal of data.pals){const rec=state.owned?.[String(pal.id)]??state.owned?.[pal.name];if(rec?.enabled&&Number(rec.count||0)>0)list.push({pal,maxCount:Math.max(1,Number(rec.count||1))});}return list;}
 function nextCopy(spec,team){const used=team.filter(x=>Number(x.pal.id)===Number(spec.pal.id)).length;if(used>=spec.maxCount)return null;return{pal:spec.pal,key:`${spec.pal.id}#${used+1}`,copy:used+1,label:spec.pal.name};}
+function mergeSpecPools(...pools){const out=new Map();for(const pool of pools)for(const spec of pool||[])if(!out.has(Number(spec.pal.id)))out.set(Number(spec.pal.id),spec);return[...out.values()];}
+function utilitySpecialistSpecs(model,species,perTask=8){
+  const out=[];
+  for(const task of (model.tasks||[]).filter(t=>t.fixed)){
+    const eligible=species.filter(spec=>palCanDo(spec.pal,task)).sort((a,b)=>{
+      const ac=utilityOpportunityCost(model,a.pal),bc=utilityOpportunityCost(model,b.pal);if(Math.abs(ac-bc)>1e-9)return ac-bc;
+      const ao=Math.max(0,Number(a.pal.abilities?.[task.ability]||0)-task.level),bo=Math.max(0,Number(b.pal.abilities?.[task.ability]||0)-task.level);
+      return ao-bo||a.pal.name.localeCompare(b.pal.name);
+    });
+    out.push(...eligible.slice(0,perTask));
+  }
+  return mergeSpecPools(out);
+}
+function utilitySeedCore(model,species){
+  const tasks=(model.tasks||[]).filter(t=>t.fixed);if(!tasks.length)return[];
+  const copies=[];for(const spec of species)for(let copy=1;copy<=Math.min(spec.maxCount,tasks.length);copy++)copies.push({spec,copy,pal:spec.pal,key:`${spec.pal.id}#${copy}`,label:spec.pal.name});
+  if(copies.length<tasks.length)return[];
+  const BIG=1e9,cost=tasks.map((task,ti)=>copies.map((cand,ci)=>{
+    if(!palCanDo(cand.pal,task))return BIG;
+    const opportunity=utilityOpportunityCost(model,cand.pal),over=Math.max(0,Number(cand.pal.abilities?.[task.ability]||0)-task.level);
+    return opportunity*1000+over*.05+ci*.000001+ti*.000000001;
+  })),match=hungarianUtilityAssignment(cost);
+  if(!match)return[];
+  const picked=[];for(let ti=0;ti<tasks.length;ti++){const ci=match[ti];if(ci<0||cost[ti][ci]>=BIG/2)return[];picked.push(copies[ci]);}
+  return normalizeTeam(picked);
+}
+function fillTeam(seed,pool,workers){
+  const team=normalizeTeam(seed||[]);if(team.length>workers)return team.slice(0,workers);
+  for(const spec of pool){while(team.length<workers){const cand=nextCopy(spec,team);if(!cand)break;team.push(cand);}if(team.length>=workers)break;}
+  return normalizeTeam(team);
+}
 
 function taskObjects(row){const out=[];for(const[key,seconds]of row.work){const[ability,lvl,fam,tag]=key.split('|');out.push({key,ability,level:Number(lvl),family:fam?Number(fam):null,tag,facility:tag||row.facility,seconds:Number(seconds||0)});}return out;}
 export function staffingCoverageSlots(model,rows=model.plan.rows){
@@ -645,8 +694,9 @@ export function burstMatch(model,team,rows=model.plan.rows){return staffingCover
 
 export async function findBestTeams(model,state,data,{limit=4,onProgress}={}){
   const species=ownedSpecies(state,data),workers=Math.max(1,Number(state.teamSlots||state.workerSlots||1));if(species.reduce((sum,x)=>sum+x.maxCount,0)<workers)throw new Error('Not enough enabled Aniimo copies for the requested real-team slots.');
-  const ranked=[...species].sort((a,b)=>relevance(model,b.pal)-relevance(model,a.pal)||a.pal.name.localeCompare(b.pal.name)),searchPool=ranked.slice(0,Math.min(42,ranked.length)),swapPool=ranked.slice(0,Math.min(28,ranked.length)),cache=new Map();
+  const ranked=[...species].sort((a,b)=>relevance(model,b.pal)-relevance(model,a.pal)||a.pal.name.localeCompare(b.pal.name)),utilityPool=utilitySpecialistSpecs(model,species),searchCount=Math.min(ranked.length,Math.max(42,Math.min(64,workers+14))),swapCount=Math.min(ranked.length,Math.max(32,Math.min(56,workers+10))),searchPool=mergeSpecPools(ranked.slice(0,searchCount),utilityPool),swapPool=mergeSpecPools(ranked.slice(0,swapCount),utilityPool),cache=new Map();
   const exact=team=>{const t=normalizeTeam(team),k=teamKey(t);if(!cache.has(k))cache.set(k,evaluateConcreteTeam(model,t));return cache.get(k);},seeds=[];
+  const utilityCore=utilitySeedCore(model,species);if(utilityCore.length){const utilitySeed=fillTeam(utilityCore,mergeSpecPools(searchPool,ranked),workers);if(utilitySeed.length===workers)seeds.push(utilitySeed);}
   for(let mode=0;mode<8;mode++){const team=[];while(team.length<workers){let best=null,bestScore=-Infinity;for(let i=0;i<searchPool.length;i++){const spec=searchPool[(i+mode)%searchPool.length],cand=nextCopy(spec,team);if(!cand)continue;const score=relevance(model,cand.pal)*1000-i*.001;if(score>bestScore){bestScore=score;best=cand;}}if(!best)break;team.push(best);}if(team.length===workers)seeds.push(normalizeTeam(team));}
   for(let off=0;off<Math.min(6,searchPool.length);off++){const team=[];let cursor=off,guard=0;while(team.length<workers&&guard++<workers*searchPool.length*3){const spec=searchPool[cursor%searchPool.length],cand=nextCopy(spec,team);if(cand)team.push(cand);cursor++;}if(team.length===workers)seeds.push(normalizeTeam(team));}
   const unique=new Map(seeds.map(t=>[teamKey(t),t])),candidates=[];let si=0;for(const team of unique.values()){si++;onProgress?.(`Seed ${si}/${unique.size}`);const ev=exact(team),burst=burstMatch(model,team,ev.rows);candidates.push({team,eval:ev,burst});if(si%2===0)await new Promise(r=>setTimeout(r,0));}
