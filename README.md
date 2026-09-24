@@ -79,7 +79,7 @@ The layout pass understands:
 - multiple Storage Units and their placement
 - climate utility influence areas
 - separate and overlapping climate zones
-- the actual number of physical structures needed by the production plan
+- every configured non-utility structure in the Homeland, including idle copies, while keeping plan-active copies annotated
 
 The automatic layout tries different packing approaches and keeps the one that fits the plan best.
 
