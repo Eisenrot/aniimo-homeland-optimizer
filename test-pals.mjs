@@ -74,3 +74,8 @@ if(!portraitCss.includes('.aniimo-hex.prismana .aniimo-hex-ring'))throw new Erro
 if(!/\.aniimo-hex-frame\{[\s\S]*?overflow:hidden;[\s\S]*?-webkit-mask:url\('https:\/\/aniidex\.com\/images\/aniimo\/ui\/hex-bg\.webp'\)[\s\S]*?mask:url\('https:\/\/aniidex\.com\/images\/aniimo\/ui\/hex-bg\.webp'\)/.test(portraitCss))throw new Error('Aniimo frame wrapper must use the AniIDEX hex background as its alpha mask');
 if(/\.aniimo-hex-cut\{[\s\S]*?clip-path:polygon\(/.test(portraitCss))throw new Error('inner Aniimo cut should not use the old approximate polygon mask');
 if(portraitCss.includes('background:#515364'))throw new Error('legacy flat gray Aniimo border is still present');
+
+if(!app.includes("aniimoHex(pal,'living-aniimo',56"))throw new Error('facility resident Aniimo icons should use the enlarged 56px size');
+if(!app.includes("aniimoHex(p,'ownership-aniimo',42"))throw new Error('owned Aniimo icons should use the enlarged 42px size');
+if(!app.includes("palAbilityChip(p,task.ability,24)")||!app.includes("utility</small>`,27)"))throw new Error('dedicated utility staffing Aniimo icons should use enlarged context-specific sizes');
+if(!css.includes('grid-template-columns:56px 1fr')||!css.includes('grid-template-columns:17px 42px minmax(0,1fr) 42px!important'))throw new Error('enlarged Aniimo layout columns are missing');
