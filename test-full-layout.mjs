@@ -103,7 +103,7 @@ const inventoryItems=planPhysicalItems(inventoryPlan,inventoryState,DATA,{storag
 if(inventoryItems.filter(x=>x.facility==='farmland').length!==3)throw new Error('full layout must include idle configured Farmlands');
 if(inventoryItems.filter(x=>x.facility==='woodland').length!==2)throw new Error('full layout must include idle configured Woodlands');
 if(inventoryItems.filter(x=>x.facility==='nimbus-bed').length!==1||inventoryItems.filter(x=>x.facility==='bouncy-brew-keg').length!==1)throw new Error('full layout must include configured idle facilities with no active recipe');
-if(inventoryItems.filter(x=>x.kind==='idle').length!==4)throw new Error(`expected 4 idle physical structures, got ${inventoryItems.filter(x=>x.kind==='idle').length}`);
+if(inventoryItems.filter(x=>x.kind==='idle').length!==5)throw new Error(`expected 5 idle physical structures, got ${inventoryItems.filter(x=>x.kind==='idle').length}`);
 const inventoryBuilt=buildFullBaseLayout(inventoryPlan,inventoryState,DATA,{compact:true,shape:'auto',allowRotate:true,storageUnits:0,disabledPlots:[]});
 if(!inventoryBuilt.feasible)throw new Error('configured-inventory layout should fit: '+inventoryBuilt.reason);
 if(inventoryBuilt.placements.length!==inventoryItems.length)throw new Error('configured idle structures were lost during packing');
