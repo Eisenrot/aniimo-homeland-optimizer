@@ -72,4 +72,5 @@ if(!portraitCss.includes('clip-path:polygon('))throw new Error('AniIDEX portrait
 if(!portraitCss.includes("https://aniidex.com/images/aniimo/ui/hex-frame.webp"))throw new Error('AniIDEX standard frame image styling is missing');
 if(!portraitCss.includes("https://aniidex.com/images/aniimo/ui/hex-frame-rainbow.webp"))throw new Error('AniIDEX Prismana frame image styling is missing');
 if(!portraitCss.includes('.aniimo-hex.prismana .aniimo-hex-ring'))throw new Error('Prismana Aniimo are not selecting the rainbow frame');
+if(!/\.aniimo-hex-frame\{[\s\S]*?overflow:hidden;[\s\S]*?clip-path:polygon\(/.test(portraitCss))throw new Error('Aniimo frame wrapper must hard-clip portraits to the hex');
 if(portraitCss.includes('background:#515364'))throw new Error('legacy flat gray Aniimo border is still present');
