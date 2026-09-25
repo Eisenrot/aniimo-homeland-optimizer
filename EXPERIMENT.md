@@ -84,3 +84,30 @@ The benchmark remains available as:
 ```bash
 npm run benchmark:lp
 ```
+
+## Modern UI architecture
+
+The React rewrite is now a real multipage application rather than a single optimizer form.
+
+| Page | Responsibility |
+| --- | --- |
+| `/` | Overview, current KPIs, plan health and workflow entry points |
+| `/optimizer.html` | Economic objective, minimum/MAX constraints and production result |
+| `/homeland.html` | Homeland level, facilities, modules, Recipe Notes and operating rules |
+| `/team.html` | Owned-roster team search, candidate comparison, personality roles and ability coverage |
+| `/layout.html` | Physical plot selection, layout policy, climate fields and generated placement |
+| `/roster.html` | Aniimo forms, copies and ability availability |
+| `/legacy.html` | Preserved migration reference |
+
+The information architecture follows the COSS guidance used during the redesign: route-level workflows are routes rather than tabs, content surfaces have explicit hierarchy, status is textual rather than color-only, dense data stays tabular, and mobile navigation is a compact segmented route list.
+
+Page-specific React code is lazy-loaded. The solver, real-team search and physical-layout builder each have their own worker boundary.
+
+### Cross-page cache behavior
+
+- exact production plans use the existing `aniimoOptimizerPlanCacheV1` signature;
+- generated physical layouts use the existing full-layout cache and layout settings;
+- real-team analysis has a modern cache keyed to both the exact plan and owned-roster state;
+- manual Re-run / Analyze again / Rebuild actions bypass cache.
+
+This makes navigation cheap without weakening result parity.
