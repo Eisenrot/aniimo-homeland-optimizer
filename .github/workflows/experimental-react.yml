@@ -35,3 +35,6 @@ jobs:
           node test-full-layout.mjs
           node test-speed.mjs
           node test-recipe-notes.mjs
+
+      - name: Benchmark JS simplex vs HiGHS
+        run: npm run benchmark:lp
