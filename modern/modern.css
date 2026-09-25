@@ -1271,3 +1271,43 @@ button:disabled, input:disabled, select:disabled { opacity: .5; cursor: not-allo
   background: rgba(6,8,10,.58);
   backdrop-filter: blur(3px);
 }
+
+.route-loading {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.aniimo-avatar-fallback {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.team-member-card > .aniimo-avatar-fallback {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+}
+
+.candidate-faces .aniimo-avatar-fallback {
+  width: 27px;
+  height: 27px;
+  margin-left: -5px;
+  border: 2px solid var(--surface);
+  border-radius: 8px;
+  font-size: 8px;
+}
+
+.candidate-faces .aniimo-avatar-fallback:first-child { margin-left: 0; }
+
+.roster-card > .aniimo-avatar-fallback {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+}
