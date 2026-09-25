@@ -6,10 +6,10 @@ type Props = {
 }
 
 const MODULES = [
-  ['crafting-module', 'Crafting Module'],
-  ['ecological-module', 'Ecological Module'],
-  ['kitchen-module', 'Kitchen Module'],
-  ['resource-detector', 'Resource Detector'],
+  ['crafting-module', 'Crafting Module', 'https://aniipedia.com/items/4040014.webp'],
+  ['ecological-module', 'Ecological Module', 'https://aniipedia.com/items/4040011.webp'],
+  ['kitchen-module', 'Kitchen Module', 'https://aniipedia.com/items/4040012.webp'],
+  ['resource-detector', 'Resource Detector', 'https://aniipedia.com/items/4040013.webp'],
 ] as const
 
 export default function ModulesPanel({ state, patch }: Props) {
@@ -17,8 +17,9 @@ export default function ModulesPanel({ state, patch }: Props) {
     <section className="panel">
       <div className="section-title"><span /><h3>Upgrade modules</h3><i /></div>
       <div className="module-grid">
-        {MODULES.map(([key, name]) => (
+        {MODULES.map(([key, name, icon]) => (
           <div className="module-card" key={key}>
+            <img src={icon} alt="" loading="lazy" />
             <div className="module-info">
               <label>{name}</label>
               <span>Upgrade level</span>
