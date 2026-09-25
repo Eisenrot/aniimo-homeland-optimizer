@@ -57,8 +57,14 @@ export default function InteractiveLayoutCanvas({ worldWidth, worldHeight, fitBo
     tx.current = sw <= vw ? (vw - sw) / 2 : clamp(tx.current, vw - sw, 0)
     ty.current = sh <= vh ? (vh - sh) / 2 : clamp(ty.current, vh - sh, 0)
 
-    target.style.transform = `translate3d(${tx.current}px,${ty.current}px,0) scale(${scale.current})`
-    setZoom(Math.round((scale.current / Math.max(0.0001, homeScale.current)) * 100))
+    const roundedX = Math.round(tx.current * 2) / 2
+    const roundedY = Math.round(ty.current * 2) / 2
+    const relativeZoom = scale.current / Math.max(0.0001, homeScale.current)
+    const labelCounterScale = relativeZoom > 1 ? 1 / relativeZoom : 1
+
+    target.style.transform = `translate(${roundedX}px,${roundedY}px) scale(${scale.current})`
+    target.style.setProperty('--map-label-counter-scale', String(labelCounterScale))
+    setZoom(Math.round(relativeZoom * 100))
   }, [baseH, baseW])
 
   const center = useCallback(() => {
