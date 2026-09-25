@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Boxes, RefreshCw, RotateCw, Snowflake, SunMedium, ThermometerSun } from 'lucide-react'
-import { LAYOUT_SETTINGS_STORE, PLOT_MATRIX, plotRect, unlockedPlotNumbers } from '../../src/full-layout.js'
+import { LAYOUT_SETTINGS_STORE, PLOT_MATRIX, plotRect, readFullLayoutCache, unlockedPlotNumbers, writeFullLayoutCache } from '../../src/full-layout.js'
 import { layoutClient } from '../engine/layoutClient'
 import { fmt } from '../lib/presentation'
+import { DATA } from '../state'
 import type { BaseLayout, LayoutSettings, OptimizerPlan, OptimizerState } from '../types'
 
 type Props = {
@@ -10,6 +11,8 @@ type Props = {
   plan: OptimizerPlan | null
   planRunning: boolean
 }
+
+const BUILD_ID = `modern-layout-v2:${DATA.version || 'data'}`
 
 const DEFAULT_SETTINGS: LayoutSettings = {
   compact: true,
@@ -49,12 +52,22 @@ export default function LayoutPage({ state, plan, planRunning }: Props) {
     })
   }
 
-  const build = async () => {
+  const build = async (force = false) => {
     if (!plan || planRunning) return
+    if (!force) {
+      const cached = readFullLayoutCache(localStorage, plan, state, settings, BUILD_ID)
+      if (cached) {
+        setLayout(cached as BaseLayout)
+        setError(null)
+        return
+      }
+    }
     setRunning(true)
     setError(null)
     try {
-      setLayout(await layoutClient.build(state, plan, settings))
+      const next = await layoutClient.build(state, plan, settings)
+      setLayout(next)
+      writeFullLayoutCache(localStorage, plan, state, settings, BUILD_ID, next)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -65,7 +78,7 @@ export default function LayoutPage({ state, plan, planRunning }: Props) {
   useEffect(() => {
     if (!plan || planRunning) return
     if (timer.current != null) window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => void build(), 220)
+    timer.current = window.setTimeout(() => void build(false), 220)
     return () => {
       if (timer.current != null) window.clearTimeout(timer.current)
       layoutClient.cancel()
@@ -105,7 +118,7 @@ export default function LayoutPage({ state, plan, planRunning }: Props) {
             <span><RotateCw aria-hidden="true" /> Rotate</span>
           </label>
         </div>
-        <button className="ui-button secondary" type="button" disabled={!plan || running || planRunning} onClick={() => void build()}>
+        <button className="ui-button secondary" type="button" disabled={!plan || running || planRunning} onClick={() => void build(true)}>
           <RefreshCw aria-hidden="true" /> Rebuild
         </button>
       </section>
