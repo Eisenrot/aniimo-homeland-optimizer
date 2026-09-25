@@ -5,7 +5,9 @@ import {
   UsersRound,
   UserRoundCheck,
   UtensilsCrossed,
+  WandSparkles,
 } from 'lucide-react'
+import { fillHomelandForRV, progressionSummary } from '../../src/progression.js'
 import { facilityAsset } from '../lib/presentation'
 import { DATA, maxAniimoForLevel } from '../state'
 import type { OptimizerState } from '../types'
@@ -19,6 +21,7 @@ const utilityFacility = (slug: string) => DATA.facilities.find((facility) => fac
 
 export default function PlanSettings({ state, patch }: Props) {
   const cap = maxAniimoForLevel(state.homelandLevel)
+  const progression = progressionSummary(state.homelandLevel, DATA)
 
   const utilities = [
     ['cooling', 'Cooling Unit', 'cooling-unit'],
@@ -28,7 +31,31 @@ export default function PlanSettings({ state, patch }: Props) {
 
   return (
     <section className="panel plan-settings-panel">
-      <div className="section-title"><span /><h3><Home aria-hidden="true" /> Homeland</h3><i /><em className="micro">{DATA.version || 'data'}</em></div>
+      <div className="section-title">
+        <span />
+        <h3><Home aria-hidden="true" /> Homeland</h3>
+        <i />
+        <button
+          className="fill-rv-button"
+          type="button"
+          onClick={() => patch((draft) => {
+            const filled = fillHomelandForRV(draft, DATA)
+            draft.facilities = filled.facilities
+            draft.modules = filled.modules
+          })}
+        >
+          <WandSparkles aria-hidden="true" />
+          Fill RV {state.homelandLevel}
+        </button>
+      </div>
+
+      <div className="rv-capacity-line">
+        <span>RV {progression.rv} progression</span>
+        <b>{progression.bulk.farmland} Farmland</b>
+        <b>{progression.bulk.woodland} Woodland</b>
+        <b>{progression.bulk.mine} Mine</b>
+        <b>{progression.bulk.well} Well</b>
+      </div>
 
       <div className="setting-tile-grid">
         <label className="setting-tile tone-red">
