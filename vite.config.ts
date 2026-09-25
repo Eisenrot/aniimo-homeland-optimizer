@@ -10,12 +10,12 @@ export default defineConfig({
     rollupOptions: {
       input: [
         'index.html',
-        'optimizer.html',
-        'homeland.html',
         'team.html',
         'layout.html',
-        'roster.html',
         'legacy.html',
+        'optimizer.html',
+        'homeland.html',
+        'roster.html',
       ],
     },
   },
