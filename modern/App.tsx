@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import FacilitiesPanel from './components/FacilitiesPanel'
 import ModulesPanel from './components/ModulesPanel'
+import OwnershipPanel from './components/OwnershipPanel'
 import ObjectivePanel from './components/ObjectivePanel'
 import PlanSettings from './components/PlanSettings'
 import RecipeNotesPanel from './components/RecipeNotesPanel'
@@ -19,6 +20,7 @@ export default function App() {
   const [progress, setProgress] = useState<SolverProgress | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [rosterOpen, setRosterOpen] = useState(false)
   const timer = useRef<number | null>(null)
 
   const patch = useCallback((update: (draft: OptimizerState) => void) => {
@@ -73,11 +75,14 @@ export default function App() {
         </div>
         <nav className="top-actions">
           <span className="modern-badge">MIGRATION 01</span>
+          <button className="ghost" onClick={() => setRosterOpen(true)}>Aniimo roster</button>
           <button className="ghost" onClick={() => void solve(state)} disabled={running}>Re-run</button>
           <button className="ghost" onClick={reset}>Reset</button>
           <a className="ghost link" href="./legacy.html">Legacy reference</a>
         </nav>
       </header>
+
+      <OwnershipPanel open={rosterOpen} state={state} patch={patch} onClose={() => setRosterOpen(false)} />
 
       <main className="shell">
         <section className="panel modern-migration-note">
