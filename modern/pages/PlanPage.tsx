@@ -17,21 +17,16 @@ type Props = {
 
 export default function PlanPage({ state, patch, plan, progress, running, error }: Props) {
   return (
-    <div className="rewrite-plan-page">
-      <div className="rewrite-plan-grid">
-        <div className="rewrite-config-stack">
-          <ObjectivePanel state={state} patch={patch} />
-          <PlanSettings state={state} patch={patch} />
-          <FacilitiesPanel state={state} patch={patch} />
-        </div>
+    <div className="rewrite-plan-workspace">
+      <aside className="rewrite-config-stack">
+        <ObjectivePanel state={state} patch={patch} />
+        <PlanSettings state={state} patch={patch} />
+        <FacilitiesPanel state={state} patch={patch} />
+        <ModulesPanel state={state} patch={patch} />
+        <RecipeNotesPanel state={state} patch={patch} />
+      </aside>
 
-        <aside className="rewrite-side-stack">
-          <ModulesPanel state={state} patch={patch} />
-          <RecipeNotesPanel state={state} patch={patch} />
-        </aside>
-      </div>
-
-      <section className="rewrite-results">
+      <section className="rewrite-results-stack">
         <ResultsPanel
           plan={plan}
           progress={progress}
