@@ -4,7 +4,7 @@ const MODULE_SLUGS={
   'Kitchen Module':'kitchen-module','Crafting Module':'crafting-module'
 };
 
-export const PERSONALITY_PAIRS=[['E','I'],['N','S'],['F','T'],['J','P']];
+export const PERSONALITY_PAIRS=[['I','E'],['N','S'],['F','T'],['P','J']];
 export const PERSONALITY_NAMES={E:'Energetic',I:'Instinctive',N:'Nimble',S:'Practical',F:'Faithful',T:'Tenacious',J:'Judicious',P:'Playful'};
 export const FACILITY_PERSONALITY={
   'bouncy-brew-keg':'E','woodworking-bench':'E','phonolfactory-table':'I','dewy-house':'I',
@@ -20,6 +20,8 @@ const BASIC=new Set(['mine','well','farmland','woodland']);
 const PERMANENT_STAFFING=new Set(['mine','well','dewy-house','tidewhisper-sandcastle']);
 const BURST_STAFFING=new Set(['farmland','woodland']);
 const NO_PERSONALITY_SPEED_FACILITIES=new Set(['aniipod-maker','dance-pad-polisher']);
+const GROWER_FACILITIES=new Set(['farmland','woodland']);
+const WATERING_ABILITY='Water',WATERINGS_PER_CYCLE=2,WATERING_WORKLOAD=3,WATERING_SAVES=.125;
 
 export function familyId(id){const n=Number(id);return Number.isFinite(n)?Math.floor(n/1000):null;}
 export function itemValue(data,id){return Number(data.items?.[String(id)]?.value??0)||0;}
@@ -27,7 +29,25 @@ export function itemName(data,id){return data.items?.[String(id)]?.name??String(
 export function recipeNetValue(recipe,data){let v=0;for(const o of recipe.outputs||[])v+=itemValue(data,o.item)*Number(o.qty||0);for(const i of recipe.inputs||[])v-=itemValue(data,i.item)*Number(i.qty||0);return v;}
 export function recipeGrossValue(recipe,data){return (recipe.outputs||[]).reduce((s,o)=>s+itemValue(data,o.item)*Number(o.qty||0),0);}
 export function recipeNetItem(recipe,item){const id=Number(item);let v=0;for(const o of recipe.outputs||[])if(Number(o.item)===id)v+=Number(o.qty||0);for(const i of recipe.inputs||[])if(Number(i.item)===id)v-=Number(i.qty||0);return v;}
-export function manualWorkload(recipe){return Number(recipe.workload||0)+(recipe.steps||[]).reduce((s,x)=>s+Number(x.workload||0),0);}
+export function isGrowerRecipe(recipe){return GROWER_FACILITIES.has(recipe?.facility)&&Number(recipe?.growSeconds||0)>0&&!recipe?.electric;}
+export function uncoveredClimateEfficiency(environment){if(environment==='Cool'||environment==='Warm')return .8;if(environment==='Freeze'||environment==='Scorching')return .5;return null;}
+export function recipeWorkSteps(recipe){
+  const steps=[...(recipe?.steps||[])].map(step=>({...step}));if(!isGrowerRecipe(recipe))return steps;
+  const sow=steps.findIndex(step=>step.name==='Sowing'),at=sow>=0?sow+1:Math.min(1,steps.length);
+  steps.splice(at,0,...Array.from({length:WATERINGS_PER_CYCLE},()=>({name:'Watering',ability:WATERING_ABILITY,level:1,workload:WATERING_WORKLOAD,synthetic:true})));
+  return steps;
+}
+export function manualWorkload(recipe){return Number(recipe.workload||0)+recipeWorkSteps(recipe).reduce((sum,step)=>sum+Number(step.workload||0),0);}
+export function wateredGrowSeconds(recipe,weatherEfficiency=1){const full=Math.max(0,Number(recipe?.growSeconds||0)),weather=Math.max(.0001,Number(weatherEfficiency||1)),slowed=full/weather;return isGrowerRecipe(recipe)?Math.max(0,slowed-WATERINGS_PER_CYCLE*WATERING_SAVES*full):slowed;}
+function recipeChoiceId(recipe){return String(recipe?.baseRecipeId??recipe?.id);}
+function recipeEffectiveEnv(recipe){return recipe?.executionMode==='uncovered'?null:(recipe?.effectiveEnv??recipe?.env??null);}
+export function recipeExecutionVariants(recipe,scenario={}){
+  if(!recipe?.env)return[recipe];const out=[];
+  if(climateAllows(recipe.env,scenario))out.push({...recipe,baseRecipeId:recipe.id,executionMode:'covered',effectiveEnv:recipe.env,weatherEfficiency:1});
+  const uncovered=isGrowerRecipe(recipe)?uncoveredClimateEfficiency(recipe.env):null;
+  if(uncovered)out.push({...recipe,id:`${recipe.id}:uncovered`,baseRecipeId:recipe.id,executionMode:'uncovered',effectiveEnv:null,sourceEnv:recipe.env,weatherEfficiency:uncovered});
+  return out;
+}
 export function recipeRequiredAbilityLevel(recipe){return Math.max(1,Number(recipe?.steps?.[0]?.level||1));}
 export function recipeUsesMeasuredEfficiency(recipe){return !recipe?.electric&&Number(recipe?.workload||0)>0&&(recipe?.steps||[]).length===1;}
 export function recipeUsesGatheringCurve(recipe){return recipeUsesMeasuredEfficiency(recipe)&&!(recipe.inputs||[]).length&&!NO_PERSONALITY_SPEED_FACILITIES.has(recipe.facility);}
@@ -67,39 +87,37 @@ function abilityAvailable(step,state,data,family=null){
 function noteEnabled(recipe,state){return !recipe.note||state.recipeNotes?.[String(recipe.note.item)]!==false;}
 
 function weatherRatio(required,scenario){return climateAllows(required,scenario)?1:0;}
-
+function recipeWeatherRatio(recipe,scenario){if(recipe?.executionMode==='uncovered')return Math.max(.0001,Number(recipe.weatherEfficiency||uncoveredClimateEfficiency(recipe.sourceEnv||recipe.env)||1));const env=recipeEffectiveEnv(recipe);return env?weatherRatio(env,scenario):1;}
 function cycleParts(recipe,state,scenario,personalityMultiplier=1){
-  const weather=weatherRatio(recipe.env,scenario);if(recipe.env&&weather<=0)return{cycle:Infinity,manual:Infinity,grow:Infinity,weather:0};
-  if(recipe.electric){const g=Number(recipe.growSeconds||0)/(weather||1);return{cycle:g,manual:0,grow:g,weather:weather||1};}
-  const recipePct=state.realRecipeSpeeds?.[String(recipe.id)]??state.realRecipeSpeeds?.[recipe.id],fallbackPct=state.manualSpeeds?state.speeds?.[recipe.facility]:defaultRecipeEfficiencyPct(recipe),pct=Math.max(1,Number(recipePct??fallbackPct??100));
+  const weather=recipeWeatherRatio(recipe,scenario);if(recipeEffectiveEnv(recipe)&&weather<=0)return{cycle:Infinity,manual:Infinity,grow:Infinity,weather:0};
+  if(recipe.electric){const grow=wateredGrowSeconds(recipe,weather);return{cycle:grow,manual:0,grow,weather};}
+  const speedId=String(recipe.baseRecipeId??recipe.id),recipePct=state.realRecipeSpeeds?.[speedId]??state.realRecipeSpeeds?.[recipe.id],fallbackPct=state.manualSpeeds?state.speeds?.[recipe.facility]:defaultRecipeEfficiencyPct(recipe),pct=Math.max(1,Number(recipePct??fallbackPct??100));
   const fed=state.hungry?.2:1,baseRate=baseWorkRateForRecipe(recipe),speed=(pct/100)*Math.max(.01,Number(personalityMultiplier||1))*fed*baseRate;
-  const manual=manualWorkload(recipe)>0?manualWorkload(recipe)/speed:0;
-  const grow=Number(recipe.growSeconds||0),ratio=weather||1;
-  return{cycle:(grow+manual)/ratio,manual:manual/ratio,grow:grow/ratio,weather:ratio};
+  const manual=manualWorkload(recipe)>0?manualWorkload(recipe)/speed:0,grow=wateredGrowSeconds(recipe,weather);
+  return{cycle:isGrowerRecipe(recipe)?grow:grow+manual,manual,grow,weather};
 }
 function workerCycleParts(recipe,state,scenario,abilityLevel,personalityBonus=false){
   if(!recipeUsesMeasuredEfficiency(recipe))return cycleParts(recipe,state,scenario,personalityBonus?1.2:1);
-  const weather=weatherRatio(recipe.env,scenario);if(recipe.env&&weather<=0)return{cycle:Infinity,manual:Infinity,grow:Infinity,weather:0,efficiencyPct:0};
+  const weather=recipeWeatherRatio(recipe,scenario);if(recipeEffectiveEnv(recipe)&&weather<=0)return{cycle:Infinity,manual:Infinity,grow:Infinity,weather:0,efficiencyPct:0};
   const eff=displayedEfficiencyMultiplier(recipe,abilityLevel,personalityBonus),fed=state.hungry?.2:1,baseRate=baseWorkRateForRecipe(recipe);
-  if(eff<=0)return{cycle:Infinity,manual:Infinity,grow:Infinity,weather:weather||1,efficiencyPct:0};
-  const manual=manualWorkload(recipe)/(eff*baseRate*fed),grow=Number(recipe.growSeconds||0),ratio=weather||1;
-  return{cycle:(grow+manual)/ratio,manual:manual/ratio,grow:grow/ratio,weather:ratio,efficiencyPct:eff*100,baseRate};
+  if(eff<=0)return{cycle:Infinity,manual:Infinity,grow:Infinity,weather,efficiencyPct:0};
+  const manual=manualWorkload(recipe)/(eff*baseRate*fed),grow=wateredGrowSeconds(recipe,weather);
+  return{cycle:isGrowerRecipe(recipe)?grow:grow+manual,manual,grow,weather,efficiencyPct:eff*100,baseRate};
 }
 export function cycleSeconds(recipe,state,scenario={cooling:null,heat:null,sunlamp:false,generator:false},personalityMultiplier=1){return cycleParts(recipe,state,scenario,personalityMultiplier).cycle;}
 export function workerCycleSeconds(recipe,state,scenario,abilityLevel,personalityBonus=false){return workerCycleParts(recipe,state,scenario,abilityLevel,personalityBonus).cycle;}
-
-export function recipeRunnable(recipe,state,data,scenario={cooling:null,heat:null,sunlamp:false,generator:false}){
+function baseRecipeRunnable(recipe,state,data,scenario={cooling:null,heat:null,sunlamp:false,generator:false}){
   if(facilityCount(state,recipe.facility)<=0||Number(recipe.level||1)>maxFacilityLevel(state,recipe.facility))return false;
   const fac=data.facilities.find(x=>x.slug===recipe.facility);
   if(recipe.electric&&(!scenario.generator||Number(state.homelandLevel||1)<Number(fac?.electricHomeLevel||12)))return false;
   if(!noteEnabled(recipe,state))return false;
   if(recipe.module){const slug=MODULE_SLUGS[recipe.module.name];if(!slug||Number(state.modules?.[slug]||0)<Number(recipe.module.level||0))return false;}
-  if(recipe.env&&weatherRatio(recipe.env,scenario)<=0)return false;
-  const fam=recipe.pet?familyId(recipe.pet):null;
-  if(fam&&!enabledFamilySet(state,data).has(fam))return false;
-  if(!recipe.electric)for(const step of recipe.steps||[])if(!abilityAvailable(step,state,data,fam))return false;
+  const fam=recipe.pet?familyId(recipe.pet):null;if(fam&&!enabledFamilySet(state,data).has(fam))return false;
+  if(!recipe.electric)for(const step of recipeWorkSteps(recipe))if(!abilityAvailable(step,state,data,fam))return false;
   return true;
 }
+export function recipeRunnable(recipe,state,data,scenario={cooling:null,heat:null,sunlamp:false,generator:false}){if(!baseRecipeRunnable(recipe,state,data,scenario))return false;if(!recipe.env)return true;if(climateAllows(recipe.env,scenario))return true;return isGrowerRecipe(recipe)&&uncoveredClimateEfficiency(recipe.env)!=null;}
+function runnableRecipeVariants(state,data,scenario){const out=[];for(const recipe of data.recipes){if(!baseRecipeRunnable(recipe,state,data,scenario))continue;if(!recipe.env){out.push(recipe);continue;}out.push(...recipeExecutionVariants(recipe,scenario));}return out;}
 
 // Two-phase simplex: maximise c*x subject to A*x <= b, x>=0.
 let activeLpSolver=null;
@@ -196,14 +214,14 @@ function addGuarantees(A,b,recipes,state){
 }
 function addClimateCaps(A,b,recipes,state,scenario,caps=[]){
   for(const cap of caps||[]){
-    const maxUnits=Math.max(0,Number(cap.maxUnits||0)),row=recipes.map(r=>r.facility===cap.facility&&r.env===cap.env?cycleParts(r,state,scenario).cycle/3600:0);
+    const maxUnits=Math.max(0,Number(cap.maxUnits||0)),row=recipes.map(r=>r.facility===cap.facility&&recipeEffectiveEnv(r)===cap.env?cycleParts(r,state,scenario).cycle/3600:0);
     if(row.some(x=>x>0)){A.push(row);b.push(maxUnits);}
   }
 }
 function recipeLaborSeconds(recipe,state,scenario){const parts=cycleParts(recipe,state,scenario);return recipe.pet?Math.max(parts.cycle,parts.manual):parts.manual;}
 
 function rawOptimize(state,data,scenario,allowRecipes=null,forcedWeights=null,climateCaps=[]){
-  let recipes=data.recipes.filter(r=>recipeRunnable(r,state,data,scenario));if(allowRecipes)recipes=recipes.filter(r=>allowRecipes.has(r.id));
+  let recipes=runnableRecipeVariants(state,data,scenario);if(allowRecipes)recipes=recipes.filter(r=>allowRecipes.has(recipeChoiceId(r)));
   if(!recipes.length)return{ratePerHour:0,targetRate:0,objectiveRate:0,rows:[],runnableRecipes:[],scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:false,objectiveWeights:forcedWeights||[]};
   const n=recipes.length,A=[],b=[];
   addFacilityConstraints(A,b,recipes,state,data,scenario);
@@ -212,7 +230,7 @@ function rawOptimize(state,data,scenario,allowRecipes=null,forcedWeights=null,cl
   const objectiveWeights=forcedWeights?.length?forcedWeights:buildObjectiveWeights(recipes,state,data,A,b),activeWeights=activeObjectiveWeights(objectiveWeights),vectors=activeWeights.map(w=>objectiveVector(recipes,w,data)),objective=recipes.map(r=>combinedObjectiveCoef(r,state,data,objectiveWeights)),joint=solveJointObjective(vectors,A,b),solved=joint?.solved;
   if(!solved)return{ratePerHour:0,targetRate:0,objectiveRate:-Infinity,rows:[],runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:true,objectiveWeights,jointMinShare:joint?.jointMinShare??null};
   const rows=[];let coin=0,target=0,obj=0;
-  recipes.forEach((recipe,i)=>{const batches=Math.max(0,Number(solved.x[i]||0));if(batches<=1e-8)return;const parts=cycleParts(recipe,state,scenario),units=batches*parts.cycle/3600,coinPart=recipeNetValue(recipe,data)*batches,targetPart=state.target&&state.target!=='coin'?recipeNetItem(recipe,state.target)*batches:coinPart;coin+=coinPart;target+=targetPart;obj+=objective[i]*batches;rows.push({facility:recipe.facility,recipe,batchesPerHour:batches,units,perHour:coinPart,targetPerHour:targetPart,cycleSeconds:parts.cycle,manualSeconds:parts.manual,netValue:recipeNetValue(recipe,data)});});
+  recipes.forEach((recipe,i)=>{const batches=Math.max(0,Number(solved.x[i]||0));if(batches<=1e-8)return;const parts=cycleParts(recipe,state,scenario),units=batches*parts.cycle/3600,coinPart=recipeNetValue(recipe,data)*batches,targetPart=state.target&&state.target!=='coin'?recipeNetItem(recipe,state.target)*batches:coinPart;coin+=coinPart;target+=targetPart;obj+=objective[i]*batches;rows.push({facility:recipe.facility,recipe,batchesPerHour:batches,units,perHour:coinPart,targetPerHour:targetPart,cycleSeconds:parts.cycle,manualSeconds:parts.manual,growSeconds:parts.grow,effectiveEnv:recipeEffectiveEnv(recipe),executionMode:recipe.executionMode||'normal',netValue:recipeNetValue(recipe,data)});});
   return{ratePerHour:coin,targetRate:target,objectiveRate:obj,rows,runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:false,objectiveWeights,jointMinShare:joint?.jointMinShare??null};
 }
 export function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[],localBudget=900,bridgeBudget=0){
@@ -220,27 +238,27 @@ export function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[],local
   for(const r of mixed.runnableRecipes){const arr=byFacility.get(r.facility)||[];arr.push(r);byFacility.set(r.facility,arr);}
   const constrained=new Map(),alwaysAllowed=[];
   for(const [facility,rs] of byFacility){
-    const cap=Math.max(1,Math.floor(facilityCount(state,facility)||1)),ids=rs.map(r=>r.id);
+    const cap=Math.max(1,Math.floor(facilityCount(state,facility)||1)),ids=[...new Set(rs.map(recipeChoiceId))];
     if(ids.length<=cap)alwaysAllowed.push(...ids);else constrained.set(facility,{ids,cap,recipes:rs});
   }
   if(!constrained.size)return mixed;
   const cloneSelection=sel=>new Map([...sel].map(([f,ids])=>[f,new Set(ids)]));
-  const selectionKey=sel=>[...sel].sort((a,b)=>a[0].localeCompare(b[0])).map(([f,ids])=>`${f}:${[...ids].sort((a,b)=>Number(a)-Number(b)).join(',')}`).join('|');
+  const selectionKey=sel=>[...sel].sort((a,b)=>a[0].localeCompare(b[0])).map(([f,ids])=>`${f}:${[...ids].sort((a,b)=>String(a).localeCompare(String(b))).join(',')}`).join('|');
   const selectedRecipeIds=sel=>new Set([...alwaysAllowed,...[...sel.values()].flatMap(ids=>[...ids])]);
   const solveCache=new Map();
   const solveSelected=sel=>{const key=selectionKey(sel);if(solveCache.has(key))return solveCache.get(key);const solved=rawOptimize(state,data,scenario,selectedRecipeIds(sel),mixed.objectiveWeights,climateCaps);solveCache.set(key,solved);return solved;};
   const activeByFacility=new Map();for(const row of mixed.rows){const arr=activeByFacility.get(row.facility)||[];arr.push(row);activeByFacility.set(row.facility,arr);}
-  const recipeById=new Map(mixed.runnableRecipes.map(r=>[r.id,r]));
   const objectiveRecipeScore=r=>combinedObjectiveCoef(r,state,data,mixed.objectiveWeights);
+  const recipeById=new Map();for(const r of mixed.runnableRecipes){const id=recipeChoiceId(r),old=recipeById.get(id);if(!old||objectiveRecipeScore(r)>objectiveRecipeScore(old))recipeById.set(id,r);}
   function makeSeed(mode='objective'){
     const sel=new Map();
     for(const [facility,cfg] of constrained){
       const active=[...(activeByFacility.get(facility)||[])],chosen=[],seen=new Set();
       const score=row=>mode==='units'?Number(row.units||0):mode==='coin'?Number(row.perHour||0):objectiveRecipeScore(row.recipe)*Number(row.batchesPerHour||0);
       active.sort((a,b)=>score(b)-score(a));
-      for(const row of active)if(!seen.has(row.recipe.id)&&chosen.length<cfg.cap){seen.add(row.recipe.id);chosen.push(row.recipe.id);}
+      for(const row of active){const id=recipeChoiceId(row.recipe);if(!seen.has(id)&&chosen.length<cfg.cap){seen.add(id);chosen.push(id);}}
       const rest=[...cfg.recipes].sort((a,b)=>objectiveRecipeScore(b)-objectiveRecipeScore(a)||recipeGrossValue(b,data)-recipeGrossValue(a,data));
-      for(const r of rest)if(!seen.has(r.id)&&chosen.length<cfg.cap){seen.add(r.id);chosen.push(r.id);}
+      for(const r of rest){const id=recipeChoiceId(r);if(!seen.has(id)&&chosen.length<cfg.cap){seen.add(id);chosen.push(id);}}
       sel.set(facility,new Set(chosen));
     }
     return sel;
@@ -255,7 +273,7 @@ export function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[],local
   function reserveRecipe(sel,locked,recipe){
     const cfg=constrained.get(recipe.facility);if(!cfg)return{sel,locked};
     const ids=new Set(sel.get(recipe.facility)||[]),locks=new Set(locked.get(recipe.facility)||[]);
-    if(ids.has(recipe.id)){locks.add(recipe.id);const nl=new Map(locked);nl.set(recipe.facility,locks);return{sel,locked:nl};}
+    const recipeId=recipeChoiceId(recipe);if(ids.has(recipeId)){locks.add(recipeId);const nl=new Map(locked);nl.set(recipe.facility,locks);return{sel,locked:nl};}
     let victim=null;
     for(const id of ids)if(!locks.has(id)){
       if(victim==null)victim=id;
@@ -267,8 +285,8 @@ export function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[],local
     if(ids.size>=cfg.cap&&victim==null)return null;
     const ns=cloneSelection(sel),next=new Set(ns.get(recipe.facility)||[]);
     if(next.size>=cfg.cap)next.delete(victim);
-    next.add(recipe.id);ns.set(recipe.facility,next);
-    const nl=new Map(locked);locks.add(recipe.id);nl.set(recipe.facility,locks);
+    next.add(recipeId);ns.set(recipe.facility,next);
+    const nl=new Map(locked);locks.add(recipeId);nl.set(recipe.facility,locks);
     return{sel:ns,locked:nl};
   }
   function injectItem(sel,locked,item,visiting=new Set(),depth=0){
@@ -326,7 +344,7 @@ export function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[],local
       return objectiveRecipeScore(inR)-objectiveRecipeScore(outR)+(recipeGrossValue(inR,data)-recipeGrossValue(outR,data))*1e-9;
     };
     for(const move of all){const arr=byFacility.get(move.facility)||[];arr.push(move);byFacility.set(move.facility,arr);}
-    for(const arr of byFacility.values())arr.sort((a,b)=>potential(b)-potential(a)||Number(a.inId)-Number(b.inId)||Number(a.outId)-Number(b.outId));
+    for(const arr of byFacility.values())arr.sort((a,b)=>potential(b)-potential(a)||String(a.inId).localeCompare(String(b.inId))||String(a.outId).localeCompare(String(b.outId)));
     const ordered=[],groups=[...byFacility.values()],firstCap=Math.min(all.length,Math.max(12,Math.floor(budget*.45)));
     for(let rank=0;ordered.length<firstCap;rank++){
       let added=false;
@@ -459,7 +477,7 @@ function recipeBlockerMessages(recipe,state,data,scenario,plan){
   if(recipe.electric){if(!scenario?.generator)out.push(`${facName} E-mode needs the Crackle Generator in the chosen utility plan.`);if(Number(state.homelandLevel||1)<Number(fac?.electricHomeLevel||12))out.push(`${facName} E-mode unlocks at RV ${fac?.electricHomeLevel||12}.`);}
   if(!noteEnabled(recipe,state))out.push(`${recipe.note?.name||'Required Recipe Note'} is disabled.`);
   if(recipe.module){const slug=MODULE_SLUGS[recipe.module.name],have=Number(state.modules?.[slug]||0),need=Number(recipe.module.level||0);if(!slug||have<need)out.push(`${recipe.module.name} Lv.${need} is required; current Lv.${have}.`);}
-  if(recipe.env&&weatherRatio(recipe.env,scenario||{})<=0){
+  if(recipe.env&&weatherRatio(recipe.env,scenario||{})<=0&&!uncoveredClimateEfficiency(recipe.env)){
     if(recipe.env==='Scorching')out.push(state.climateOptions?.heat?'Needs Scorching from the Heat Furnace, but the chosen utility plan is not Scorching.':'Needs Scorching, but Heat Furnace is disabled.');
     else if(recipe.env==='Warm')out.push(state.climateOptions?.heat?'Needs Warm/compatible Heat Furnace climate, but the chosen utility plan does not provide it.':'Needs Warm climate, but Heat Furnace is disabled.');
     else if(recipe.env==='Freeze'||recipe.env==='Cool')out.push(state.climateOptions?.cooling?`Needs ${recipe.env}/compatible Cooling Unit climate, but the chosen utility plan does not provide it.`:`Needs ${recipe.env}, but Cooling Unit is disabled.`);
@@ -467,7 +485,7 @@ function recipeBlockerMessages(recipe,state,data,scenario,plan){
     else out.push(`Needs ${recipe.env} climate, which the chosen utility plan does not provide.`);
   }
   const fam=recipe.pet?familyId(recipe.pet):null;if(fam&&!enabledFamilySet(state,data).has(fam))out.push(`Needs resident ${recipe.petName||'Aniimo family'}, but that family is not enabled.`);
-  if(!recipe.electric)for(const step of recipe.steps||[])if(!abilityAvailable(step,state,data,fam))out.push(String(state.abilityLevel)==='auto'?`No enabled Aniimo can cover ${step.ability} Lv.${step.level} for this recipe.`:`Planning ability ceiling is below ${step.ability} Lv.${step.level}.`);
+  if(!recipe.electric)for(const step of recipeWorkSteps(recipe))if(!abilityAvailable(step,state,data,fam))out.push(String(state.abilityLevel)==='auto'?`No enabled Aniimo can cover ${step.ability} Lv.${step.level} for this recipe.`:`Planning ability ceiling is below ${step.ability} Lv.${step.level}.`);
   if(state.oneRecipePerFacility&&count>0){
     const active=[...new Map((plan?.rows||[]).filter(row=>row.facility===recipe.facility&&Number(row.batchesPerHour||0)>1e-8).map(row=>[row.recipe.id,row.recipe])).values()];
     if(!active.some(r=>r.id===recipe.id)&&active.length>=count){
@@ -515,7 +533,7 @@ export function livingFacilityGroups(state,data){
 
 export function requiredAbilities(plan){
   const map=new Map();
-  for(const row of plan.rows){const local=new Map();for(const s of row.recipe.steps||[])local.set(s.ability,Math.max(local.get(s.ability)||0,Number(s.level||0)));for(const [ability,level] of local){const rec=map.get(ability)||{ability,level:0,jobs:new Set(),units:0};rec.level=Math.max(rec.level,level);rec.units+=row.units;map.set(ability,rec);}for(const s of row.recipe.steps||[])map.get(s.ability)?.jobs.add(s.name);}
+  for(const row of plan.rows){const steps=recipeWorkSteps(row.recipe),local=new Map();for(const step of steps)local.set(step.ability,Math.max(local.get(step.ability)||0,Number(step.level||0)));for(const [ability,level] of local){const rec=map.get(ability)||{ability,level:0,jobs:new Set(),units:0};rec.level=Math.max(rec.level,level);rec.units+=row.units;map.set(ability,rec);}for(const step of steps)map.get(step.ability)?.jobs.add(step.name);}
   for(const u of utilityTasksForScenario(plan.scenario)){const rec=map.get(u.ability)||{ability:u.ability,level:0,jobs:new Set(),units:0};rec.level=Math.max(rec.level,u.level);rec.units+=1;rec.jobs.add(u.name);map.set(u.ability,rec);}
   return[...map.values()].map(x=>({...x,jobs:[...x.jobs].sort(),count:Math.max(1,Math.ceil(x.units-1e-9))})).sort((a,b)=>b.level-a.level||a.ability.localeCompare(b.ability));
 }
@@ -528,7 +546,7 @@ export function pickCoverageCore(demands,stationCap,pals){
 
 function taskKey(ability,level,family='',tag=''){return`${ability}|${level}|${family||''}|${tag||''}`;}
 function splitRecipeWork(recipe,state,scenario){
-  if(recipe.electric)return new Map();const parts=cycleParts(recipe,state,scenario),steps=recipe.steps||[],fam=recipe.pet?familyId(recipe.pet):'';
+  if(recipe.electric)return new Map();const parts=cycleParts(recipe,state,scenario),steps=recipeWorkSteps(recipe),fam=recipe.pet?familyId(recipe.pet):'';
   if(recipe.pet){const s=steps[0]||{ability:'Leisure',level:1};return new Map([[taskKey(s.ability,s.level,fam,recipe.facility),parts.cycle]]);}
   const rawTotal=manualWorkload(recipe);if(parts.manual<=1e-9||rawTotal<=0||!steps.length)return new Map();const raw=new Map();if(Number(recipe.workload||0)>0){const s=steps[0],k=taskKey(s.ability,s.level,fam,recipe.facility);raw.set(k,(raw.get(k)||0)+Number(recipe.workload||0));}for(const s of steps){const w=Number(s.workload||0);if(w<=0)continue;const k=taskKey(s.ability,s.level,fam,recipe.facility);raw.set(k,(raw.get(k)||0)+w);}const out=new Map();for(const[k,v]of raw)out.set(k,parts.manual*v/rawTotal);return out;
 }
