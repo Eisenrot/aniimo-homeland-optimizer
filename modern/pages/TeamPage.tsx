@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, RefreshCw, ShieldCheck, Sparkles, UsersRound } from 'lucide-react'
+import AbilityPill from '../components/AbilityPill'
 import AniimoAvatar from '../components/AniimoAvatar'
 import { teamClient } from '../engine/teamClient'
 import { DATA } from '../state'
@@ -121,7 +122,7 @@ export default function TeamPage({ state, plan, planRunning }: Props) {
                     <div className="team-member-main">
                       <span><b>{member.name}</b><small>{member.form || 'Base'} · copy {member.copy}</small></span>
                       <div className="ability-chip-row">
-                        {Object.entries(member.abilities).map(([ability, level]) => <em key={ability}>{ability} Lv.{level}</em>)}
+                        {Object.entries(member.abilities).map(([ability, level]) => <AbilityPill key={ability} ability={ability} level={level} compact />)}
                       </div>
                     </div>
                     {hint && <div className="personality-profile"><Sparkles aria-hidden="true" /><span><small>Personality</small><b>{hint.profile}</b></span></div>}
@@ -150,7 +151,7 @@ export default function TeamPage({ state, plan, planRunning }: Props) {
               <div className="surface-header"><div><span className="surface-eyebrow">Coverage</span><h3>Ability and anti-stall health.</h3></div><ShieldCheck aria-hidden="true" className="surface-icon" /></div>
               <div className="coverage-list">
                 {analysis?.requiredAbilities.map((item) => (
-                  <div key={item.ability}><CheckCircle2 aria-hidden="true" /><span><b>{item.ability} Lv.{item.level}</b><small>{item.count} worker-equivalent · {item.jobs.join(' · ')}</small></span></div>
+                  <div key={item.ability}><CheckCircle2 aria-hidden="true" /><span><AbilityPill ability={item.ability} level={item.level} compact /><small>{item.count} worker-equivalent · {item.jobs.join(' · ')}</small></span></div>
                 ))}
               </div>
             </section>
