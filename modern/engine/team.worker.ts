@@ -49,7 +49,13 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
   try {
     progress('Building staffing model')
     const model = buildTeamModel(plan, state, GAME_DATA)
-    const candidates = await findBestTeams(model, state, GAME_DATA, {
+    const findTeams = findBestTeams as unknown as (
+      model: unknown,
+      state: OptimizerState,
+      data: typeof GAME_DATA,
+      options: { limit?: number; onProgress?: (detail: string) => void },
+    ) => Promise<any[]>
+    const candidates = await findTeams(model, state, GAME_DATA, {
       limit: 4,
       onProgress: progress,
     })
