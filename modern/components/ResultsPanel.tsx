@@ -1,3 +1,4 @@
+import { facilityAsset, itemIcon } from '../lib/presentation'
 import { DATA } from '../state'
 import type { OptimizerPlan, SolverProgress } from '../types'
 
@@ -5,8 +6,12 @@ function fmt(value: number, digits = 1) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits })
 }
 
+function outputId(row: OptimizerPlan['rows'][number]) {
+  return row.recipe.outputs?.[0]?.item
+}
+
 function outputName(row: OptimizerPlan['rows'][number]) {
-  const id = row.recipe.outputs?.[0]?.item
+  const id = outputId(row)
   return id == null ? 'Recipe' : DATA.items[String(id)]?.name || String(id)
 }
 
@@ -29,7 +34,7 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
 
   return (
     <>
-      <section className="panel">
+      <section className="panel result-overview-panel">
         <div className="section-title"><span /><h3>Best plan</h3><i /><em className="micro">{engine}</em></div>
 
         {running && (
@@ -48,13 +53,16 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
         {!running && plan && (
           <>
             <div className="modern-kpis">
-              <div><small>Home Coin / h</small><strong>{fmt(plan.ratePerHour)}</strong></div>
+              <div className="kpi-coin">
+                <img src={itemIcon('coin')} alt="" />
+                <span><small>Home Coin / h</small><strong>{fmt(plan.ratePerHour)}</strong></span>
+              </div>
               <div><small>Target / h</small><strong>{fmt(plan.targetRate)}</strong></div>
               <div><small>Objective</small><strong>{fmt(plan.objectiveRate, 3)}</strong></div>
-              <div><small>Solve time</small><strong>{stats?.engine === 'cache' ? 'cached' : `${fmt((stats?.elapsedMs || 0) / 1000, 2)}s`}</strong></div>
+              <div><small>Solve</small><strong>{stats?.engine === 'cache' ? 'cached' : `${fmt((stats?.elapsedMs || 0) / 1000, 2)}s`}</strong></div>
             </div>
             <div className="micro modern-stats">
-              {stats?.candidatePlans || 0} candidate plans · {stats?.climateOffsets || 0} geometry checks · {plan.scenarioLabel || 'No utility scenario'}
+              {stats?.candidatePlans || 0} candidates · {stats?.climateOffsets || 0} geometry checks · {plan.scenarioLabel || 'No utility scenario'}
             </div>
           </>
         )}
@@ -67,17 +75,31 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
         ) : (
           <div className="modern-table-wrap">
             <table className="modern-table">
-              <thead><tr><th>Facility</th><th>Output</th><th>Batches / h</th><th>Facility use</th><th className="numeric">Coin / h</th></tr></thead>
+              <thead><tr><th>Facility</th><th>Output</th><th>Batches / h</th><th>Use</th><th className="numeric">Coin / h</th></tr></thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={`${row.facility}:${row.recipe.id}`}>
-                    <td><b>{DATA.facilities.find((facility) => facility.slug === row.facility)?.name || row.facility}</b></td>
-                    <td>{outputName(row)}</td>
-                    <td>{fmt(row.batchesPerHour, 2)}</td>
-                    <td>{fmt(row.units, 2)}</td>
-                    <td className="numeric">{fmt(row.perHour)}</td>
-                  </tr>
-                ))}
+                {rows.map((row) => {
+                  const facility = DATA.facilities.find((item) => item.slug === row.facility)
+                  const output = outputId(row)
+                  return (
+                    <tr key={`${row.facility}:${row.recipe.id}`}>
+                      <td>
+                        <span className="table-identity">
+                          {facility?.icon && <img src={facilityAsset(facility)} alt="" />}
+                          <b>{facility?.name || row.facility}</b>
+                        </span>
+                      </td>
+                      <td>
+                        <span className="table-identity">
+                          {output != null && <img src={itemIcon(output)} alt="" />}
+                          <span>{outputName(row)}</span>
+                        </span>
+                      </td>
+                      <td>{fmt(row.batchesPerHour, 2)}</td>
+                      <td>{fmt(row.units, 2)}</td>
+                      <td className="numeric"><span className="coin-inline"><img src={itemIcon('coin')} alt="" />{fmt(row.perHour)}</span></td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
