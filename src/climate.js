@@ -53,7 +53,7 @@ export function climateDemands(plan,state,data){
   const placements=new Map();
   for(const[facility,facilityRows]of byFacility)for(const[row,count]of productionPlacementCounts(facility,facilityRows,state,data))placements.set(row,count);
   for(const row of rows){
-    const env=row?.recipe?.env;if(!env)continue;
+    const env=Object.prototype.hasOwnProperty.call(row,'effectiveEnv')?row.effectiveEnv:row?.recipe?.env;if(!env)continue;
     const fac=data.facilities.find(f=>f.slug===row.facility);if(fac?.kind!=='production')continue;
     const fp=fac.footprint||{};if(!(Number(fp.w)>0&&Number(fp.h)>0))continue;
     const count=Math.max(0,Number(placements.get(row)||0));if(count<=0)continue;
