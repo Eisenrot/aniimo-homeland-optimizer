@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import FacilitiesPanel from './components/FacilitiesPanel'
+import ModulesPanel from './components/ModulesPanel'
+import ObjectivePanel from './components/ObjectivePanel'
 import PlanSettings from './components/PlanSettings'
+import RecipeNotesPanel from './components/RecipeNotesPanel'
 import ResultsPanel from './components/ResultsPanel'
 import { optimizerClient } from './engine/optimizerClient'
-import { DATA, loadState, resetState, saveState } from './state'
+import { DATA, loadState, normalizeState, resetState, saveState } from './state'
 import type { OptimizerPlan, OptimizerState, SolverProgress } from './types'
 
 function clone<T>(value: T): T {
@@ -22,8 +25,9 @@ export default function App() {
     setState((current) => {
       const draft = clone(current)
       update(draft)
-      saveState(draft)
-      return draft
+      const normalized = normalizeState(draft)
+      saveState(normalized)
+      return normalized
     })
   }, [])
 
@@ -79,15 +83,18 @@ export default function App() {
         <section className="panel modern-migration-note">
           <div className="section-title"><span /><h3>Migration parity</h3><i /><em className="micro">{DATA.version || ''}</em></div>
           <p>
-            This branch intentionally calls the existing production solver from a Vite worker.
-            UI and engine are now separate; solver replacement comes after result parity is stable.
+            The React shell still calls the existing production solver from a Vite worker.
+            Model-affecting controls are being moved first; solver replacement comes only after parity is measurable.
           </p>
         </section>
 
         <div className="workspace">
           <aside className="config-stack">
+            <ObjectivePanel state={state} patch={patch} />
             <PlanSettings state={state} patch={patch} />
             <FacilitiesPanel state={state} patch={patch} />
+            <ModulesPanel state={state} patch={patch} />
+            <RecipeNotesPanel state={state} patch={patch} />
           </aside>
 
           <section className="results-stack">

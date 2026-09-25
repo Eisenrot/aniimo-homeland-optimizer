@@ -35,6 +35,19 @@
   min-height: 68px;
 }
 
+.modern-objectives {
+  display: grid;
+  gap: 7px;
+}
+
+.modern-objectives .objective-row {
+  grid-template-columns: 28px minmax(135px, 1fr) minmax(86px, .55fr) auto 34px;
+}
+
+.modern-objectives .objective-row > select {
+  min-width: 0;
+}
+
 .modern-facility-list {
   display: grid;
   gap: 7px;
@@ -42,7 +55,7 @@
 
 .modern-facility-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) 84px 74px;
+  grid-template-columns: minmax(140px, 1fr) 74px 64px 86px;
   align-items: center;
   gap: 8px;
   padding: 9px 10px;
@@ -70,6 +83,17 @@
 
 .modern-facility-row input {
   width: 100%;
+}
+
+.modern-note-grid .note-card {
+  min-height: 86px;
+}
+
+.modern-note-grid .note-unlocks {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255,255,255,.48);
+  font-size: 10px;
 }
 
 .modern-progress {
@@ -155,7 +179,7 @@
 
 @media (max-width: 900px) {
   .modern-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .modern-facility-row { grid-template-columns: minmax(120px, 1fr) 74px 64px; }
+  .modern-facility-row { grid-template-columns: minmax(120px, 1fr) 68px 60px 78px; }
 }
 
 @media (max-width: 620px) {
@@ -163,4 +187,7 @@
   .modern-kpis { grid-template-columns: 1fr; }
   .modern-facility-row { grid-template-columns: 1fr 1fr; }
   .modern-facility-row > div { grid-column: 1 / -1; }
+  .modern-objectives .objective-row { grid-template-columns: 28px 1fr 34px; }
+  .modern-objectives .objective-row > select,
+  .modern-objectives .rate-field { grid-column: span 2; }
 }

@@ -7,6 +7,12 @@ export const STORE_KEY = 'aniimoHomelandOptimizerStateV1'
 
 const MAX_ANIIMO_BY_HOMELAND = [0,5,8,11,14,17,20,22,24,26,28,30,32,34,36,38,40,42,43,44,45]
 
+const LEGACY_FORM_IDS = new Map(
+  DATA.pals
+    .filter((pal) => pal.isForm && pal.legacyId != null)
+    .map((pal) => [String(pal.legacyId), String(pal.id)]),
+)
+
 export function maxAniimoForLevel(level: number) {
   return MAX_ANIIMO_BY_HOMELAND[Math.min(20, Math.max(1, Math.floor(Number(level) || 1)))] || 5
 }
@@ -15,18 +21,27 @@ function clone<T>(value: T): T {
   return structuredClone(value)
 }
 
-function defaultOwned() {
+function defaultOwned(): OptimizerState['owned'] {
   const out: OptimizerState['owned'] = {}
-  const pals = (GAME_DATA as { pals?: Array<{ id: number; isForm?: boolean; unavailable?: boolean }> }).pals || []
-  for (const pal of pals) {
-    out[String(pal.id)] = { enabled: !pal.isForm && !pal.unavailable, count: 1 }
+  for (const pal of DATA.pals) {
+    out[String(pal.id)] = {
+      enabled: !pal.isForm && !pal.unavailable,
+      count: 1,
+    }
   }
   return out
 }
 
-export function normalizeState(raw?: Partial<OptimizerState> | null): OptimizerState {
+type LegacyState = Partial<OptimizerState> & {
+  climate?: {
+    enabled?: boolean
+    temperature?: string
+  }
+}
+
+export function normalizeState(raw?: LegacyState | null): OptimizerState {
   const base = clone(DEFAULT_STATE) as OptimizerState
-  const incoming = clone(raw || {}) as Partial<OptimizerState>
+  const incoming = clone(raw || {}) as LegacyState
   const state = {
     ...base,
     ...incoming,
@@ -38,20 +53,55 @@ export function normalizeState(raw?: Partial<OptimizerState> | null): OptimizerS
     owned: { ...(incoming.owned || {}) },
   } as OptimizerState
 
+  if (incoming.climate?.enabled && !incoming.climateOptions) {
+    const temperature = incoming.climate.temperature
+    if (temperature === 'Cool' || temperature === 'Freeze') state.climateOptions.cooling = true
+    else if (temperature === 'Warm' || temperature === 'Scorching') state.climateOptions.heat = true
+    else if (temperature === 'Adequate') state.climateOptions.sunlamp = true
+  }
+
   state.homelandLevel = Math.min(20, Math.max(1, Number(state.homelandLevel) || 1))
   const cap = maxAniimoForLevel(state.homelandLevel)
   state.workerSlots = Math.min(cap, Math.max(1, Number(state.workerSlots) || 1))
-  state.teamSlots = Math.min(cap, Math.max(1, Number(state.teamSlots || state.workerSlots) || 1))
+  state.teamSlots = Math.min(
+    cap,
+    Math.max(1, Number(incoming.teamSlots ?? incoming.workerSlots ?? state.teamSlots) || 1),
+  )
   state.collectHours = Math.max(0, Number(state.collectHours) || 0)
+  state.oneRecipePerFacility = Boolean(state.oneRecipePerFacility)
+  state.generatorAvailable = Boolean(state.generatorAvailable)
+  state.hungry = Boolean(state.hungry)
+  state.manualSpeeds = Boolean(state.manualSpeeds)
   state.target = String(state.target || 'coin')
-  state.guarantees = Array.isArray(state.guarantees) ? state.guarantees : []
+  state.guarantees = Array.isArray(incoming.guarantees)
+    ? incoming.guarantees.map((guarantee) => ({
+        item: String(guarantee.item || ''),
+        perHour: Math.max(0, Number(guarantee.perHour || 0)),
+        maximize: Boolean(guarantee.maximize),
+        enabled: guarantee.enabled !== false,
+      }))
+    : []
 
-  if (!Object.keys(state.owned).length) state.owned = defaultOwned()
+  if (!Object.keys(state.owned).length) {
+    state.owned = defaultOwned()
+  } else {
+    for (const [legacy, current] of LEGACY_FORM_IDS) {
+      if (state.owned[legacy] && !state.owned[current]) {
+        state.owned[current] = { ...state.owned[legacy] }
+      }
+      if (legacy !== current) delete state.owned[legacy]
+    }
+  }
 
-  const pals = (GAME_DATA as { pals?: Array<{ id: number; isForm?: boolean; unavailable?: boolean }> }).pals || []
-  for (const pal of pals) {
+  for (const pal of DATA.pals) {
     const id = String(pal.id)
-    if (!state.owned[id]) state.owned[id] = { enabled: !pal.isForm && !pal.unavailable, count: 1 }
+    if (!state.owned[id]) {
+      state.owned[id] = {
+        enabled: !pal.isForm && !pal.unavailable,
+        count: 1,
+      }
+    }
+    state.owned[id].count = Math.max(1, Number(state.owned[id].count) || 1)
     if (pal.unavailable) state.owned[id].enabled = false
   }
 
@@ -60,7 +110,7 @@ export function normalizeState(raw?: Partial<OptimizerState> | null): OptimizerS
 
 export function loadState(): OptimizerState {
   try {
-    return normalizeState(JSON.parse(localStorage.getItem(STORE_KEY) || 'null'))
+    return normalizeState(JSON.parse(localStorage.getItem(STORE_KEY) || 'null') as LegacyState | null)
   } catch {
     return normalizeState()
   }

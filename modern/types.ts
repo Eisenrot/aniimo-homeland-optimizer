@@ -1,7 +1,12 @@
+export type FacilityStack = {
+  count: number
+  level: number
+}
+
 export type FacilityConfig = {
   count: number
   level: number
-  stacks?: Array<{ count: number; level: number }>
+  stacks?: FacilityStack[]
 }
 
 export type Guarantee = {
@@ -9,6 +14,11 @@ export type Guarantee = {
   perHour: number
   maximize: boolean
   enabled: boolean
+}
+
+export type OwnedAniimo = {
+  enabled: boolean
+  count: number
 }
 
 export type OptimizerState = {
@@ -33,7 +43,7 @@ export type OptimizerState = {
   modules: Record<string, number>
   speeds: Record<string, number>
   recipeNotes: Record<string, boolean>
-  owned: Record<string, { enabled: boolean; count: number }>
+  owned: Record<string, OwnedAniimo>
   realRecipeSpeeds?: Record<string, number>
 }
 
@@ -43,6 +53,8 @@ export type Facility = {
   kind: string
   maxLevel: number
   categoryName?: string
+  category?: number
+  icon?: string
   homeLevel?: Record<string, number>
 }
 
@@ -51,10 +63,32 @@ export type Item = {
   value?: number
 }
 
+export type RecipeNote = {
+  item: number | string
+  name: string
+}
+
 export type Recipe = {
   id: number
   facility: string
+  level?: number
+  env?: string
+  note?: RecipeNote
   outputs?: Array<{ item: number; qty: number }>
+  inputs?: Array<{ item: number; qty: number }>
+  steps?: Array<{ ability: string; level: number; name?: string; workload?: number }>
+  [key: string]: unknown
+}
+
+export type Pal = {
+  id: number | string
+  name: string
+  speciesName?: string
+  isForm?: boolean
+  unavailable?: boolean
+  legacyId?: number | string
+  abilities?: Record<string, number>
+  [key: string]: unknown
 }
 
 export type GameData = {
@@ -62,6 +96,8 @@ export type GameData = {
   facilities: Facility[]
   recipes: Recipe[]
   items: Record<string, Item>
+  pals: Pal[]
+  abilities?: Record<string, { color?: string }>
 }
 
 export type PlanRow = {
