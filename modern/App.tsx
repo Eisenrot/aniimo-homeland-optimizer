@@ -1,20 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { readPlanCache, writePlanCache } from '../src/plan-cache.js'
 import AppShell from './components/AppShell'
 import { optimizerClient } from './engine/optimizerClient'
 import { currentPage } from './lib/page'
-import HomelandPage from './pages/HomelandPage'
-import LayoutPage from './pages/LayoutPage'
-import OptimizerPage from './pages/OptimizerPage'
-import OverviewPage from './pages/OverviewPage'
-import RosterPage from './pages/RosterPage'
-import TeamPage from './pages/TeamPage'
 import { DATA, loadState, normalizeState, resetState, saveState } from './state'
 import type { OptimizerPlan, OptimizerState, SolverProgress } from './types'
 
 function clone<T>(value: T): T {
   return structuredClone(value)
 }
+
+const OverviewPage = lazy(() => import('./pages/OverviewPage'))
+const OptimizerPage = lazy(() => import('./pages/OptimizerPage'))
+const HomelandPage = lazy(() => import('./pages/HomelandPage'))
+const TeamPage = lazy(() => import('./pages/TeamPage'))
+const LayoutPage = lazy(() => import('./pages/LayoutPage'))
+const RosterPage = lazy(() => import('./pages/RosterPage'))
 
 const PLAN_PAGES = new Set(['overview', 'optimizer', 'team', 'layout'])
 const RUN_OPTIONS = { maxClimateVariants: 28, maxClimateOffset: 9 }
@@ -123,7 +124,9 @@ export default function App() {
       onSolve={() => void solve(state, true)}
       onReset={reset}
     >
-      {content}
+      <Suspense fallback={<section className="surface-card route-loading">Loading page…</section>}>
+        {content}
+      </Suspense>
     </AppShell>
   )
 }
