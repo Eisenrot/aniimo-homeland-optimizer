@@ -1,26 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import FacilitiesPanel from './components/FacilitiesPanel'
-import ModulesPanel from './components/ModulesPanel'
-import OwnershipPanel from './components/OwnershipPanel'
-import ObjectivePanel from './components/ObjectivePanel'
-import PlanSettings from './components/PlanSettings'
-import RecipeNotesPanel from './components/RecipeNotesPanel'
-import ResultsPanel from './components/ResultsPanel'
+import AppShell from './components/AppShell'
 import { optimizerClient } from './engine/optimizerClient'
-import { DATA, loadState, normalizeState, resetState, saveState } from './state'
+import { currentPage } from './lib/page'
+import HomelandPage from './pages/HomelandPage'
+import LayoutPage from './pages/LayoutPage'
+import OptimizerPage from './pages/OptimizerPage'
+import OverviewPage from './pages/OverviewPage'
+import RosterPage from './pages/RosterPage'
+import TeamPage from './pages/TeamPage'
+import { loadState, normalizeState, resetState, saveState } from './state'
 import type { OptimizerPlan, OptimizerState, SolverProgress } from './types'
 
 function clone<T>(value: T): T {
   return structuredClone(value)
 }
 
+const PLAN_PAGES = new Set(['overview', 'optimizer', 'team', 'layout'])
+
 export default function App() {
+  const page = currentPage()
   const [state, setState] = useState<OptimizerState>(() => loadState())
   const [plan, setPlan] = useState<OptimizerPlan | null>(null)
   const [progress, setProgress] = useState<SolverProgress | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [rosterOpen, setRosterOpen] = useState(false)
   const timer = useRef<number | null>(null)
 
   const patch = useCallback((update: (draft: OptimizerState) => void) => {
@@ -34,6 +37,7 @@ export default function App() {
   }, [])
 
   const solve = useCallback(async (snapshot: OptimizerState) => {
+    if (!PLAN_PAGES.has(page)) return
     setRunning(true)
     setError(null)
     setProgress({ phase: 'Preparing', progress: 0 })
@@ -46,15 +50,16 @@ export default function App() {
     } finally {
       setRunning(false)
     }
-  }, [])
+  }, [page])
 
   useEffect(() => {
+    if (!PLAN_PAGES.has(page)) return
     if (timer.current != null) window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => void solve(state), 180)
     return () => {
       if (timer.current != null) window.clearTimeout(timer.current)
     }
-  }, [state, solve])
+  }, [state, solve, page])
 
   useEffect(() => () => optimizerClient.cancel(), [])
 
@@ -63,55 +68,31 @@ export default function App() {
     setState(next)
   }
 
+  let content
+  if (page === 'overview') {
+    content = <OverviewPage state={state} plan={plan} progress={progress} running={running} error={error} />
+  } else if (page === 'optimizer') {
+    content = <OptimizerPage state={state} patch={patch} plan={plan} progress={progress} running={running} error={error} />
+  } else if (page === 'homeland') {
+    content = <HomelandPage state={state} patch={patch} />
+  } else if (page === 'team') {
+    content = <TeamPage state={state} plan={plan} planRunning={running} />
+  } else if (page === 'layout') {
+    content = <LayoutPage state={state} plan={plan} planRunning={running} />
+  } else {
+    content = <RosterPage state={state} patch={patch} />
+  }
+
   return (
-    <>
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark" role="img" aria-label="Aniimo" />
-          <div>
-            <h1>Aniimo Homeland Optimizer</h1>
-            <p>experimental · React + TypeScript · parity engine</p>
-          </div>
-        </div>
-        <nav className="top-actions">
-          <span className="modern-badge">MIGRATION 01</span>
-          <button className="ghost" onClick={() => setRosterOpen(true)}>Aniimo roster</button>
-          <button className="ghost" onClick={() => void solve(state)} disabled={running}>Re-run</button>
-          <button className="ghost" onClick={reset}>Reset</button>
-          <a className="ghost link" href="./legacy.html">Legacy reference</a>
-        </nav>
-      </header>
-
-      <OwnershipPanel open={rosterOpen} state={state} patch={patch} onClose={() => setRosterOpen(false)} />
-
-      <main className="shell">
-        <section className="panel modern-migration-note">
-          <div className="section-title"><span /><h3>Migration parity</h3><i /><em className="micro">{DATA.version || ''}</em></div>
-          <p>
-            The React shell still calls the existing production solver from a Vite worker.
-            Model-affecting controls are being moved first; solver replacement comes only after parity is measurable.
-          </p>
-        </section>
-
-        <div className="workspace">
-          <aside className="config-stack">
-            <ObjectivePanel state={state} patch={patch} />
-            <PlanSettings state={state} patch={patch} />
-            <FacilitiesPanel state={state} patch={patch} />
-            <ModulesPanel state={state} patch={patch} />
-            <RecipeNotesPanel state={state} patch={patch} />
-          </aside>
-
-          <section className="results-stack">
-            <ResultsPanel plan={plan} progress={progress} running={running} error={error} />
-          </section>
-        </div>
-      </main>
-
-      <footer>
-        <span>Experimental rewrite. Main remains untouched.</span>
-        <span>Current engine: existing JavaScript solver in a Web Worker.</span>
-      </footer>
-    </>
+    <AppShell
+      page={page}
+      state={state}
+      plan={plan}
+      running={running}
+      onSolve={() => void solve(state)}
+      onReset={reset}
+    >
+      {content}
+    </AppShell>
   )
 }
