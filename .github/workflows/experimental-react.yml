@@ -1,0 +1,38 @@
+name: Experimental React migration
+
+on:
+  push:
+    branches:
+      - experiment/react-ts-vite
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install modern toolchain
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck and build modern app
+        run: |
+          npm run typecheck
+          npm run build
+
+      - name: Verify legacy solver regressions
+        run: |
+          node test.mjs
+          node test-team.mjs
+          node test-climate.mjs
+          node test-full-layout.mjs
+          node test-speed.mjs
+          node test-recipe-notes.mjs

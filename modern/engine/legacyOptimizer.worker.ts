@@ -2,7 +2,7 @@
 
 import { GAME_DATA } from '../../src/data.js'
 import { optimizePlan } from '../../src/optimizer.js'
-import type { SolveRequest, WorkerMessage } from '../types'
+import type { SolveRequest, SolverProgress, WorkerMessage } from '../types'
 
 self.onmessage = (event: MessageEvent<SolveRequest>) => {
   const { id, state, options } = event.data
@@ -14,8 +14,8 @@ self.onmessage = (event: MessageEvent<SolveRequest>) => {
         const message: WorkerMessage = {
           type: 'progress',
           id,
-          progress: progress as WorkerMessage & never,
-        } as WorkerMessage
+          progress: progress as SolverProgress,
+        }
         self.postMessage(message)
       },
     })
