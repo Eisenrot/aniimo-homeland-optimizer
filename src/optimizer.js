@@ -102,7 +102,22 @@ export function recipeRunnable(recipe,state,data,scenario={cooling:null,heat:nul
 }
 
 // Two-phase simplex: maximise c*x subject to A*x <= b, x>=0.
+let activeLpSolver=null;
+
+export function setLpSolver(solver){
+  if(solver!=null&&typeof solver!=='function')throw new TypeError('LP solver must be a function or null.');
+  activeLpSolver=solver||null;
+}
+export function resetLpSolver(){activeLpSolver=null;}
 export function solveLp(objective,A,b){
+  if(activeLpSolver){
+    const result=activeLpSolver(objective,A,b);
+    if(result!==undefined)return result;
+  }
+  return solveLpJs(objective,A,b);
+}
+
+export function solveLpJs(objective,A,b){
   const m=A.length,n=objective.length;if(!m)return{x:Array(n).fill(0),duals:[]};
   const neg=b.map(v=>v<-1e-9),artificialCount=neg.reduce((s,x)=>s+(x?1:0),0),cols=n+m+artificialCount+1,rhs=cols-1;
   const tab=Array.from({length:m+1},()=>Array(cols).fill(0)),basis=Array(m).fill(0),artificial=[];let next=n+m;
