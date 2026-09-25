@@ -191,3 +191,72 @@
   .modern-objectives .objective-row > select,
   .modern-objectives .rate-field { grid-column: span 2; }
 }
+
+.modern-roster-modal {
+  width: min(1120px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+}
+
+.modern-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  max-height: min(620px, calc(100vh - 245px));
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.modern-roster-row {
+  display: grid;
+  grid-template-columns: 24px minmax(110px, .8fr) minmax(140px, 1.2fr) 58px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 10px;
+  background: rgba(255,255,255,.018);
+}
+
+.modern-roster-row.off {
+  opacity: .46;
+}
+
+.modern-roster-row.unavailable {
+  opacity: .28;
+}
+
+.modern-roster-name {
+  display: grid;
+  min-width: 0;
+}
+
+.modern-roster-name small {
+  color: rgba(255,255,255,.42);
+  font-size: 10px;
+}
+
+.modern-roster-abilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.modern-roster-abilities em {
+  padding: 3px 6px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 999px;
+  color: rgba(255,255,255,.58);
+  font-size: 9px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.modern-roster-count {
+  width: 58px;
+}
+
+@media (max-width: 760px) {
+  .modern-roster-grid { grid-template-columns: 1fr; }
+  .modern-roster-row { grid-template-columns: 24px 1fr 58px; }
+  .modern-roster-abilities { grid-column: 2 / -1; }
+}
