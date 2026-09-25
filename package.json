@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "benchmark:lp": "node scripts/benchmark-lp.mjs"
   },
   "dependencies": {
     "highs": "1.15.3",
