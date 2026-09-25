@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { readPlanCache, writePlanCache } from '../src/plan-cache.js'
 import AppShell from './components/AppShell'
 import { optimizerClient } from './engine/optimizerClient'
 import { currentPage } from './lib/page'
@@ -8,7 +9,7 @@ import OptimizerPage from './pages/OptimizerPage'
 import OverviewPage from './pages/OverviewPage'
 import RosterPage from './pages/RosterPage'
 import TeamPage from './pages/TeamPage'
-import { loadState, normalizeState, resetState, saveState } from './state'
+import { DATA, loadState, normalizeState, resetState, saveState } from './state'
 import type { OptimizerPlan, OptimizerState, SolverProgress } from './types'
 
 function clone<T>(value: T): T {
@@ -16,6 +17,8 @@ function clone<T>(value: T): T {
 }
 
 const PLAN_PAGES = new Set(['overview', 'optimizer', 'team', 'layout'])
+const RUN_OPTIONS = { maxClimateVariants: 28, maxClimateOffset: 9 }
+const BUILD_ID = `modern-v2:${DATA.version || 'data'}`
 
 export default function App() {
   const page = currentPage()
@@ -36,14 +39,42 @@ export default function App() {
     })
   }, [])
 
-  const solve = useCallback(async (snapshot: OptimizerState) => {
+  const solve = useCallback(async (snapshot: OptimizerState, force = false) => {
     if (!PLAN_PAGES.has(page)) return
+
+    if (!force) {
+      const cached = readPlanCache(localStorage, snapshot, RUN_OPTIONS, BUILD_ID)
+      if (cached?.plan) {
+        setError(null)
+        setProgress({ phase: 'Cached', progress: 1, detail: 'Exact plan state restored' })
+        setPlan({
+          ...cached.plan,
+          optimizerStats: {
+            ...(cached.plan.optimizerStats || {}),
+            ...(cached.stats || {}),
+            engine: 'cache',
+            elapsedMs: 0,
+          },
+        } as OptimizerPlan)
+        setRunning(false)
+        return
+      }
+    }
+
     setRunning(true)
     setError(null)
     setProgress({ phase: 'Preparing', progress: 0 })
     try {
       const result = await optimizerClient.solve(snapshot, setProgress)
       setPlan(result)
+      writePlanCache(
+        localStorage,
+        snapshot,
+        RUN_OPTIONS,
+        BUILD_ID,
+        result,
+        result.optimizerStats || {},
+      )
     } catch (reason) {
       if (reason instanceof DOMException && reason.name === 'AbortError') return
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -89,7 +120,7 @@ export default function App() {
       state={state}
       plan={plan}
       running={running}
-      onSolve={() => void solve(state)}
+      onSolve={() => void solve(state, true)}
       onReset={reset}
     >
       {content}
