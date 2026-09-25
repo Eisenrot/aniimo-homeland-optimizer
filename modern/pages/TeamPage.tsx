@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, RefreshCw, ShieldCheck, Sparkles, UsersRound } from 'lucide-react'
+import AniimoAvatar from '../components/AniimoAvatar'
 import { teamClient } from '../engine/teamClient'
 import { DATA } from '../state'
-import { fmt, palHeadUrl } from '../lib/presentation'
+import { fmt } from '../lib/presentation'
 import { stableStringify } from '../../src/plan-cache.js'
 import type { OptimizerPlan, OptimizerState, TeamAnalysisResult } from '../types'
 
@@ -116,7 +117,7 @@ export default function TeamPage({ state, plan, planRunning }: Props) {
                 const hint = personality?.hints[index]
                 return (
                   <article className="team-member-card" key={`${member.id}:${member.copy}:${index}`}>
-                    <img src={palHeadUrl(member)} alt="" onError={(event) => { event.currentTarget.style.visibility = 'hidden' }} />
+                    <AniimoAvatar pal={member} />
                     <div className="team-member-main">
                       <span><b>{member.name}</b><small>{member.form || 'Base'} · copy {member.copy}</small></span>
                       <div className="ability-chip-row">
@@ -137,7 +138,7 @@ export default function TeamPage({ state, plan, planRunning }: Props) {
                 {analysis?.candidates.map((item, index) => (
                   <button type="button" className={selected === index ? 'candidate-row selected' : 'candidate-row'} key={item.rank} onClick={() => setSelected(index)}>
                     <span className="candidate-rank">#{item.rank}</span>
-                    <span className="candidate-faces">{item.team.slice(0, 5).map((member, i) => <img key={`${member.id}:${i}`} src={palHeadUrl(member)} alt="" />)}</span>
+                    <span className="candidate-faces">{item.team.slice(0, 5).map((member, i) => <AniimoAvatar key={`${member.id}:${i}`} pal={member} />)}</span>
                     <span><small>Coin / h</small><b>{fmt(item.rate)}</b></span>
                     <span><small>Objective</small><b>{fmt(item.objectiveRate, 2)}</b></span>
                   </button>
