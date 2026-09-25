@@ -43,6 +43,7 @@ jobs:
           node test-speed.mjs
           node test-recipe-notes.mjs
           node test-progression.mjs
+          node test-aniimax-parity.mjs
 
       - name: Benchmark JS simplex vs HiGHS
         run: npm run benchmark:lp
