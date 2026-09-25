@@ -1,7 +1,7 @@
 {
   "name": "aniimo-homeland-optimizer",
   "private": true,
-  "version": "0.1.0-experimental",
+  "version": "0.2.0-experimental",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "highs": "1.15.3",
+    "lucide-react": "^0.544.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
