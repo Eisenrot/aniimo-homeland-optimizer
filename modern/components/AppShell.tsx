@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import {
   Activity,
   Github,
+  History,
   House,
   Map,
   PawPrint,
@@ -80,9 +81,12 @@ export default function AppShell({ page, state, plan, running, children, onSolve
 
         <div className="sidebar-footer">
           <span>{DATA.version || 'Game data'}</span>
-          <a href="https://github.com/Eisenrot/aniimo-homeland-optimizer" target="_blank" rel="noreferrer">
-            <Github aria-hidden="true" /> GitHub
-          </a>
+          <span className="sidebar-footer-links">
+            <a href="./legacy.html"><History aria-hidden="true" /> Legacy</a>
+            <a href="https://github.com/Eisenrot/aniimo-homeland-optimizer" target="_blank" rel="noreferrer">
+              <Github aria-hidden="true" /> GitHub
+            </a>
+          </span>
         </div>
       </aside>
 
