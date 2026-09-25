@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Boxes, RefreshCw, RotateCw, Snowflake, SunMedium, ThermometerSun } from 'lucide-react'
 import { LAYOUT_SETTINGS_STORE, PLOT_MATRIX, plotRect, readFullLayoutCache, unlockedPlotNumbers, writeFullLayoutCache } from '../../src/full-layout.js'
 import { layoutClient } from '../engine/layoutClient'
-import { fmt } from '../lib/presentation'
+import { assetUrl, fmt } from '../lib/presentation'
 import { DATA } from '../state'
 import type { BaseLayout, LayoutSettings, OptimizerPlan, OptimizerState } from '../types'
 
@@ -150,8 +150,13 @@ export default function LayoutPage({ state, plan, planRunning }: Props) {
       <div className="layout-workspace">
         <section className="layout-canvas-card surface-card">
           <div className="surface-header">
-            <div><span className="surface-eyebrow">Physical base</span><h3>{running ? 'Packing structures…' : layout?.feasible ? `${layout.itemCount || layout.placements.length} placed structures` : 'Layout preview'}</h3></div>
-            <span className={layout?.feasible ? 'status-badge' : 'status-badge danger'}>{layout?.feasible ? 'Feasible' : running ? 'Working' : 'Not ready'}</span>
+            <div>
+              <span className="surface-eyebrow">Physical base</span>
+              <h3>{running ? 'Packing structures…' : layout?.feasible ? `${layout.itemCount || layout.placements.length} placed structures` : 'Layout preview'}</h3>
+            </div>
+            <span className={layout?.feasible ? 'status-badge' : 'status-badge danger'}>
+              {layout?.feasible ? 'Feasible' : running ? 'Working' : 'Not ready'}
+            </span>
           </div>
 
           <div className="layout-scroll">
@@ -180,27 +185,43 @@ export default function LayoutPage({ state, plan, planRunning }: Props) {
                     height: `${field.h / boardHeight * 100}%`,
                   }}
                 >
-                  {field.type === 'cooling' ? <Snowflake aria-hidden="true" /> : field.type === 'heating' ? <ThermometerSun aria-hidden="true" /> : <SunMedium aria-hidden="true" />}
+                  {field.type === 'cooling'
+                    ? <Snowflake aria-hidden="true" />
+                    : field.type === 'heating'
+                      ? <ThermometerSun aria-hidden="true" />
+                      : <SunMedium aria-hidden="true" />}
                 </div>
               ))}
 
-              {(layout?.placements || []).map((item) => (
-                <div
-                  className={`layout-item kind-${item.kind || 'plan'} env-${String(item.env || 'none').toLowerCase()}`}
-                  key={item.id}
-                  title={`${item.name}${item.env ? ` · ${item.env}` : ''}`}
-                  style={{
-                    left: `${item.x / boardWidth * 100}%`,
-                    top: `${item.y / boardHeight * 100}%`,
-                    width: `${item.w / boardWidth * 100}%`,
-                    height: `${item.h / boardHeight * 100}%`,
-                  }}
-                ><span>{item.name}</span></div>
-              ))}
+              {(layout?.placements || []).map((item) => {
+                const facility = DATA.facilities.find((candidate) => candidate.slug === item.facility)
+                const icon = assetUrl(facility?.plotGlyph || facility?.icon || item.icon)
+                const showLabel = item.w >= 3 && item.h >= 2
+                return (
+                  <div
+                    className={`layout-item kind-${item.kind || 'plan'} env-${String(item.env || 'none').toLowerCase()}`}
+                    key={item.id}
+                    title={`${item.name}${item.env ? ` · ${item.env}` : ''}`}
+                    style={{
+                      left: `${item.x / boardWidth * 100}%`,
+                      top: `${item.y / boardHeight * 100}%`,
+                      width: `${item.w / boardWidth * 100}%`,
+                      height: `${item.h / boardHeight * 100}%`,
+                    }}
+                  >
+                    {icon
+                      ? <img src={icon} alt="" />
+                      : <b className="layout-item-fallback">{item.name.slice(0, 1)}</b>}
+                    {showLabel && <span>{item.name}</span>}
+                  </div>
+                )
+              })}
             </div>
           </div>
 
-          {(error || (layout && !layout.feasible)) && <div className="inline-alert danger">{error || layout?.reason}</div>}
+          {(error || (layout && !layout.feasible)) && (
+            <div className="inline-alert danger">{error || layout?.reason}</div>
+          )}
         </section>
 
         <aside className="layout-inspector surface-card">
