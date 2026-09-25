@@ -3,7 +3,36 @@ import { CheckCircle2, RefreshCw, ShieldCheck, Sparkles, UsersRound } from 'luci
 import { teamClient } from '../engine/teamClient'
 import { DATA } from '../state'
 import { fmt, palHeadUrl } from '../lib/presentation'
+import { stableStringify } from '../../src/plan-cache.js'
 import type { OptimizerPlan, OptimizerState, TeamAnalysisResult } from '../types'
+
+const TEAM_CACHE_STORE = 'aniimoModernTeamCacheV1'
+const TEAM_CACHE_VERSION = 1
+
+function teamSignature(state: OptimizerState, plan: OptimizerPlan) {
+  const { optimizerStats: _stats, ...stablePlan } = plan
+  return stableStringify({ version: TEAM_CACHE_VERSION, state, plan: stablePlan })
+}
+
+function readTeamCache(state: OptimizerState, plan: OptimizerPlan) {
+  try {
+    const entry = JSON.parse(localStorage.getItem(TEAM_CACHE_STORE) || 'null')
+    if (entry?.version !== TEAM_CACHE_VERSION || entry.signature !== teamSignature(state, plan)) return null
+    return entry.result as TeamAnalysisResult
+  } catch {
+    return null
+  }
+}
+
+function writeTeamCache(state: OptimizerState, plan: OptimizerPlan, result: TeamAnalysisResult) {
+  try {
+    localStorage.setItem(TEAM_CACHE_STORE, JSON.stringify({
+      version: TEAM_CACHE_VERSION,
+      signature: teamSignature(state, plan),
+      result,
+    }))
+  } catch {}
+}
 
 type Props = {
   state: OptimizerState
@@ -18,8 +47,18 @@ export default function TeamPage({ state, plan, planRunning }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState(0)
 
-  const run = async () => {
+  const run = async (force = false) => {
     if (!plan || planRunning) return
+    if (!force) {
+      const cached = readTeamCache(state, plan)
+      if (cached) {
+        setAnalysis(cached)
+        setSelected(0)
+        setDetail('Exact roster and plan restored from cache')
+        setError(null)
+        return
+      }
+    }
     setRunning(true)
     setError(null)
     setDetail('Preparing real-team search')
@@ -27,6 +66,7 @@ export default function TeamPage({ state, plan, planRunning }: Props) {
       const result = await teamClient.analyze(state, plan, setDetail)
       setAnalysis(result)
       setSelected(0)
+      writeTeamCache(state, plan, result)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -36,7 +76,7 @@ export default function TeamPage({ state, plan, planRunning }: Props) {
 
   useEffect(() => {
     if (!plan || planRunning) return
-    void run()
+    void run(false)
     return () => teamClient.cancel()
   }, [plan, planRunning])
 
@@ -52,7 +92,7 @@ export default function TeamPage({ state, plan, planRunning }: Props) {
           <h2>{running ? detail : candidate ? `Candidate #${candidate.rank}` : 'No team result yet'}</h2>
           <p>{error || (planRunning ? 'The production plan is still changing. Team search starts as soon as it settles.' : candidate ? `${candidate.team.length} Aniimo · ${enabled} enabled roster entries considered` : 'The theoretical production plan is converted into actual owned workers here.')}</p>
         </div>
-        <button className="ui-button secondary" type="button" onClick={() => void run()} disabled={!plan || running || planRunning}>
+        <button className="ui-button secondary" type="button" onClick={() => void run(true)} disabled={!plan || running || planRunning}>
           <RefreshCw aria-hidden="true" /> Analyze again
         </button>
       </section>
