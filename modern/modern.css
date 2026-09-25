@@ -2060,3 +2060,482 @@ button:disabled, input:disabled, select:disabled { opacity: .5; cursor: not-allo
   .plot-selector { grid-template-columns:1fr; }
   .plot-map-selector { justify-self:start; }
 }
+
+
+/* ==========================================================================
+   Readability / personality / map precision pass
+   ========================================================================== */
+
+body { font-size: 15px; }
+
+.page-heading p { font-size: 13px; }
+.page-eyebrow,
+.surface-eyebrow,
+.hero-kicker,
+.context-label { font-size: 10px; }
+
+.section-title h3,
+.surface-header h3 { font-size: 16px; }
+
+.micro,
+.modern-stats,
+.map-hint { font-size: 11px; }
+
+.ui-button { font-size: 12.5px; }
+.app-nav-item { font-size: 13px; }
+.app-brand b { font-size: 15px; }
+.app-brand small { font-size: 10px; }
+
+.field label,
+.modern-facility-row label > span,
+.module-info span,
+.layout-controls label > span,
+.micro-label { font-size: 10px; }
+
+.context-strip small { font-size: 9px; }
+.context-strip b { font-size: 12px; }
+.context-strip a { font-size: 10px; }
+
+/* Fill-for-RV is a first-class Homeland action again */
+.fill-rv-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(212,45,70,.34);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(212,45,70,.13), rgba(212,45,70,.06));
+  color: #ff9baa;
+  cursor: pointer;
+  font-size: 10.5px;
+  font-weight: 850;
+}
+.fill-rv-button:hover {
+  border-color: #d84b60;
+  background: rgba(212,45,70,.16);
+  color: #fff;
+}
+.fill-rv-button svg { width: 14px; height: 14px; }
+
+.rv-capacity-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: -1px 0 9px;
+  color: #7e8995;
+  font-size: 9.5px;
+}
+.rv-capacity-line > span {
+  margin-right: 2px;
+  color: #a7b0ba;
+  font-weight: 800;
+}
+.rv-capacity-line b {
+  padding: 3px 7px;
+  border: 1px solid #29313a;
+  border-radius: 999px;
+  background: #0b0e12;
+  color: #9ba5af;
+  font-size: 9px;
+}
+
+/* Homeland controls need to read at normal human scale */
+.setting-tile { min-height: 92px; }
+.setting-tile small { font-size: 9px; }
+.setting-tile b { font-size: 16px; }
+.setting-tile input,
+.setting-tile select { min-height: 34px; font-size: 10.5px; }
+
+.rule-pill { min-height: 52px; }
+.rule-pill b { font-size: 11.5px; }
+.rule-pill small { font-size: 9.5px; }
+
+.modern-utility-grid.vivid .utility-main b { font-size: 11px; }
+.modern-utility-grid.vivid .utility-main small { font-size: 9px; }
+
+.modern-facility-row {
+  min-height: 58px;
+  padding-block: 7px;
+}
+.modern-facility-row > div b { font-size: 13px; }
+.modern-facility-row > div small { font-size: 9.5px; }
+.modern-facility-row label > span { font-size: 9px; }
+.modern-facility-row input { min-height: 36px; font-size: 11.5px; }
+
+.module-info label { font-size: 11.5px; }
+.module-info span { font-size: 9.5px; }
+.note-main b { font-size: 11.5px; }
+.note-unlocks,
+.note-unlock { font-size: 9px; }
+
+/* Personality: four stable axis circles, no prose-shaped badge */
+.personality-profile {
+  min-width: 142px;
+  padding-inline: 10px;
+}
+.personality-profile > span {
+  display: grid;
+  gap: 5px;
+}
+.personality-profile > span > small { font-size: 8.5px; }
+
+.personality-code {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  width: max-content;
+}
+.personality-letter {
+  width: 28px;
+  height: 28px;
+  display: grid !important;
+  place-items: center;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  color: white;
+  font-size: 12px !important;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.3),
+    0 2px 8px rgba(0,0,0,.22);
+}
+.personality-code.compact .personality-letter {
+  width: 23px;
+  height: 23px;
+  flex-basis: 23px;
+  font-size: 10px !important;
+}
+.personality-letter.blue {
+  background: #6bb3ed;
+  border: 1px solid #8ac7f4;
+}
+.personality-letter.pink {
+  background: #e979b3;
+  border: 1px solid #f09aca;
+}
+.personality-letter.unknown {
+  background: #58616c;
+  border: 1px solid #707b87;
+}
+
+/* Team readability + fix the coverage-pill selector collision */
+.team-hero h2 { font-size: 25px; }
+.team-hero p { font-size: 11.5px; }
+
+.team-member-card {
+  min-height: 88px;
+  grid-template-columns: 58px 1fr auto;
+}
+.team-member-card > img,
+.team-member-card > .aniimo-avatar-fallback {
+  width: 58px;
+  height: 58px;
+}
+.team-member-main b { font-size: 13.5px; }
+.team-member-main small { font-size: 9.5px; }
+
+.ability-pill {
+  width: max-content;
+  min-width: 0;
+}
+.ability-pill.compact { min-height: 25px; }
+.ability-pill.compact span,
+.ability-pill.compact b { font-size: 9px; }
+
+.coverage-list > div {
+  display: grid;
+  grid-template-columns: 18px minmax(0,1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+.coverage-list > div > span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.coverage-list .ability-pill {
+  display: inline-flex !important;
+  width: max-content !important;
+  justify-self: start;
+}
+.coverage-list .ability-pill > span {
+  display: inline !important;
+  width: auto !important;
+}
+.coverage-list small {
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+
+/* Alternatives are choices, not microscopic footnotes */
+.candidate-list { gap: 8px; }
+.candidate-row {
+  grid-template-columns: 42px minmax(190px,1fr) 116px 104px;
+  min-height: 74px;
+  padding: 9px 11px;
+  border-radius: 11px;
+}
+.candidate-rank { font-size: 12px; }
+.candidate-faces img,
+.candidate-faces .aniimo-avatar-fallback {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+.candidate-faces img,
+.candidate-faces .aniimo-avatar-fallback { margin-left: -7px; }
+.candidate-faces img:first-child,
+.candidate-faces .aniimo-avatar-fallback:first-child { margin-left: 0; }
+.candidate-row small { font-size: 8.5px; }
+.candidate-row b { font-size: 13px; }
+
+/* Roster should be readable without browser zoom */
+.roster-card { min-height: 86px; }
+.roster-card-copy b { font-size: 12px; }
+.roster-card-copy small { font-size: 9px; }
+
+/* Tables */
+.modern-table,
+.data-table { font-size: 11.5px; }
+.modern-table th,
+.data-table th { font-size: 8.8px; }
+.modern-table th,
+.modern-table td,
+.data-table th,
+.data-table td { padding: 11px 12px; }
+
+/* Optimizer gets a proper visual focal point instead of a settings column + table */
+.optimizer-page {
+  gap: 10px;
+}
+.optimizer-focus {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid rgba(212,45,70,.24);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 8% 50%, rgba(212,45,70,.14), transparent 18rem),
+    linear-gradient(100deg, #151117, #101419 55%);
+  overflow: hidden;
+}
+.optimizer-focus-target {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.optimizer-target-art {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 60px;
+  border: 1px solid rgba(212,45,70,.24);
+  border-radius: 13px;
+  background: rgba(5,7,9,.46);
+  box-shadow: inset 0 0 28px rgba(212,45,70,.07);
+}
+.optimizer-target-art img {
+  width: 49px;
+  height: 49px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,.3));
+}
+.optimizer-focus-target > span:last-child {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.optimizer-focus-target small {
+  color: #a96b77;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.optimizer-focus-target strong {
+  overflow: hidden;
+  font-size: 22px;
+  letter-spacing: -.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.optimizer-focus-target em {
+  color: #a3adb7;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.optimizer-focus-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(110px,1fr));
+  gap: 6px;
+}
+.optimizer-focus-metrics > div {
+  min-width: 112px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #2a3139;
+  border-radius: 10px;
+  background: rgba(7,9,11,.42);
+}
+.optimizer-focus-metrics svg {
+  width: 18px;
+  height: 18px;
+  color: #ff778b;
+}
+.optimizer-focus-metrics span { display: grid; gap: 1px; }
+.optimizer-focus-metrics small {
+  color: #78838e;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+.optimizer-focus-metrics b { font-size: 13px; }
+
+.objective-panel {
+  border-color: rgba(212,45,70,.17);
+  background:
+    linear-gradient(120deg, rgba(212,45,70,.035), transparent 34%),
+    linear-gradient(180deg, rgba(18,21,26,.98), rgba(14,17,21,.98));
+}
+.objective-primary .item-picker-trigger {
+  min-height: 58px;
+}
+.objective-primary .item-picker-trigger img {
+  width: 40px;
+  height: 40px;
+}
+.objective-primary .item-picker-trigger span { font-size: 16px; }
+
+.optimizer-rule-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.optimizer-rule-strip span {
+  padding: 6px 9px;
+  border: 1px solid #29313a;
+  border-radius: 999px;
+  background: #0c0f13;
+  color: #87919c;
+  font-size: 9.5px;
+}
+.optimizer-rule-strip b {
+  margin-right: 3px;
+  color: #ff788d;
+  font-size: 9px;
+}
+
+.result-overview-panel {
+  border-color: rgba(103,217,139,.13);
+  background:
+    linear-gradient(120deg, rgba(103,217,139,.035), transparent 32%),
+    linear-gradient(180deg, rgba(18,21,26,.98), rgba(14,17,21,.98));
+}
+.modern-kpis > div { min-height: 94px; }
+.modern-kpis small { font-size: 9px; }
+.modern-kpis strong { font-size: 22px; }
+
+/* Plot selector: one clear card, one clear map */
+.layout-top-grid {
+  grid-template-columns: minmax(0,1fr) 286px;
+}
+.plot-selector {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 9px;
+  padding: 11px;
+}
+.plot-selector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+.plot-selector-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plot-selector-title > svg {
+  width: 19px;
+  height: 19px;
+  color: #ff7489;
+}
+.plot-selector-title > span { display: grid; gap: 0; }
+.plot-selector-title small {
+  color: #74808b;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+.plot-selector-title b { font-size: 15px; }
+.plot-selector-summary {
+  display: grid;
+  gap: 0;
+  text-align: right;
+}
+.plot-selector-summary b { font-size: 14px; color: #9fe6b5; }
+.plot-selector-summary small { font-size: 7.5px; color: #68727d; }
+
+.plot-map-selector {
+  grid-template-columns: repeat(4, 46px);
+  grid-template-rows: repeat(4, 37px);
+  gap: 4px;
+  justify-self: center;
+}
+.plot-map-cell {
+  border-radius: 7px;
+}
+.plot-map-cell b { font-size: 11px; }
+.plot-map-cell small { font-size: 6.5px; right: 3px; bottom: 2px; }
+
+/* Counter-scale map text above fit zoom so fonts stay crisp instead of being magnified */
+.layout-item > span {
+  transform: scale(var(--map-label-counter-scale, 1));
+  transform-origin: center;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+.layout-plot > span {
+  transform: scale(var(--map-label-counter-scale, 1));
+  transform-origin: top left;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+.layout-item > span {
+  font-size: 8px;
+  font-weight: 800;
+}
+.layout-plot > span { font-size: 15px; }
+
+@media (max-width: 1220px) {
+  .optimizer-focus { flex-direction: column; }
+  .optimizer-focus-metrics { grid-template-columns: repeat(3,1fr); }
+  .layout-top-grid { grid-template-columns: 1fr; }
+  .plot-selector { grid-template-columns: auto 1fr; align-items: center; }
+  .plot-selector-head { display: grid; gap: 5px; }
+  .plot-selector-summary { text-align: left; }
+  .plot-map-selector { justify-self: end; }
+}
+
+@media (max-width: 760px) {
+  .optimizer-focus-metrics { grid-template-columns: 1fr; }
+  .setting-tile-grid { grid-template-columns: 1fr 1fr; }
+  .candidate-row { grid-template-columns: 34px 1fr 92px; }
+  .candidate-row > span:last-child { display: none; }
+  .plot-selector { grid-template-columns: 1fr; }
+  .plot-map-selector { justify-self: start; }
+}
