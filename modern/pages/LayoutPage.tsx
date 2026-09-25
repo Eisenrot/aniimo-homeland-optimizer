@@ -128,18 +128,15 @@ export default function LayoutPage({ state, plan, planRunning }: Props) {
     return { x, y, w: right - x, h: bottom - y }
   }, [layout, enabledRects, boardWidth, boardHeight])
 
-  const togglePlot = (number: number) => {
-    const next = new Set(settings.disabledPlots)
-    if (next.has(number)) next.delete(number)
-    else next.add(number)
-    update({ disabledPlots: [...next].sort((a, b) => a - b) })
-  }
-
   return (
     <div className="layout-page">
-      <div className="layout-top-grid">
-        <section className="layout-toolbar surface-card">
-          <div className="layout-controls">
+      <section className="layout-command-bar surface-card">
+        <div className="layout-command-summary">
+          <span>FULL BASE</span>
+          <b>{layout?.feasible ? `${layout.itemCount || layout.placements.length} structures · ${layout.usedPlots?.length || 0}/${enabledRects.length} plots` : running ? 'Arranging optimized layout…' : 'Layout needs attention'}</b>
+        </div>
+
+        <div className="layout-command-controls">
             <label>
               <span>Layout style</span>
               <select value={settings.shape} onChange={(event) => update({ shape: event.target.value as LayoutSettings['shape'] })}>
@@ -168,25 +165,23 @@ export default function LayoutPage({ state, plan, planRunning }: Props) {
               <input type="checkbox" checked={settings.allowRotate} onChange={(event) => update({ allowRotate: event.target.checked })} />
               <span><RotateCw aria-hidden="true" /> Rotate</span>
             </label>
-          </div>
+        </div>
 
-          <div className="layout-toolbar-status">
-            <span className={layout?.feasible ? 'status-badge' : 'status-badge danger'}>
-              {running ? 'Packing…' : layout?.feasible ? 'Placement found' : 'Needs attention'}
-            </span>
-            <button className="ui-button secondary" type="button" disabled={!plan || running || planRunning} onClick={() => void build(true)}>
-              <RefreshCw aria-hidden="true" /> Rebuild
-            </button>
-          </div>
-        </section>
-
-        <PlotSelector
-          unlocked={unlocked}
-          disabled={settings.disabledPlots}
-          used={layout?.usedPlots || []}
-          onToggle={togglePlot}
-        />
-      </div>
+        <div className="layout-command-actions">
+          <PlotSelector
+            unlocked={unlocked}
+            disabled={settings.disabledPlots}
+            used={layout?.usedPlots || []}
+            onApply={(disabledPlots) => update({ disabledPlots })}
+          />
+          <span className={layout?.feasible ? 'status-badge' : 'status-badge danger'}>
+            {running ? 'Packing…' : layout?.feasible ? 'Placement found' : 'Needs attention'}
+          </span>
+          <button className="ui-button secondary" type="button" disabled={!plan || running || planRunning} onClick={() => void build(true)}>
+            <RefreshCw aria-hidden="true" /> Rebuild
+          </button>
+        </div>
+      </section>
 
       <div className="layout-workspace">
         <section className="layout-canvas-card surface-card">

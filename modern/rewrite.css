@@ -714,3 +714,345 @@ body {
     transition:none !important;
   }
 }
+
+
+/* 2026-09-26: restore sane scale inside the half-width Plan column. */
+.rewrite-plan-workspace .setting-tile-grid {
+  grid-template-columns:repeat(6,minmax(0,1fr));
+}
+.rewrite-plan-workspace .setting-tile {
+  grid-column:span 2;
+  min-width:0;
+}
+.rewrite-plan-workspace .setting-tile:nth-child(4),
+.rewrite-plan-workspace .setting-tile:nth-child(5) {
+  grid-column:span 3;
+}
+
+/* Personality is metadata, but not microscopic metadata. */
+.personality-profile { min-width:122px !important; }
+.personality-letter {
+  width:25px !important;
+  height:25px !important;
+  flex-basis:25px !important;
+  font-size:10px !important;
+}
+.personality-code.compact .personality-letter {
+  width:21px !important;
+  height:21px !important;
+  flex-basis:21px !important;
+  font-size:9px !important;
+}
+
+/* Compact full-base command strip. */
+.layout-command-bar {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-height:66px;
+  padding:9px 10px !important;
+}
+.layout-command-summary {
+  min-width:150px;
+  display:grid;
+  gap:2px;
+  padding:2px 8px 2px 3px;
+  border-right:1px solid #252d36;
+}
+.layout-command-summary > span {
+  color:#ff7489;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.13em;
+}
+.layout-command-summary > b {
+  color:#b7c0c9;
+  font-size:10px;
+  font-weight:720;
+  white-space:nowrap;
+}
+.layout-command-controls {
+  min-width:0;
+  display:flex;
+  align-items:end;
+  gap:6px;
+  flex:1;
+}
+.layout-command-controls > label:not(.inline-toggle) {
+  display:grid;
+  gap:3px;
+}
+.layout-command-controls > label:not(.inline-toggle) > span {
+  color:#77828d;
+  font-size:8px;
+  font-weight:750;
+}
+.layout-command-controls select {
+  width:116px;
+  min-height:34px;
+}
+.layout-command-controls input[type="number"] {
+  width:72px;
+  min-height:34px;
+}
+.layout-command-controls .inline-toggle {
+  min-height:34px;
+  align-self:end;
+}
+.layout-command-actions {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  flex:0 0 auto;
+}
+.layout-command-actions .status-badge {
+  min-height:32px;
+}
+
+/* OG Plot management interaction, rebuilt as a modern dialog. */
+.plot-management-trigger {
+  min-width:174px;
+  min-height:44px;
+  display:grid;
+  grid-template-columns:36px minmax(0,1fr);
+  align-items:center;
+  gap:8px;
+  padding:4px 9px 4px 6px;
+  border:1px solid #34404b;
+  border-radius:9px;
+  background:linear-gradient(120deg,#111820,#0c1116);
+  color:#dce3e9;
+  text-align:left;
+  cursor:pointer;
+  transition:border-color 160ms ease,background 160ms ease,transform 160ms ease;
+}
+.plot-management-trigger:hover {
+  transform:translateY(-1px);
+  border-color:#667b90;
+  background:linear-gradient(120deg,#15202a,#0d1319);
+}
+.plot-management-trigger > img {
+  width:34px;
+  height:34px;
+  object-fit:contain;
+}
+.plot-management-trigger > span {
+  min-width:0;
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:0 7px;
+  align-items:baseline;
+}
+.plot-management-trigger small {
+  grid-column:1/-1;
+  color:#697785;
+  font-size:7px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.plot-management-trigger b {
+  overflow:hidden;
+  color:#dce3e9;
+  font-size:10px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.plot-management-trigger em {
+  color:#7ed9a0;
+  font-size:7.5px;
+  font-style:normal;
+  white-space:nowrap;
+}
+
+.plot-management-dialog {
+  grid-row:2;
+  width:min(560px,calc(100vw - 32px));
+  max-height:calc(100vh - 44px);
+  overflow:auto;
+  pointer-events:auto;
+  border:1px solid #35414d;
+  border-radius:17px;
+  background:
+    radial-gradient(circle at 8% 0,rgba(212,45,70,.07),transparent 18rem),
+    linear-gradient(155deg,#11171d,#090c0f 62%);
+  box-shadow:0 30px 90px rgba(0,0,0,.68);
+  outline:none;
+  transform-origin:center;
+  transition:opacity 200ms ease,transform 200ms ease;
+}
+.plot-management-dialog[data-starting-style],
+.plot-management-dialog[data-ending-style] {
+  opacity:0;
+  transform:scale(.975);
+}
+.plot-management-dialog-head {
+  display:grid;
+  grid-template-columns:58px minmax(0,1fr) 34px;
+  align-items:center;
+  gap:12px;
+  padding:16px 16px 12px;
+  border-bottom:1px solid #252d35;
+}
+.plot-management-dialog-head > img {
+  width:54px;
+  height:54px;
+  object-fit:contain;
+}
+.plot-management-dialog-head > div {
+  min-width:0;
+  display:grid;
+  gap:2px;
+}
+.plot-management-dialog-head > div > span {
+  color:#7a8fa3;
+  font-size:8px;
+  font-weight:850;
+  letter-spacing:.14em;
+}
+.plot-management-dialog-head [data-slot="dialog-title"],
+.plot-management-dialog-head h2 {
+  margin:0;
+  font-size:18px;
+}
+.plot-management-dialog-head [data-slot="dialog-description"],
+.plot-management-dialog-head p {
+  margin:0;
+  color:#7c8792;
+  font-size:9px;
+  line-height:1.4;
+}
+
+.plot-management-summary {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin:12px 16px 0;
+  padding:8px 10px;
+  border:1px solid #28313a;
+  border-radius:9px;
+  background:#0b1014;
+}
+.plot-management-summary > svg {
+  width:18px;
+  height:18px;
+  color:#ff758b;
+}
+.plot-management-summary > span {
+  display:flex;
+  align-items:baseline;
+  gap:4px;
+}
+.plot-management-summary b { font-size:13px; }
+.plot-management-summary small { color:#74808b;font-size:8px; }
+.plot-management-summary > i {
+  width:1px;
+  height:20px;
+  background:#28313a;
+}
+
+.plot-management-grid {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+  padding:12px 16px;
+}
+.plot-management-cell {
+  position:relative;
+  aspect-ratio:1.33;
+  min-height:82px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:3px;
+  border:1px solid #35414d;
+  border-radius:9px;
+  background:#0c1217;
+  color:#d6dee5;
+  cursor:pointer;
+  transition:border-color 140ms ease,background 140ms ease,transform 140ms ease;
+}
+.plot-management-cell:hover:not(:disabled) {
+  transform:translateY(-1px);
+}
+.plot-management-cell.enabled {
+  border-color:#3e8060;
+  background:linear-gradient(145deg,rgba(69,159,104,.15),#0c1217 70%);
+}
+.plot-management-cell.disabled {
+  border-color:#69404a;
+  background:linear-gradient(145deg,rgba(175,62,83,.12),#0c1217 70%);
+}
+.plot-management-cell.locked {
+  opacity:.3;
+  cursor:not-allowed;
+  filter:saturate(.45);
+  border-style:dashed;
+}
+.plot-management-number {
+  min-height:28px;
+  display:grid;
+  place-items:center;
+  font-size:20px;
+  font-weight:900;
+}
+.plot-management-number svg { width:16px;height:16px; }
+.plot-management-state {
+  color:#77818b;
+  font-size:7px;
+  font-weight:850;
+  letter-spacing:.09em;
+}
+.plot-management-cell.enabled .plot-management-state { color:#77d99a; }
+.plot-management-cell.disabled .plot-management-state { color:#cf7887; }
+.plot-management-cell > em {
+  position:absolute;
+  right:6px;
+  bottom:5px;
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  color:#ff7a8f;
+  font-size:6px;
+  font-style:normal;
+  font-weight:850;
+}
+.plot-management-cell > em svg { width:8px;height:8px; }
+.plot-management-help {
+  margin:0 16px;
+  color:#6f7b86;
+  font-size:8.5px;
+  line-height:1.5;
+}
+.plot-management-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:7px;
+  padding:12px 16px 15px;
+}
+
+@media (max-width:1120px) {
+  .layout-command-bar { flex-wrap:wrap; }
+  .layout-command-controls { order:3; flex-basis:100%; }
+  .layout-command-actions { margin-left:auto; }
+}
+
+@media (max-width:760px) {
+  .rewrite-plan-workspace .setting-tile-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .rewrite-plan-workspace .setting-tile,
+  .rewrite-plan-workspace .setting-tile:nth-child(4),
+  .rewrite-plan-workspace .setting-tile:nth-child(5) {
+    grid-column:span 1;
+  }
+  .layout-command-summary { flex:1; }
+  .layout-command-actions { width:100%;justify-content:flex-start;flex-wrap:wrap; }
+  .layout-command-controls { flex-wrap:wrap; }
+  .plot-management-trigger { min-width:170px; }
+}
+
+@media (max-width:560px) {
+  .rewrite-plan-workspace .setting-tile-grid { grid-template-columns:1fr; }
+  .plot-management-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
