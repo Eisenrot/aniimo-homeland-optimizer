@@ -100,15 +100,13 @@ const inventoryPlan={scenario:{},rows:[
   {facility:'woodland',units:1,perHour:100,recipe:{id:8802,outputs:[{item:4001032,qty:8}]}}
 ]};
 const inventoryItems=planPhysicalItems(inventoryPlan,inventoryState,DATA,{storageUnits:0});
-if(inventoryItems.filter(x=>x.facility==='farmland').length!==3)throw new Error('full layout must include idle configured Farmlands');
-if(inventoryItems.filter(x=>x.facility==='woodland').length!==2)throw new Error('full layout must include idle configured Woodlands');
-if(inventoryItems.filter(x=>x.facility==='nimbus-bed').length!==1||inventoryItems.filter(x=>x.facility==='bouncy-brew-keg').length!==1)throw new Error('full layout must include configured idle facilities with no active recipe');
-if(inventoryItems.filter(x=>x.kind==='idle').length!==5)throw new Error(`expected 5 idle physical structures, got ${inventoryItems.filter(x=>x.kind==='idle').length}`);
+if(inventoryItems.filter(x=>x.facility==='farmland').length!==1)throw new Error('plan-following layout should place only the active Farmland count');
+if(inventoryItems.filter(x=>x.facility==='woodland').length!==1)throw new Error('plan-following layout should place only the active Woodland count');
+if(inventoryItems.some(x=>x.facility==='nimbus-bed'||x.facility==='bouncy-brew-keg'||x.kind==='idle'))throw new Error('unused configured facilities must stay off the plan-following layout');
 const inventoryBuilt=buildFullBaseLayout(inventoryPlan,inventoryState,DATA,{compact:true,shape:'auto',allowRotate:true,storageUnits:0,disabledPlots:[]});
-if(!inventoryBuilt.feasible)throw new Error('configured-inventory layout should fit: '+inventoryBuilt.reason);
-if(inventoryBuilt.placements.length!==inventoryItems.length)throw new Error('configured idle structures were lost during packing');
-console.log('configured full Homeland inventory OK',{total:inventoryItems.length,idle:inventoryItems.filter(x=>x.kind==='idle').length});
-
+if(!inventoryBuilt.feasible)throw new Error('plan-following layout should fit: '+inventoryBuilt.reason);
+if(inventoryBuilt.placements.length!==inventoryItems.length)throw new Error('plan-following structures were lost during packing');
+console.log('plan-following physical layout OK',{total:inventoryItems.length});
 
 const denseClimateState={
   homelandLevel:10,oneRecipePerFacility:true,

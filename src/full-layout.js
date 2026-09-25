@@ -1,7 +1,7 @@
 import {productionPlacementCounts} from './climate.js';
 import {stableStringify} from './plan-cache.js';
 
-export const FULL_LAYOUT_VERSION=6;
+export const FULL_LAYOUT_VERSION=7;
 export const FULL_LAYOUT_STORE='aniimoOptimizerFullLayoutV1';
 export const LAYOUT_SETTINGS_STORE='aniimoOptimizerLayoutSettingsV1';
 export const PLOT_WIDTH=20;
@@ -56,36 +56,22 @@ function genericPlacementCounts(facility,rows,state,data){
   return counts;
 }
 
-function configuredFacilityCount(state,slug){
-  const cfg=state.facilities?.[slug];if(!cfg)return 0;
-  if(Array.isArray(cfg.stacks))return cfg.stacks.reduce((sum,x)=>sum+Math.max(0,Number(x.count||0)),0);
-  return Math.max(0,Number(cfg.count||0));
-}
 export function planPhysicalItems(plan,state,data,settings={}){
-  const rows=[...(plan?.rows||[])],byFacility=new Map(),items=[],plannedCounts=new Map();
+  const rows=[...(plan?.rows||[])],byFacility=new Map(),items=[];
   for(const row of rows){if(!byFacility.has(row.facility))byFacility.set(row.facility,[]);byFacility.get(row.facility).push(row);}
   for(const[facility,facilityRows]of byFacility){
     const fac=data.facilities.find(f=>f.slug===facility);if(!fac?.footprint)continue;
     const counts=genericPlacementCounts(facility,facilityRows,state,data);
     for(const[row,count]of counts){
-      const output=row.recipe?.outputs?.[0]?.item??null,n=Math.max(0,Number(count||0));plannedCounts.set(facility,(plannedCounts.get(facility)||0)+n);
+      const output=row.recipe?.outputs?.[0]?.item??null,n=Math.max(0,Number(count||0));
       for(let copy=1;copy<=n;copy++)items.push({
         id:`${facility}:${row.recipe?.id??'job'}:${copy}`,facility,name:fac.name||facility,kind:'plan',recipeId:row.recipe?.id??null,
         outputItem:output,env:row.recipe?.env||null,w:Number(fac.footprint.w),h:Number(fac.footprint.h),canRotate:fac.canRotate!==false,copy
       });
     }
   }
-  // "Full Homeland" means the configured physical Homeland, not only the subset
-  // earning coins this instant. Add every owned/configured non-utility copy that
-  // the production plan left idle so packing remains physically honest.
-  for(const fac of data.facilities||[]){
-    if(fac.kind==='utility'||!fac?.footprint)continue;
-    const configured=configuredFacilityCount(state,fac.slug),planned=Number(plannedCounts.get(fac.slug)||0),idle=Math.max(0,Math.round(configured-planned));
-    for(let copy=1;copy<=idle;copy++)items.push({
-      id:`idle:${fac.slug}:${copy}`,facility:fac.slug,name:fac.name||fac.slug,kind:'idle',recipeId:null,
-      outputItem:null,env:null,w:Number(fac.footprint.w),h:Number(fac.footprint.h),canRotate:fac.canRotate!==false,copy
-    });
-  }
+  // The layout follows the chosen production plan. Unused configured facilities
+  // stay off-map; only utilities needed by the chosen scenario are added.
   const scenario=plan?.scenario||{},addUtility=slug=>{const fac=data.facilities.find(f=>f.slug===slug);if(fac?.footprint)items.push({id:`utility:${slug}`,facility:slug,name:fac.name||slug,kind:'utility',outputItem:null,env:null,w:Number(fac.footprint.w),h:Number(fac.footprint.h),canRotate:fac.canRotate!==false,copy:1});};
   if(scenario.cooling)addUtility('cooling-unit');if(scenario.heat)addUtility('heat-furnace');if(scenario.sunlamp)addUtility('sunlamp');
   if(scenario.generator)items.push({id:'utility:crackle-generator',facility:'crackle-generator',name:'Crackle Generator',kind:'utility',outputItem:null,env:null,w:1,h:1,canRotate:false,copy:1,icon:'https://aniipedia.com/items/10400021.webp'});

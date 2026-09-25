@@ -565,7 +565,7 @@ async function renderClimateLayout({forceLayout=false,reuseLayout=false}={}){
   const serial=++layoutComputeSerial;activeLayoutSolve?.cancel?.();activeLayoutSolve=null;
   if(!forceLayout){const cached=currentFullLayout||cachedFullLayout();if(cached){paintFullLayout(host,cached,climate);return;}}
   const settings=currentLayoutSettings(),planSnapshot=clone(currentPlan),stateSnapshot=clone(effectivePlanState());
-  host.innerHTML=title('Layout','packing full base…')+`<div class="full-layout-loading"><span class="loader"></span><div><b>Arranging the full Homeland</b><small>Climate clusters first, then every configured structure, including idle copies. You can keep using the rest of the page while this runs.</small></div></div>`;
+  host.innerHTML=title('Layout','packing full base…')+`<div class="full-layout-loading"><span class="loader"></span><div><b>Arranging the optimized plan</b><small>Climate clusters first, then only the structures used by the current plan, plus required utilities and selected Storage Units. You can keep using the rest of the page while this runs.</small></div></div>`;
   const solve=startFullLayoutSolve(planSnapshot,stateSnapshot,settings);activeLayoutSolve=solve;
   try{
     const result=await solve.promise;if(serial!==layoutComputeSerial)return;currentFullLayout=result;writeFullLayoutCache(localStorage,currentPlan,effectivePlanState(),currentLayoutSettings(),BUILD_ID,currentFullLayout);paintFullLayout(host,currentFullLayout,climate);
