@@ -20,11 +20,17 @@ type Props = {
 export default function ResultsPanel({ plan, progress, running, error }: Props) {
   const stats = plan?.optimizerStats
   const pct = Math.max(0, Math.min(100, Number(progress?.progress || (running ? 0 : 1)) * 100))
+  const rows = [...(plan?.rows || [])].sort((a, b) => b.perHour - a.perHour)
+  const engine = stats?.engine === 'cache'
+    ? 'EXACT CACHE'
+    : stats?.engine === 'main'
+      ? 'MAIN THREAD'
+      : 'WORKER SOLVE'
 
   return (
     <>
       <section className="panel">
-        <div className="section-title"><span /><h3>Best plan</h3><i /><em className="micro">LEGACY ENGINE · MODERN SHELL</em></div>
+        <div className="section-title"><span /><h3>Best plan</h3><i /><em className="micro">{engine}</em></div>
 
         {running && (
           <div className="modern-progress">
@@ -45,7 +51,7 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
               <div><small>Home Coin / h</small><strong>{fmt(plan.ratePerHour)}</strong></div>
               <div><small>Target / h</small><strong>{fmt(plan.targetRate)}</strong></div>
               <div><small>Objective</small><strong>{fmt(plan.objectiveRate, 3)}</strong></div>
-              <div><small>Solve time</small><strong>{fmt((stats?.elapsedMs || 0) / 1000, 2)}s</strong></div>
+              <div><small>Solve time</small><strong>{stats?.engine === 'cache' ? 'cached' : `${fmt((stats?.elapsedMs || 0) / 1000, 2)}s`}</strong></div>
             </div>
             <div className="micro modern-stats">
               {stats?.candidatePlans || 0} candidate plans · {stats?.climateOffsets || 0} geometry checks · {plan.scenarioLabel || 'No utility scenario'}
@@ -55,21 +61,21 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
       </section>
 
       <section className="panel">
-        <div className="section-title"><span /><h3>Production rows</h3><i /></div>
-        {!plan?.rows?.length ? (
+        <div className="section-title"><span /><h3>Production rows</h3><i /><em>{rows.length ? `${rows.length} ACTIVE` : ''}</em></div>
+        {!rows.length ? (
           <div className="empty">{running ? 'Solver is working…' : 'No active production rows yet.'}</div>
         ) : (
           <div className="modern-table-wrap">
             <table className="modern-table">
-              <thead><tr><th>Facility</th><th>Output</th><th>Batches / h</th><th>Facility use</th><th>Coin / h</th></tr></thead>
+              <thead><tr><th>Facility</th><th>Output</th><th>Batches / h</th><th>Facility use</th><th className="numeric">Coin / h</th></tr></thead>
               <tbody>
-                {plan.rows.map((row) => (
+                {rows.map((row) => (
                   <tr key={`${row.facility}:${row.recipe.id}`}>
-                    <td>{DATA.facilities.find((facility) => facility.slug === row.facility)?.name || row.facility}</td>
+                    <td><b>{DATA.facilities.find((facility) => facility.slug === row.facility)?.name || row.facility}</b></td>
                     <td>{outputName(row)}</td>
                     <td>{fmt(row.batchesPerHour, 2)}</td>
                     <td>{fmt(row.units, 2)}</td>
-                    <td>{fmt(row.perHour)}</td>
+                    <td className="numeric">{fmt(row.perHour)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -80,7 +86,12 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
 
       {plan?.climateLayout && (
         <section className="panel">
-          <div className="section-title"><span /><h3>Climate geometry</h3><i /></div>
+          <div className="section-title">
+            <span />
+            <h3>Climate geometry</h3>
+            <i />
+            <em>{plan.climateLayout.feasible === false ? 'BLOCKED' : 'PHYSICAL OK'}</em>
+          </div>
           <p className={plan.climateLayout.feasible === false ? 'modern-error' : 'micro'}>
             {plan.climateLayout.message || plan.climateLayout.status || 'No climate-sensitive production.'}
           </p>
