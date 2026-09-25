@@ -55,6 +55,7 @@ export type Facility = {
   categoryName?: string
   category?: number
   icon?: string
+  plotGlyph?: string
   homeLevel?: Record<string, number>
 }
 
@@ -240,6 +241,7 @@ export type LayoutPlacement = {
   w: number
   h: number
   rotated?: boolean
+  icon?: string
 }
 
 export type LayoutField = {
