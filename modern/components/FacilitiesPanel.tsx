@@ -1,3 +1,4 @@
+import { facilityAsset } from '../lib/presentation'
 import { DATA } from '../state'
 import type { FacilityConfig, OptimizerState } from '../types'
 
@@ -56,12 +57,19 @@ export default function FacilitiesPanel({ state, patch }: Props) {
 
           return (
             <div className="modern-facility-row" key={facility.slug}>
-              <div>
-                <b>{facility.name}</b>
-                <small>
-                  {facility.categoryName || facility.kind} · max Lv.{facility.maxLevel}
-                  {config.mixed ? ' · mixed-level stack' : ''}
-                </small>
+              <div className="facility-identity">
+                <span className="facility-icon">
+                  {facility.icon
+                    ? <img src={facilityAsset(facility)} alt="" />
+                    : <b>{facility.name.slice(0, 1)}</b>}
+                </span>
+                <span>
+                  <b>{facility.name}</b>
+                  <small>
+                    {facility.categoryName || facility.kind} · max Lv.{facility.maxLevel}
+                    {config.mixed ? ' · mixed-level stack' : ''}
+                  </small>
+                </span>
               </div>
               <label>
                 <span>Copies</span>
