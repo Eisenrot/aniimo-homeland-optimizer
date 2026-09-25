@@ -1,6 +1,6 @@
 import {GAME_DATA as DATA} from './src/data.js';
 import {DEFAULT_STATE} from './src/defaults.js';
-import {optimizePlan,buildTeamModel,findBestTeams,optimizePersonalities,antiStallSummary,staffingCoverageMatch,utilityTasksForScenario,assignUtilityWorkers} from './src/optimizer.js';
+import {optimizePlan,oneRecipeOptimize,buildTeamModel,findBestTeams,optimizePersonalities,antiStallSummary,staffingCoverageMatch,utilityTasksForScenario,assignUtilityWorkers} from './src/optimizer.js';
 const state=structuredClone(DEFAULT_STATE);state.owned={};for(const p of DATA.pals)state.owned[String(p.id)]={enabled:true,count:1};state.teamSlots=9;
 const plan=optimizePlan(state,DATA),model=buildTeamModel(plan,state,DATA);
 const teams=await findBestTeams(model,state,DATA,{limit:1,onProgress:()=>{}});
@@ -153,3 +153,38 @@ if(!altTeams.length)throw new Error('one-recipe recipe-set exploration returned 
 if(!altTeams[0].eval.rows.some(r=>r.recipe.id===altRecipeB.id))throw new Error('real-team pass stayed trapped in the generic one-recipe selection');
 if(!(altTeams[0].eval.rate>200))throw new Error(`real-team alternate recipe speed was not captured: ${altTeams[0].eval.rate}`);
 console.log('one-recipe real-team recipe-set exploration OK',{baseline:altPlan.ratePerHour,real:altTeams[0].eval.rate,recipe:altTeams[0].eval.rows[0]?.recipe?.id});
+
+
+const bridgeAOld={id:9950001,facility:'bridge-a',level:1,inputs:[],outputs:[{item:9950101,qty:1}],growSeconds:3600};
+const bridgeANew={id:9950002,facility:'bridge-a',level:1,inputs:[],outputs:[{item:9950102,qty:1}],growSeconds:3600};
+const bridgeBOld={id:9950003,facility:'bridge-b',level:1,inputs:[{item:9950101,qty:1}],outputs:[{item:9950201,qty:1}],growSeconds:3600};
+const bridgeBNew={id:9950004,facility:'bridge-b',level:1,inputs:[{item:9950102,qty:1}],outputs:[{item:9950202,qty:1}],growSeconds:3600};
+const bridgeData={
+  items:{
+    '9950101':{name:'Old Intermediate',value:0},'9950102':{name:'New Intermediate',value:0},
+    '9950201':{name:'Old Prize',value:100},'9950202':{name:'New Prize',value:180}
+  },
+  facilities:[
+    {slug:'bridge-a',name:'Bridge A',kind:'production',outputLimit:{1:99}},
+    {slug:'bridge-b',name:'Bridge B',kind:'production',outputLimit:{1:99}}
+  ],
+  recipes:[bridgeAOld,bridgeANew,bridgeBOld,bridgeBNew],pals:[],abilities:{}
+};
+const bridgeState={
+  workerSlots:99,teamSlots:1,target:'coin',guarantees:[],oneRecipePerFacility:true,manualSpeeds:false,hungry:false,collectHours:0,
+  facilities:{'bridge-a':{count:1,level:1},'bridge-b':{count:1,level:1}},modules:{},speeds:{},recipeNotes:{}
+};
+const bridgeMixed={
+  scenario:{},scenarioLabel:'No utility building used',objectiveWeights:[{key:'primary',item:'coin',label:'Home Coin',scale:1,normalizer:1,max:null}],
+  runnableRecipes:[bridgeAOld,bridgeANew,bridgeBOld,bridgeBNew],
+  rows:[
+    {facility:'bridge-a',recipe:bridgeAOld,batchesPerHour:1,units:1,perHour:0,targetPerHour:0,cycleSeconds:3600},
+    {facility:'bridge-b',recipe:bridgeBOld,batchesPerHour:1,units:1,perHour:100,targetPerHour:100,cycleSeconds:3600}
+  ],
+  ratePerHour:100,targetRate:100,objectiveRate:100,utilityWorkers:0
+};
+const bridgeLocal=oneRecipeOptimize(bridgeState,bridgeData,{},bridgeMixed,[],40,0);
+if(bridgeLocal.rows.some(r=>r.recipe.id===bridgeANew.id||r.recipe.id===bridgeBNew.id))throw new Error('single-swap fixture unexpectedly escaped its intended local optimum');
+const bridgeSolved=oneRecipeOptimize(bridgeState,bridgeData,{},bridgeMixed,[],40,160);
+if(!(bridgeSolved.ratePerHour>150)||!bridgeSolved.rows.some(r=>r.recipe.id===bridgeANew.id)||!bridgeSolved.rows.some(r=>r.recipe.id===bridgeBNew.id))throw new Error(`two-swap bridge failed to cross the recipe valley: ${bridgeSolved.ratePerHour}`);
+console.log('two-swap one-recipe bridge OK',{local:bridgeLocal.ratePerHour,bridged:bridgeSolved.ratePerHour});

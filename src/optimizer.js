@@ -200,7 +200,7 @@ function rawOptimize(state,data,scenario,allowRecipes=null,forcedWeights=null,cl
   recipes.forEach((recipe,i)=>{const batches=Math.max(0,Number(solved.x[i]||0));if(batches<=1e-8)return;const parts=cycleParts(recipe,state,scenario),units=batches*parts.cycle/3600,coinPart=recipeNetValue(recipe,data)*batches,targetPart=state.target&&state.target!=='coin'?recipeNetItem(recipe,state.target)*batches:coinPart;coin+=coinPart;target+=targetPart;obj+=objective[i]*batches;rows.push({facility:recipe.facility,recipe,batchesPerHour:batches,units,perHour:coinPart,targetPerHour:targetPart,cycleSeconds:parts.cycle,manualSeconds:parts.manual,netValue:recipeNetValue(recipe,data)});});
   return{ratePerHour:coin,targetRate:target,objectiveRate:obj,rows,runnableRecipes:recipes,scenario,scenarioLabel:scenarioLabel(scenario),utilityWorkers:utilityWorkerCount(scenario),infeasible:false,objectiveWeights,jointMinShare:joint?.jointMinShare??null};
 }
-function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[],localBudget=900){
+export function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[],localBudget=900,bridgeBudget=0){
   const byFacility=new Map();
   for(const r of mixed.runnableRecipes){const arr=byFacility.get(r.facility)||[];arr.push(r);byFacility.set(r.facility,arr);}
   const constrained=new Map(),alwaysAllowed=[];
@@ -277,24 +277,67 @@ function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[],localBudget=
     for(const item of items){const next=injectItem(cur.sel,cur.locked,item);if(!next)return null;cur=next;}
     return cur.sel;
   }
+  function applySwap(sel,move){
+    const next=cloneSelection(sel),ids=new Set(next.get(move.facility)||[]);
+    if(!ids.has(move.outId)||ids.has(move.inId))return null;
+    ids.delete(move.outId);ids.add(move.inId);next.set(move.facility,ids);return next;
+  }
+  function swapMoves(sel){
+    const out=[];
+    for(const [facility,cfg] of constrained){
+      const current=new Set(sel.get(facility)||[]);
+      for(const outId of current)for(const inId of cfg.ids)if(!current.has(inId))out.push({facility,outId,inId});
+    }
+    return out;
+  }
   function localSearch(seed,budget=localBudget){
     let sel=cloneSelection(seed),best=solveSelected(sel),left=budget;
     for(let pass=0;pass<5;pass++){
       let improved=false;
-      for(const [facility,cfg] of constrained){
-        let current=new Set(sel.get(facility)||[]);
-        for(const outId of [...current]){
-          for(const inId of cfg.ids){
-            if(current.has(inId)||left--<=0)continue;
-            const testSel=cloneSelection(sel),next=new Set(current);next.delete(outId);next.add(inId);testSel.set(facility,next);
-            const test=solveSelected(testSel);
-            if(planBeats(test,best)){best=test;sel=testSel;current=next;improved=true;break;}
-          }
-          if(left<=0)break;
-        }
-        if(left<=0)break;
+      for(const move of swapMoves(sel)){
+        if(left--<=0)break;
+        const testSel=applySwap(sel,move);if(!testSel)continue;
+        const test=solveSelected(testSel);
+        if(planBeats(test,best)){best=test;sel=testSel;improved=true;break;}
       }
       if(!improved||left<=0)break;
+    }
+    return{plan:best,sel};
+  }
+  function bridgeSearch(seed,bestPlan,budget){
+    if(budget<=0)return{plan:bestPlan,sel:cloneSelection(seed)};
+    const all=swapMoves(seed),byFacility=new Map(),potential=move=>{
+      const inR=recipeById.get(move.inId),outR=recipeById.get(move.outId);
+      return objectiveRecipeScore(inR)-objectiveRecipeScore(outR)+(recipeGrossValue(inR,data)-recipeGrossValue(outR,data))*1e-9;
+    };
+    for(const move of all){const arr=byFacility.get(move.facility)||[];arr.push(move);byFacility.set(move.facility,arr);}
+    for(const arr of byFacility.values())arr.sort((a,b)=>potential(b)-potential(a)||Number(a.inId)-Number(b.inId)||Number(a.outId)-Number(b.outId));
+    const ordered=[],groups=[...byFacility.values()],firstCap=Math.min(all.length,Math.max(12,Math.floor(budget*.45)));
+    for(let rank=0;ordered.length<firstCap;rank++){
+      let added=false;
+      for(const arr of groups)if(arr[rank]){ordered.push(arr[rank]);added=true;if(ordered.length>=firstCap)break;}
+      if(!added)break;
+    }
+    const singles=[];let left=budget;
+    for(const move of ordered){
+      if(left--<=0)break;
+      const sel=applySwap(seed,move);if(!sel)continue;
+      singles.push({move,sel,plan:solveSelected(sel)});
+    }
+    const keep=[];
+    for(const facility of byFacility.keys()){
+      const group=singles.filter(x=>x.move.facility===facility).sort((a,b)=>planBeats(a.plan,b.plan)?-1:planBeats(b.plan,a.plan)?1:0);
+      keep.push(...group.slice(0,3));
+    }
+    const rankPlan=p=>Number.isFinite(Number(p?.jointMinShare))?Number(p.jointMinShare)*1e9+Number(p.objectiveRate||0):Number(p?.objectiveRate||0);
+    const pairs=[];
+    for(let i=0;i<keep.length;i++)for(let j=i+1;j<keep.length;j++)if(keep[i].move.facility!==keep[j].move.facility)pairs.push([keep[i],keep[j]]);
+    pairs.sort((a,b)=>(rankPlan(b[0].plan)+rankPlan(b[1].plan))-(rankPlan(a[0].plan)+rankPlan(a[1].plan)));
+    let best={plan:bestPlan,sel:cloneSelection(seed)};
+    for(const [a,b] of pairs){
+      if(left--<=0)break;
+      const first=applySwap(seed,a.move),second=first&&applySwap(first,b.move);if(!second)continue;
+      const plan=solveSelected(second);if(planBeats(plan,best.plan))best={plan,sel:second};
     }
     return best;
   }
@@ -305,8 +348,12 @@ function oneRecipeOptimize(state,data,scenario,mixed,climateCaps=[],localBudget=
     if(objectiveItems.length)for(let off=0;off<Math.min(4,objectiveItems.length);off++){const order=[...objectiveItems.slice(off),...objectiveItems.slice(0,off)],s=objectiveSeed(base,order);if(s)seeds.push(s);}
   }
   const unique=new Map(seeds.map(s=>[selectionKey(s),s]));let best=null;
-  for(const seed of unique.values()){const test=localSearch(seed);if(planBeats(test,best))best=test;}
-  return best||mixed;
+  for(const seed of unique.values()){const test=localSearch(seed);if(!best||planBeats(test.plan,best.plan))best=test;}
+  if(best&&bridgeBudget>0){
+    const bridged=bridgeSearch(best.sel,best.plan,bridgeBudget);
+    if(planBeats(bridged.plan,best.plan))best=localSearch(bridged.sel,Math.min(160,Math.max(40,localBudget)));
+  }
+  return best?.plan||mixed;
 }
 
 function scenarios(state){
@@ -645,7 +692,7 @@ function exploreOneRecipeTeam(model,team,budget=80){
   const optimistic=optimisticTeamRecipeState(model,team);if(!optimistic)return null;
   let mixed=rawOptimize(optimistic,model.data,model.scenario,null,model.plan.objectiveWeights,[]);
   if(mixed.infeasible)return null;
-  const alt=oneRecipeOptimize(optimistic,model.data,model.scenario,mixed,[],budget);
+  const alt=oneRecipeOptimize(optimistic,model.data,model.scenario,mixed,[],Math.max(120,budget),420);
   if(!alt||alt.infeasible)return null;
   // Exact evaluation deliberately returns to the real unmodified state. The
   // optimistic speeds above are only a search lantern, never final accounting.
