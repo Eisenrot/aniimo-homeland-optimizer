@@ -57,3 +57,30 @@ The optimizer is a local compute application. SSR, Server Components and route h
 ## HiGHS
 
 `highs@1.15.3` is included now so the solver migration can happen behind the engine boundary without another application rewrite. The first milestone deliberately does not use it for production results yet.
+
+## First LP backend benchmark
+
+GitHub Actions Ubuntu runner, full `optimizePlan()` path, identical state/data, only LP backend swapped:
+
+| Scenario | JS simplex | HiGHS WASM | HiGHS / JS |
+| --- | ---: | ---: | ---: |
+| default coin | 14.1 ms | 56.6 ms | 4.02x |
+| all climate options | 86.5 ms | 65.3 ms | 0.75x |
+| material target | 1.7 ms | 3.3 ms | 1.92x |
+| joint MAX | 7.1 ms | 14.3 ms | 2.02x |
+
+All four scenarios passed numerical parity.
+
+The result argues against blindly replacing the custom simplex. The next compute experiment should be hybrid:
+
+- retain the JS simplex for small cheap LPs;
+- investigate persistent HiGHS models / warm starts for repeated related solves;
+- test HiGHS where climate branching makes the LP workload large enough to amortize Wasm/model setup;
+- investigate a HiGHS MIP formulation for one-recipe-per-facility rather than repeatedly enumerating recipe subsets;
+- parallelise independent scenario work with a persistent Worker pool.
+
+The benchmark remains available as:
+
+```bash
+npm run benchmark:lp
+```
