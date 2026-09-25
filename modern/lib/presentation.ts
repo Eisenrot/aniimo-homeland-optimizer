@@ -2,10 +2,14 @@ import type { Facility, Pal } from '../types'
 
 const HIDEOUT = 'https://www.hideoutgacha.com'
 
+export function assetUrl(path?: string | null) {
+  const value = path || ''
+  if (!value) return ''
+  return value.startsWith('http') ? value : `${HIDEOUT}${value}`
+}
+
 export function facilityAsset(facility?: Pick<Facility, 'icon'> | null) {
-  const icon = facility?.icon || ''
-  if (!icon) return ''
-  return icon.startsWith('http') ? icon : `${HIDEOUT}${icon}`
+  return assetUrl(facility?.icon)
 }
 
 export function palHeadKey(pal: Pal) {
