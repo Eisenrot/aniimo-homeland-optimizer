@@ -108,3 +108,27 @@ const inventoryBuilt=buildFullBaseLayout(inventoryPlan,inventoryState,DATA,{comp
 if(!inventoryBuilt.feasible)throw new Error('configured-inventory layout should fit: '+inventoryBuilt.reason);
 if(inventoryBuilt.placements.length!==inventoryItems.length)throw new Error('configured idle structures were lost during packing');
 console.log('configured full Homeland inventory OK',{total:inventoryItems.length,idle:inventoryItems.filter(x=>x.kind==='idle').length});
+
+
+const denseClimateState={
+  homelandLevel:10,oneRecipePerFacility:true,
+  facilities:{farmland:{count:11,level:5},woodland:{count:8,level:3}},
+  climateOptions:{cooling:true,heat:true,sunlamp:false}
+};
+const denseClimatePlan={
+  scenario:{cooling:'Cool',heat:'Scorching',sunlamp:false,generator:false},
+  rows:[
+    {facility:'farmland',units:6,perHour:100,recipe:{id:8951,env:'Cool',outputs:[{item:4001005,qty:8}]}},
+    {facility:'farmland',units:5,perHour:90,recipe:{id:8952,env:'Scorching',outputs:[{item:4001001,qty:6}]}},
+    {facility:'woodland',units:8,perHour:80,recipe:{id:8953,env:'Cool',outputs:[{item:4001032,qty:8}]}}
+  ]
+};
+denseClimatePlan.climateLayout=evaluateClimateLayout(denseClimatePlan,denseClimateState,DATA);
+if(!denseClimatePlan.climateLayout.feasible||denseClimatePlan.climateLayout.status!=='separate')throw new Error('dense Cool + Scorching fixture should use separate direct zones');
+const denseItems=planPhysicalItems(denseClimatePlan,denseClimateState,DATA,{storageUnits:0});
+const denseBuilt=buildFullBaseLayout(denseClimatePlan,denseClimateState,DATA,{compact:true,shape:'auto',allowRotate:true,storageUnits:0,disabledPlots:[]});
+if(!denseBuilt.feasible)throw new Error('dense direct climate layout should fit at RV10: '+denseBuilt.reason);
+if(denseBuilt.placements.length!==denseItems.length)throw new Error(`dense direct climate layout lost structures: ${denseBuilt.placements.length}/${denseItems.length}`);
+const denseCool=denseBuilt.placements.filter(x=>x.kind==='plan'&&x.env==='Cool');
+if(denseCool.length!==14)throw new Error(`expected 14 Cool structures in dense zone, got ${denseCool.length}`);
+console.log('dense separate climate zones OK',{cool:denseCool.length,total:denseBuilt.placements.length,fields:denseBuilt.fields.map(f=>f.type)});

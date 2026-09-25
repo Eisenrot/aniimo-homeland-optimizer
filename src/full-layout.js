@@ -1,7 +1,7 @@
 import {productionPlacementCounts} from './climate.js';
 import {stableStringify} from './plan-cache.js';
 
-export const FULL_LAYOUT_VERSION=5;
+export const FULL_LAYOUT_VERSION=6;
 export const FULL_LAYOUT_STORE='aniimoOptimizerFullLayoutV1';
 export const LAYOUT_SETTINGS_STORE='aniimoOptimizerLayoutSettingsV1';
 export const PLOT_WIDTH=20;
@@ -227,37 +227,77 @@ function placeCluster(cluster,placed,plots,settings,occupiedFields=[]){
   }
   return best;
 }
-function singleFieldMembers(matching,utility){
-  const field={x:0,y:0,w:9,h:9},ux=roundStep((field.w-utility.w)/2),uy=roundStep((field.h-utility.h)/2),placed=[{...utility,lx:ux,ly:uy}],occupied=[{x:ux,y:uy,w:utility.w,h:utility.h}];
-  const ordered=[...matching].sort((a,b)=>area(b)-area(a)||a.facility.localeCompare(b.facility));
-  for(const item of ordered){
-    const dims=[[item.w,item.h]],candidates=[];
-    if(item.canRotate&&Math.abs(item.w-item.h)>EPS)dims.push([item.h,item.w]);
-    for(const[w,h]of dims)for(let y=-h+STEP;y<9-EPS;y+=STEP)for(let x=-w+STEP;x<9-EPS;x+=STEP){
-      const r={x:roundStep(x),y:roundStep(y),w,h};
-      if(intersectionArea(r,field)<=EPS||occupied.some(o=>intersects(r,o)))continue;
-      candidates.push(r);
-    }
-    candidates.sort((a,b)=>(Math.abs(a.x+a.w/2-4.5)+Math.abs(a.y+a.h/2-4.5))-(Math.abs(b.x+b.w/2-4.5)+Math.abs(b.y+b.h/2-4.5))||a.y-b.y||a.x-b.x);
-    const pick=candidates[0];if(!pick)return null;
-    placed.push({...item,lx:pick.x,ly:pick.y,w:pick.w,h:pick.h,rotated:Math.abs(pick.w-item.w)>EPS});occupied.push(pick);
+function singleFieldCandidateRects(item,field,utilityRect){
+  const dims=[[item.w,item.h]],out=[],seen=new Set();
+  if(item.canRotate&&Math.abs(item.w-item.h)>EPS)dims.push([item.h,item.w]);
+  for(const[w,h]of dims)for(let y=-h+STEP;y<field.h-EPS;y+=STEP)for(let x=-w+STEP;x<field.w-EPS;x+=STEP){
+    const r={x:roundStep(x),y:roundStep(y),w,h},k=`${r.x},${r.y},${r.w},${r.h}`;
+    if(seen.has(k)||intersectionArea(r,field)<=EPS||intersects(r,utilityRect))continue;
+    seen.add(k);out.push(r);
   }
-  return placed;
+  return out;
+}
+function singleFieldCandidateTuple(r,field,variant){
+  const cx=r.x+r.w/2,cy=r.y+r.h/2,fx=field.x+field.w/2,fy=field.y+field.h/2,
+    inside=intersectionArea(r,field),dist=Math.abs(cx-fx)+Math.abs(cy-fy),bbArea=(Math.max(field.x+field.w,r.x+r.w)-Math.min(field.x,r.x))*(Math.max(field.y+field.h,r.y+r.h)-Math.min(field.y,r.y));
+  switch(variant%12){
+    // Climate only needs the structure to intersect the field. Prefer using the
+    // perimeter first so large structures do not consume the scarce 9x9 core.
+    case 0:return[inside,-dist,bbArea,r.y,r.x];
+    case 1:return[inside,-dist,bbArea,r.x,r.y];
+    case 2:return[inside,r.y,r.x];
+    case 3:return[inside,-r.y,r.x];
+    case 4:return[inside,r.x,r.y];
+    case 5:return[inside,-r.x,r.y];
+    // Keep a few inward/compact variants: small groups often look better there.
+    case 6:return[-inside,dist,bbArea,r.y,r.x];
+    case 7:return[-inside,dist,bbArea,r.x,r.y];
+    case 8:return[dist,inside,r.y,r.x];
+    case 9:return[-dist,inside,r.y,r.x];
+    case 10:return[bbArea,inside,-dist,r.y,r.x];
+    default:return[inside,bbArea,Math.abs(cx-fx),Math.abs(cy-fy),r.y,r.x];
+  }
+}
+function singleFieldMembers(matching,utility){
+  const field={x:0,y:0,w:9,h:9},ux=roundStep((field.w-utility.w)/2),uy=roundStep((field.h-utility.h)/2),
+    utilityRect={x:ux,y:uy,w:utility.w,h:utility.h},utilityPlaced={...utility,lx:ux,ly:uy},
+    cache=new Map(),get=item=>{if(!cache.has(item))cache.set(item,singleFieldCandidateRects(item,field,utilityRect));return cache.get(item);};
+  const orders=[
+    [...matching].sort((a,b)=>area(b)-area(a)||get(a).length-get(b).length||a.facility.localeCompare(b.facility)),
+    [...matching].sort((a,b)=>get(a).length-get(b).length||area(b)-area(a)||a.facility.localeCompare(b.facility)),
+    [...matching].sort((a,b)=>area(a)-area(b)||get(a).length-get(b).length||a.facility.localeCompare(b.facility))
+  ];
+  for(const ordered of orders)for(let variant=0;variant<12;variant++){
+    const placed=[utilityPlaced],occupied=[utilityRect],sorted=new Map();let ok=true;
+    for(const item of ordered){
+      if(!sorted.has(item))sorted.set(item,[...get(item)].sort((a,b)=>{
+        const aa=singleFieldCandidateTuple(a,field,variant),bb=singleFieldCandidateTuple(b,field,variant);
+        for(let i=0;i<Math.max(aa.length,bb.length);i++){const d=Number(aa[i]||0)-Number(bb[i]||0);if(Math.abs(d)>1e-9)return d;}return 0;
+      }));
+      const pick=sorted.get(item).find(r=>!occupied.some(o=>intersects(r,o)));
+      if(!pick){ok=false;break;}
+      placed.push({...item,lx:pick.x,ly:pick.y,w:pick.w,h:pick.h,rotated:Math.abs(pick.w-item.w)>EPS});occupied.push(pick);
+    }
+    if(ok)return placed;
+  }
+  return null;
 }
 function directClimateClusters(plan,items){
-  const layout=plan?.climateLayout,scenario=plan?.scenario||{};if(!layout?.feasible||layout.status==='overlap')return{clusters:[],used:new Set()};
-  const demands=layout.demands||[],out=[],used=new Set();
+  const layout=plan?.climateLayout,scenario=plan?.scenario||{};if(!layout?.feasible||layout.status==='overlap')return{clusters:[],used:new Set(),failures:[]};
+  const demands=layout.demands||[],out=[],used=new Set(),failures=[];
   const add=(type,facility,env)=>{
     const group=demands.filter(d=>d.env===env);if(!group.length)return;
     const matching=items.filter((x,i)=>!used.has(i)&&group.some(d=>d.facility===x.facility&&x.env===d.env)),utilityIndex=items.findIndex((x,i)=>!used.has(i)&&x.facility===facility);
-    if(!matching.length||utilityIndex<0)return;
-    const utility=items[utilityIndex],members=singleFieldMembers(matching,utility);if(!members)return;
+    if(!matching.length)return;
+    if(utilityIndex<0){failures.push(`${type} zone is missing ${facility}`);return;}
+    const utility=items[utilityIndex],members=singleFieldMembers(matching,utility);
+    if(!members){failures.push(`${type} 9×9 field could not cover ${matching.length} required structure${matching.length===1?'':'s'}`);return;}
     used.add(utilityIndex);for(const item of matching)used.add(items.indexOf(item));
     out.push({id:`direct-${type}`,members,fields:[{type,x:0,y:0,w:9,h:9}]});
   };
   if(scenario.cooling)add('cooling','cooling-unit',scenario.cooling);
   if(scenario.heat)add('heating','heat-furnace',scenario.heat);
-  return{clusters:out,used};
+  return{clusters:out,used,failures};
 }
 
 function buildFullBaseLayoutVariant(plan,state,data,settings){
@@ -271,7 +311,10 @@ function buildFullBaseLayoutVariant(plan,state,data,settings){
   // climate-sensitive recipe is ever added without a matching cluster rule,
   // fail visibly instead of placing it somewhere invalid.
   const strandedClimate=remaining.filter(x=>x.kind==='plan'&&x.env);
-  if(strandedClimate.length)return{feasible:false,reason:`Climate-sensitive structures escaped climate clustering: ${[...new Set(strandedClimate.map(x=>x.env+' '+x.name))].join(', ')}.`,placements:placed,fields,plots,settings,unplaced:remaining};
+  if(strandedClimate.length){
+    const detail=direct?.failures?.length?` ${direct.failures.join('; ')}.`:'';
+    return{feasible:false,reason:`Climate zone packing failed for: ${[...new Set(strandedClimate.map(x=>x.env+' '+x.name))].join(', ')}.${detail}`,placements:placed,fields,plots,settings,unplaced:remaining};
+  }
   // Largest climate groups first: a nine-Woodland cooling zone should not lose
   // the useful central space because a tiny Sunlamp group happened to be listed first.
   clusters.sort((a,b)=>b.members.reduce((s,x)=>s+area(x),0)-a.members.reduce((s,x)=>s+area(x),0)||a.id.localeCompare(b.id));
