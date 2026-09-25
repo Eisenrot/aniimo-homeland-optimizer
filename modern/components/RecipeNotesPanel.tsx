@@ -1,3 +1,4 @@
+import { assetUrl } from '../lib/presentation'
 import { DATA } from '../state'
 import type { OptimizerState, RecipeNote } from '../types'
 
@@ -16,6 +17,7 @@ const UNLOCKS: Record<string, string> = {
 }
 
 type NoteView = RecipeNote & {
+  outputItem?: number
   outputName?: string
 }
 
@@ -29,15 +31,21 @@ function notes(): NoteView[] {
     if (!existing) {
       result.set(key, {
         ...recipe.note,
+        outputItem: output,
         outputName: output == null ? undefined : DATA.items[String(output)]?.name,
       })
-    } else if (!existing.outputName && output != null) {
+    } else if (!existing.outputItem && output != null) {
+      existing.outputItem = output
       existing.outputName = DATA.items[String(output)]?.name
     }
   }
 
   const rv = (note: NoteView) => Number(UNLOCKS[String(note.item)]?.match(/\d+/)?.[0] || 999)
   return [...result.values()].sort((a, b) => rv(a) - rv(b) || a.name.localeCompare(b.name))
+}
+
+function itemIcon(item?: number) {
+  return item == null ? '' : assetUrl(`/images/aniimo/database/materials/item_${item}.webp`)
 }
 
 export default function RecipeNotesPanel({ state, patch }: Props) {
@@ -51,6 +59,7 @@ export default function RecipeNotesPanel({ state, patch }: Props) {
         {all.map((note) => {
           const key = String(note.item)
           const checked = state.recipeNotes[key] !== false
+          const icon = itemIcon(note.outputItem)
           return (
             <label className="note-card" key={key}>
               <input
@@ -58,6 +67,7 @@ export default function RecipeNotesPanel({ state, patch }: Props) {
                 checked={checked}
                 onChange={(event) => patch((draft) => { draft.recipeNotes[key] = event.target.checked })}
               />
+              {icon && <img className="note-output-icon" src={icon} alt="" loading="lazy" />}
               <div className="note-body">
                 <div className="note-main">
                   <div>
