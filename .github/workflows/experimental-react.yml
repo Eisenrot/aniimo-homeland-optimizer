@@ -26,6 +26,13 @@ jobs:
         run: |
           npm run typecheck
           npm run build
+          test -f dist/index.html
+          test -f dist/optimizer.html
+          test -f dist/homeland.html
+          test -f dist/team.html
+          test -f dist/layout.html
+          test -f dist/roster.html
+          test -f dist/legacy.html
 
       - name: Verify legacy solver regressions
         run: |
