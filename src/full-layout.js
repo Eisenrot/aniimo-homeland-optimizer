@@ -1,7 +1,7 @@
 import {productionPlacementCounts} from './climate.js';
 import {stableStringify} from './plan-cache.js';
 
-export const FULL_LAYOUT_VERSION=7;
+export const FULL_LAYOUT_VERSION=8;
 export const FULL_LAYOUT_STORE='aniimoOptimizerFullLayoutV1';
 export const LAYOUT_SETTINGS_STORE='aniimoOptimizerLayoutSettingsV1';
 export const PLOT_WIDTH=20;
@@ -66,7 +66,7 @@ export function planPhysicalItems(plan,state,data,settings={}){
       const output=row.recipe?.outputs?.[0]?.item??null,n=Math.max(0,Number(count||0));
       for(let copy=1;copy<=n;copy++)items.push({
         id:`${facility}:${row.recipe?.id??'job'}:${copy}`,facility,name:fac.name||facility,kind:'plan',recipeId:row.recipe?.id??null,
-        outputItem:output,env:row.recipe?.env||null,w:Number(fac.footprint.w),h:Number(fac.footprint.h),canRotate:fac.canRotate!==false,copy
+        outputItem:output,env:Object.prototype.hasOwnProperty.call(row,'effectiveEnv')?row.effectiveEnv:(row.recipe?.env||null),avoidClimate:row.executionMode==='uncovered',w:Number(fac.footprint.w),h:Number(fac.footprint.h),canRotate:fac.canRotate!==false,copy
       });
     }
   }
@@ -163,13 +163,13 @@ function candidateScore(rect,placed,settings,item){
   if(shape==='clusters'){const anchor=facilityAnchor(placed,item.facility);if(anchor)return Math.hypot(rect.x+rect.w/2-anchor.x,rect.y+rect.h/2-anchor.y)*20+bboxPenalty+storagePenalty*5;}
   return bboxPenalty*50+Math.hypot(rect.x+rect.w/2-(before.x+before.w/2),rect.y+rect.h/2-(before.y+before.h/2))+storagePenalty*6;
 }
-function placeOne(item,placed,plots,settings){
+function placeOne(item,placed,plots,settings,forbiddenFields=[]){
   const shape=settings.shape==='auto'?(settings.compact?'compact':'clusters'):settings.shape,plotOrder=plotDistanceOrder(plots,shape),dims=[[item.w,item.h]];
   if(settings.allowRotate&&item.canRotate&&Math.abs(item.w-item.h)>EPS)dims.push([item.h,item.w]);
   let best=null,bestScore=Infinity;
   for(const[w,h]of dims)for(const plot of plotOrder){
     const positions=scanPositions(plot,w,h,shape);
-    for(const pos of positions){const rect={...item,x:pos.x,y:pos.y,w,h,rotated:Math.abs(w-item.w)>EPS};if(overlapsPlaced(rect,placed))continue;const score=candidateScore(rect,placed,settings,item);if(score<bestScore){best=rect;bestScore=score;if(shape==='rows'||(!settings.compact&&shape!=='spread'))break;}}
+    for(const pos of positions){const rect={...item,x:pos.x,y:pos.y,w,h,rotated:Math.abs(w-item.w)>EPS};if(overlapsPlaced(rect,placed)||(item.avoidClimate&&forbiddenFields.some(field=>intersects(rect,field))))continue;const score=candidateScore(rect,placed,settings,item);if(score<bestScore){best=rect;bestScore=score;if(shape==='rows'||(!settings.compact&&shape!=='spread'))break;}}
     if(best&&(shape==='rows'||(!settings.compact&&shape!=='spread')))break;
   }
   return best;
@@ -314,7 +314,7 @@ function buildFullBaseLayoutVariant(plan,state,data,settings){
   if(storagePlacements?.length)placed.push(...storagePlacements);
   remaining=[...ordinary].sort((a,b)=>area(b)-area(a)||a.facility.localeCompare(b.facility));
   for(let index=0;index<remaining.length;index++){
-    const item=remaining[index],p=placeOne(item,placed,plots,settings);
+    const item=remaining[index],p=placeOne(item,placed,plots,settings,fields);
     if(!p)return{feasible:false,reason:`${item.name} does not fit inside the enabled plots.`,placements:placed,fields,plots,settings,unplaced:[item,...remaining.slice(index+1)]};
     placed.push(p);
   }
@@ -340,7 +340,7 @@ export function layoutStillFitsPlots(layout,rawSettings,homelandLevel){
   return!!plots.length&&(layout.placements||[]).every(p=>coveredByPlots(p,plots));
 }
 export function fullLayoutSignature(plan,state,settings,buildId='dev'){
-  const rows=(plan?.rows||[]).map(r=>({facility:r.facility,recipeId:r.recipe?.id??null,units:Number(r.units||0),perHour:Number(r.perHour||0),env:r.recipe?.env||null})).sort((a,b)=>(a.facility+':'+a.recipeId).localeCompare(b.facility+':'+b.recipeId));
+  const rows=(plan?.rows||[]).map(r=>({facility:r.facility,recipeId:r.recipe?.id??null,baseRecipeId:r.recipe?.baseRecipeId??r.recipe?.id??null,units:Number(r.units||0),perHour:Number(r.perHour||0),env:Object.prototype.hasOwnProperty.call(r,'effectiveEnv')?r.effectiveEnv:(r.recipe?.env||null),mode:r.executionMode||'normal'})).sort((a,b)=>(a.facility+':'+a.recipeId).localeCompare(b.facility+':'+b.recipeId));
   return stableStringify({version:FULL_LAYOUT_VERSION,build:String(buildId||'dev'),homelandLevel:Number(state.homelandLevel||1),facilities:state.facilities,scenario:plan?.scenario||{},rows,settings:normalizeLayoutSettings(settings,state.homelandLevel)});
 }
 export function readFullLayoutCache(storage,plan,state,settings,buildId='dev'){
