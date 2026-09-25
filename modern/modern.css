@@ -1311,3 +1311,27 @@ button:disabled, input:disabled, select:disabled { opacity: .5; cursor: not-allo
   height: 52px;
   border-radius: 12px;
 }
+
+.module-card > img,
+.note-output-icon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #0b0e12;
+}
+.note-output-icon {
+  width: 32px;
+  height: 32px;
+}
+.sidebar-footer-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.sidebar-footer-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
