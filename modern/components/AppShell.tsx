@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Activity, Home, Map, UsersRound } from 'lucide-react'
-import { itemIcon, fmt } from '../lib/presentation'\nimport { DATA } from '../state'
+import { itemIcon, fmt } from '../lib/presentation'
+import { DATA } from '../state'
 import type { AppPage } from '../lib/page'
 import type { OptimizerPlan, OptimizerState } from '../types'
 import OwnedAniimoDialog from './OwnedAniimoDialog'
