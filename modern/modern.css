@@ -1220,3 +1220,54 @@ button:disabled, input:disabled, select:disabled { opacity: .5; cursor: not-allo
   .roster-grid { grid-template-columns: 1fr; }
   .app-footer { flex-direction: column; }
 }
+
+.facility-identity {
+  display: flex !important;
+  align-items: center;
+  gap: 9px !important;
+}
+.facility-identity > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.facility-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: #0b0e12;
+  color: var(--muted);
+}
+.facility-icon img {
+  width: 31px;
+  height: 31px;
+  object-fit: contain;
+}
+.modern-kpis > div:first-child {
+  border-color: rgba(120,214,165,.16);
+  background: rgba(120,214,165,.035);
+}
+.layout-item {
+  gap: 1px;
+}
+.layout-item img {
+  width: min(70%, 28px);
+  height: min(70%, 28px);
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.32));
+}
+.layout-item-fallback {
+  color: rgba(255,255,255,.72);
+  font-size: 8px;
+}
+.layout-item span {
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(6,8,10,.58);
+  backdrop-filter: blur(3px);
+}
