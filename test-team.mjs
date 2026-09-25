@@ -132,3 +132,24 @@ const searchUtility=searchTeams[0].eval.utilityAssignments.find(a=>a.task.abilit
 if(searchTeams[0].team[searchUtility.worker].pal.name!=='Lunara-like Utility')throw new Error('real-team search wasted the Lv.4 production worker on Sunlamp');
 if(!(searchTeams[0].eval.objectiveRate>100.01))throw new Error(`Lv.4 worker speed did not improve concrete-team throughput: ${searchTeams[0].eval.objectiveRate}`);
 console.log('utility-aware Prismana search OK',{team:[...searchNames],rate:searchTeams[0].eval.objectiveRate});
+
+
+const altRecipeA={id:9940001,facility:'test-bench',level:1,inputs:[{item:9940999,qty:1}],outputs:[{item:9940101,qty:1}],workload:3600,steps:[{name:'A',ability:'Fire',level:1,workload:0}]};
+const altRecipeB={id:9940002,facility:'test-bench',level:1,inputs:[{item:9940999,qty:1}],outputs:[{item:9940102,qty:1}],workload:3600,steps:[{name:'B',ability:'Water',level:1,workload:0}]};
+const altPal={id:9941001,name:'Water specialist',abilities:{Fire:1,Water:4}};
+const altData={
+  items:{'9940999':{name:'Free Input',value:0},'9940101':{name:'Generic Prize',value:100},'9940102':{name:'Real-team Prize',value:50}},
+  facilities:[{slug:'test-bench',name:'Test Bench',kind:'processing',outputLimit:{1:999}}],
+  recipes:[altRecipeA,altRecipeB],pals:[altPal],abilities:{}
+};
+const altState={
+  homelandLevel:10,workerSlots:1,teamSlots:1,abilityLevel:'auto',collectHours:0,oneRecipePerFacility:true,generatorAvailable:false,hungry:false,manualSpeeds:false,
+  climateOptions:{cooling:false,heat:false,sunlamp:false},target:'coin',guarantees:[],facilities:{'test-bench':{count:1,level:1}},modules:{},speeds:{},recipeNotes:{},owned:{'9941001':{enabled:true,count:1}}
+};
+const altPlan=optimizePlan(altState,altData);
+if(altPlan.rows[0]?.recipe?.id!==altRecipeA.id)throw new Error('synthetic generic one-recipe baseline should choose recipe A');
+const altModel=buildTeamModel(altPlan,altState,altData),altTeams=await findBestTeams(altModel,altState,altData,{limit:1,onProgress:()=>{}});
+if(!altTeams.length)throw new Error('one-recipe recipe-set exploration returned no team');
+if(!altTeams[0].eval.rows.some(r=>r.recipe.id===altRecipeB.id))throw new Error('real-team pass stayed trapped in the generic one-recipe selection');
+if(!(altTeams[0].eval.rate>200))throw new Error(`real-team alternate recipe speed was not captured: ${altTeams[0].eval.rate}`);
+console.log('one-recipe real-team recipe-set exploration OK',{baseline:altPlan.ratePerHour,real:altTeams[0].eval.rate,recipe:altTeams[0].eval.rows[0]?.recipe?.id});

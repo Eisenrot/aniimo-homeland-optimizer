@@ -622,17 +622,18 @@ async function analyzeTeam(){
     teamAnalysisBaseline=captureTeamBaseline();const baseline=clone(teamAnalysisBaseline);
     const teams=await findBestTeams(currentModel,currentModel.state||state,DATA,{limit:4,onProgress:t=>status.innerHTML=`<span class="loader"></span> ${esc(t)}`});
     if(!teams.length)throw new Error('No valid team found.');
-    const best=teams[0],core=findEssentialCore(currentModel,best.team,best.eval.objectiveRate),anti=antiStallSummary(currentModel,best.team,core,best.eval.rows);
+    const best=teams[0],bestModel=best.model||currentModel,core=findEssentialCore(bestModel,best.team,best.eval.objectiveRate),anti=antiStallSummary(bestModel,best.team,core,best.eval.rows);
     let special=null;
     for(let i=0;i<Math.min(3,teams.length);i++){
       status.innerHTML=`<span class="loader"></span> Measured-speed personality pass ${i+1}/${Math.min(3,teams.length)}`;
-      const ev=await optimizePersonalities(currentModel,teams[i].team,t=>status.innerHTML=`<span class="loader"></span> ${esc(t)}`,teams[i].eval,teams[i].burst);
-      if(!special||ev.objectiveRate>special.ev.objectiveRate)special={team:teams[i].team,ev};
+      const teamModel=teams[i].model||currentModel,ev=await optimizePersonalities(teamModel,teams[i].team,t=>status.innerHTML=`<span class="loader"></span> ${esc(t)}`,teams[i].eval,teams[i].burst);
+      if(!special||ev.objectiveRate>special.ev.objectiveRate)special={team:teams[i].team,ev,model:teamModel};
     }
     if(special){
-      special.coverage=antiStallSummary(currentModel,special.team,special.team,special.ev.rows);
+      special.coverage=antiStallSummary(special.model||currentModel,special.team,special.team,special.ev.rows);
       teamSpeedOverride=state.manualSpeeds?null:speedOverrideFromSpecial(special);
-      currentPlan={...currentPlan,rows:special.ev.rows||[],ratePerHour:Number(special.ev.rate||0),targetRate:Number(special.ev.targetRate||0),objectiveRate:Number(special.ev.objectiveRate||0),utilityWorkers:Number(special.ev.utilityWorkers??currentPlan.utilityWorkers??0),utilityStaffing:{team:special.team,ev:{utilityAssignments:special.ev.utilityAssignments||[]}},realTeamApplied:true};
+      const sourcePlan=special.model?.plan||currentPlan;
+      currentPlan={...currentPlan,scenario:sourcePlan.scenario||currentPlan.scenario,scenarioLabel:sourcePlan.scenarioLabel||currentPlan.scenarioLabel,runnableRecipes:sourcePlan.runnableRecipes||currentPlan.runnableRecipes,objectiveWeights:sourcePlan.objectiveWeights||currentPlan.objectiveWeights,rows:special.ev.rows||[],ratePerHour:Number(special.ev.rate||0),targetRate:Number(special.ev.targetRate||0),objectiveRate:Number(special.ev.objectiveRate||0),utilityWorkers:Number(special.ev.utilityWorkers??sourcePlan.utilityWorkers??currentPlan.utilityWorkers??0),utilityStaffing:{team:special.team,ev:{utilityAssignments:special.ev.utilityAssignments||[]}},realTeamApplied:true};
       currentPlan.climateLayout=evaluateClimateLayout(currentPlan,effectivePlanState(),DATA);
       currentFullLayout=null;
       teamAppliedPlan=true;
