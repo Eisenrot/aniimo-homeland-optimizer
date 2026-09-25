@@ -84,6 +84,7 @@ export type Pal = {
   id: number | string
   name: string
   speciesName?: string
+  form?: string
   isForm?: boolean
   unavailable?: boolean
   legacyId?: number | string
@@ -160,3 +161,106 @@ export type WorkerMessage =
   | { type: 'progress'; id: number; progress: SolverProgress }
   | { type: 'result'; id: number; plan: OptimizerPlan }
   | { type: 'error'; id: number; message: string; stack?: string }
+
+export type TeamMemberView = {
+  id: string
+  name: string
+  speciesName: string
+  form?: string
+  isForm: boolean
+  abilities: Record<string, number>
+  copy: number
+}
+
+export type TeamCandidateView = {
+  rank: number
+  team: TeamMemberView[]
+  rate: number
+  targetRate: number
+  objectiveRate: number
+  coverageWeight: number
+  resilience: number
+}
+
+export type TeamAnalysisResult = {
+  candidates: TeamCandidateView[]
+  requiredAbilities: Array<{
+    ability: string
+    level: number
+    jobs: string[]
+    count: number
+    units?: number
+  }>
+  personality: null | {
+    rate: number
+    targetRate: number
+    objectiveRate: number
+    profiles: string[]
+    hints: Array<{
+      profile: string
+      display: Array<{
+        char: string
+        status: string
+        facilities: string[]
+      }>
+    }>
+  }
+  core: TeamMemberView[]
+  reserves: TeamMemberView[]
+  coverage: Array<{
+    facility: string
+    total: number
+    hit: number
+    demandHours: number
+    capacityRatio: number
+  }>
+}
+
+export type TeamWorkerMessage =
+  | { type: 'progress'; id: number; detail: string }
+  | { type: 'result'; id: number; result: TeamAnalysisResult }
+  | { type: 'error'; id: number; message: string }
+
+export type LayoutSettings = {
+  compact: boolean
+  shape: 'auto' | 'compact' | 'rows' | 'clusters' | 'spread'
+  allowRotate: boolean
+  storageUnits: number
+  disabledPlots: number[]
+}
+
+export type LayoutPlacement = {
+  id: string
+  facility: string
+  name: string
+  kind?: string
+  env?: string | null
+  x: number
+  y: number
+  w: number
+  h: number
+  rotated?: boolean
+}
+
+export type LayoutField = {
+  type: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export type BaseLayout = {
+  feasible: boolean
+  reason?: string
+  placements: LayoutPlacement[]
+  fields: LayoutField[]
+  plots: Array<{ plot: number; x: number; y: number; w: number; h: number }>
+  usedPlots?: number[]
+  bounds?: { x: number; y: number; w: number; h: number }
+  itemCount?: number
+}
+
+export type LayoutWorkerMessage =
+  | { type: 'result'; id: number; layout: BaseLayout }
+  | { type: 'error'; id: number; message: string }
