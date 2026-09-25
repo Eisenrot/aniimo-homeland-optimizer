@@ -588,7 +588,7 @@ body {
 /* OG workspace rhythm: configuration left, live result stack right. */
 .rewrite-plan-workspace {
   display:grid;
-  grid-template-columns:minmax(0,1.55fr) minmax(360px,.9fr);
+  grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);
   gap:12px;
   align-items:start;
 }
@@ -599,24 +599,118 @@ body {
   gap:12px;
 }
 .rewrite-results-stack {
-  position:sticky;
-  top:158px;
-  max-height:calc(100vh - 174px);
-  overflow:auto;
-  padding-right:2px;
-  scrollbar-width:thin;
-  scrollbar-color:#323a44 transparent;
+  position:static;
+  max-height:none;
+  overflow:visible;
+  padding-right:0;
 }
 .rewrite-results-stack .panel {
   box-shadow:0 1px 0 rgba(255,255,255,.015) inset;
 }
 
-@media (max-width:980px) {
+@media (max-width:1120px) {
   .rewrite-plan-workspace { grid-template-columns:1fr; }
   .rewrite-results-stack {
     position:static;
     max-height:none;
     overflow:visible;
     padding-right:0;
+  }
+}
+
+
+/* Persistent panel collapsing. The actual panel header remains visible. */
+.rewrite-collapse {
+  position:relative;
+  min-width:0;
+}
+.rewrite-collapse-body {
+  min-width:0;
+}
+.rewrite-collapse .panel,
+.rewrite-collapse .surface-card {
+  min-width:0;
+}
+.rewrite-collapse .section-title,
+.rewrite-collapse .surface-header {
+  padding-right:38px;
+}
+.rewrite-collapse-toggle {
+  position:absolute;
+  z-index:3;
+  top:10px;
+  right:10px;
+  width:27px;
+  height:27px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:1px solid #2b333c;
+  border-radius:8px;
+  background:#0c1014;
+  color:#717c87;
+  cursor:pointer;
+  transition:background 150ms ease,border-color 150ms ease,color 150ms ease,transform 180ms ease;
+}
+.rewrite-collapse-toggle:hover {
+  color:#f2f4f6;
+  border-color:#49535f;
+  background:#151a20;
+}
+.rewrite-collapse-toggle svg {
+  width:14px;
+  height:14px;
+  transition:transform 180ms ease;
+}
+.rewrite-collapse.is-collapsed .rewrite-collapse-toggle svg {
+  transform:rotate(-90deg);
+}
+.rewrite-collapse.is-collapsed > .rewrite-collapse-body > .panel > :not(.section-title),
+.rewrite-collapse.is-collapsed > .rewrite-collapse-body > .surface-card > :not(.surface-header) {
+  display:none !important;
+}
+.rewrite-collapse.is-collapsed > .rewrite-collapse-body > .panel > .section-title,
+.rewrite-collapse.is-collapsed > .rewrite-collapse-body > .surface-card > .surface-header {
+  min-height:27px;
+  margin-bottom:0;
+  align-items:center;
+}
+
+/* Result surfaces must fit their column instead of creating a hidden inner page. */
+.rewrite-results-stack,
+.rewrite-results-stack > *,
+.rewrite-results-stack .panel,
+.rewrite-results-stack .modern-kpis,
+.rewrite-results-stack .modern-table-wrap {
+  max-width:100%;
+  min-width:0;
+}
+.rewrite-results-stack .modern-table-wrap {
+  overflow-x:auto;
+  overflow-y:hidden;
+}
+.rewrite-results-stack .modern-table {
+  min-width:560px;
+}
+.rewrite-results-stack .modern-kpis > div {
+  min-width:0;
+  padding-inline:10px;
+}
+.rewrite-results-stack .modern-kpis strong {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+@media (max-width:700px) {
+  .rewrite-results-stack .modern-table {
+    min-width:520px;
+  }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .rewrite-collapse-toggle,
+  .rewrite-collapse-toggle svg {
+    transition:none !important;
   }
 }

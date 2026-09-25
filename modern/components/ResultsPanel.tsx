@@ -1,4 +1,5 @@
 import { facilityAsset, itemIcon } from '../lib/presentation'
+import PersistentCollapse from './PersistentCollapse'
 import { DATA } from '../state'
 import type { OptimizerPlan, SolverProgress } from '../types'
 
@@ -34,6 +35,7 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
 
   return (
     <>
+      <PersistentCollapse id="best-plan" label="Best plan">
       <section className="panel result-overview-panel">
         <div className="section-title"><span /><h3>Best plan</h3><i /><em className="micro">{engine}</em></div>
 
@@ -67,7 +69,9 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
           </>
         )}
       </section>
+      </PersistentCollapse>
 
+      <PersistentCollapse id="production-rows" label="Production rows">
       <section className="panel">
         <div className="section-title"><span /><h3>Production rows</h3><i /><em>{rows.length ? `${rows.length} ACTIVE` : ''}</em></div>
         {!rows.length ? (
@@ -105,8 +109,10 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
           </div>
         )}
       </section>
+      </PersistentCollapse>
 
       {plan?.climateLayout && (
+        <PersistentCollapse id="climate-geometry" label="Climate geometry">
         <section className="panel">
           <div className="section-title">
             <span />
@@ -118,6 +124,7 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
             {plan.climateLayout.message || plan.climateLayout.status || 'No climate-sensitive production.'}
           </p>
         </section>
+        </PersistentCollapse>
       )}
     </>
   )

@@ -47,6 +47,3 @@ jobs:
 
       - name: Benchmark JS simplex vs HiGHS
         run: npm run benchmark:lp
-
-      - name: Benchmark heuristic vs exact facility MIP
-        run: npm run benchmark:mip
