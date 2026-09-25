@@ -12,12 +12,19 @@ export default function PlotSelector({ unlocked, disabled, used = [], onToggle }
   const unlockedSet = new Set(unlocked)
   const disabledSet = new Set(disabled)
   const usedSet = new Set(used)
+  const enabledCount = unlocked.filter((plot) => !disabledSet.has(plot)).length
 
   return (
     <section className="plot-selector surface-card">
-      <div className="plot-selector-copy">
-        <MapPinned aria-hidden="true" />
-        <span><small>Enabled plots</small><b>Tap the mini Homeland map.</b></span>
+      <div className="plot-selector-head">
+        <span className="plot-selector-title">
+          <MapPinned aria-hidden="true" />
+          <span><small>Homeland map</small><b>Plots</b></span>
+        </span>
+        <span className="plot-selector-summary">
+          <b>{enabledCount}/{unlocked.length}</b>
+          <small>enabled · {usedSet.size} used</small>
+        </span>
       </div>
 
       <div className="plot-map-selector" aria-label="Homeland plot selector">
