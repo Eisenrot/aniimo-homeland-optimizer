@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { PawPrint, Search, UsersRound } from 'lucide-react'
+import AbilityPill from '../components/AbilityPill'
 import AniimoAvatar from '../components/AniimoAvatar'
 import { DATA } from '../state'
 import type { OptimizerState, Pal } from '../types'
@@ -97,7 +98,7 @@ export default function RosterPage({ state, patch }: Props) {
                 <AniimoAvatar pal={pal} />
                 <div className="roster-card-copy">
                   <span><b>{pal.speciesName || pal.name}</b><small>{pal.isForm ? String(pal.form || 'Form') : 'Base'}</small></span>
-                  <div className="ability-chip-row">{Object.entries(pal.abilities || {}).map(([ability, level]) => <em key={ability}>{ability} Lv.{level}</em>)}</div>
+                  <div className="ability-chip-row">{Object.entries(pal.abilities || {}).map(([ability, level]) => <AbilityPill key={ability} ability={ability} level={level} compact />)}</div>
                 </div>
                 <label className="copy-field"><UsersRound aria-hidden="true" /><input type="number" min={1} max={99} value={owned.count} disabled={Boolean(pal.unavailable)} aria-label={`${pal.name} copies`} onChange={(event) => patch((draft) => { draft.owned[id].count = Math.max(1, Number(event.target.value) || 1) })} /></label>
               </article>
