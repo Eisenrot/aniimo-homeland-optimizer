@@ -45,7 +45,8 @@ type Props = {
 
 export default function AppShell({ page, state, plan, running, children, onSolve, onReset }: Props) {
   const meta = META[page]
-  const status = running ? 'Solving' : plan ? 'Plan synced' : page === 'roster' ? 'Roster mode' : 'Ready'
+  const status = running ? 'Solving' : plan ? 'Plan synced' : page === 'roster' ? 'Roster saved' : page === 'homeland' ? 'Config saved' : 'Ready'
+  const canRerun = page !== 'roster' && page !== 'homeland'
 
   return (
     <div className="app-shell">
@@ -104,7 +105,7 @@ export default function AppShell({ page, state, plan, running, children, onSolve
           </div>
           <div className="page-actions">
             <span className={running ? 'status-badge running' : 'status-badge'}><Activity aria-hidden="true" />{status}</span>
-            {page !== 'roster' && (
+            {canRerun && (
               <button className="ui-button secondary" type="button" onClick={onSolve} disabled={running}>
                 <RefreshCw aria-hidden="true" /> Re-run
               </button>
