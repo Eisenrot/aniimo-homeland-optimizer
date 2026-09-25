@@ -60,7 +60,7 @@ export default function InteractiveLayoutCanvas({ worldWidth, worldHeight, fitBo
     const roundedX = Math.round(tx.current * 2) / 2
     const roundedY = Math.round(ty.current * 2) / 2
     const relativeZoom = scale.current / Math.max(0.0001, homeScale.current)
-    const labelCounterScale = relativeZoom > 1 ? 1 / relativeZoom : 1
+    const labelCounterScale = 1 / Math.max(0.0001, scale.current)
 
     target.style.transform = `translate(${roundedX}px,${roundedY}px) scale(${scale.current})`
     target.style.setProperty('--map-label-counter-scale', String(labelCounterScale))
