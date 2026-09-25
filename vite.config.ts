@@ -8,7 +8,15 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: true,
     rollupOptions: {
-      input: ['index.html', 'legacy.html'],
+      input: [
+        'index.html',
+        'optimizer.html',
+        'homeland.html',
+        'team.html',
+        'layout.html',
+        'roster.html',
+        'legacy.html',
+      ],
     },
   },
   worker: {
