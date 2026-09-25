@@ -110,6 +110,10 @@ export type PlanRow = {
   perHour: number
   targetPerHour?: number
   cycleSeconds?: number
+  manualSeconds?: number
+  growSeconds?: number
+  effectiveEnv?: string | null
+  executionMode?: string
 }
 
 export type OptimizerStats = {

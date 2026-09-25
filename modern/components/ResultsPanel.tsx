@@ -1,19 +1,58 @@
 import { facilityAsset, itemIcon } from '../lib/presentation'
 import PersistentCollapse from './PersistentCollapse'
 import { DATA } from '../state'
-import type { OptimizerPlan, SolverProgress } from '../types'
+import type { OptimizerPlan, PlanRow, SolverProgress } from '../types'
 
 function fmt(value: number, digits = 1) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits })
 }
 
-function outputId(row: OptimizerPlan['rows'][number]) {
+function outputId(row: PlanRow) {
   return row.recipe.outputs?.[0]?.item
 }
 
-function outputName(row: OptimizerPlan['rows'][number]) {
+function outputName(row: PlanRow) {
   const id = outputId(row)
   return id == null ? 'Recipe' : DATA.items[String(id)]?.name || String(id)
+}
+
+function rowEnvironment(row: PlanRow) {
+  const environment = Object.prototype.hasOwnProperty.call(row, 'effectiveEnv')
+    ? row.effectiveEnv
+    : row.recipe.env
+  return String(environment || '').toLowerCase()
+}
+
+function rowClasses(row: PlanRow, continued: boolean) {
+  const classes = ['production-plan-row']
+  if (continued) classes.push('facility-continuation')
+
+  const environment = rowEnvironment(row)
+  if (['freeze', 'cool', 'adequate', 'warm', 'scorching'].includes(environment)) {
+    classes.push('climate-row', `climate-${environment}`)
+  }
+  if (row.recipe.electric) classes.push('climate-row', 'climate-electric')
+  return classes.join(' ')
+}
+
+function groupedRows(rows: PlanRow[]) {
+  const sorted = [...rows].sort((a, b) => Number(b.perHour || 0) - Number(a.perHour || 0))
+  const groups = new Map<string, PlanRow[]>()
+  const order: string[] = []
+
+  for (const row of sorted) {
+    if (!groups.has(row.facility)) {
+      groups.set(row.facility, [])
+      order.push(row.facility)
+    }
+    groups.get(row.facility)!.push(row)
+  }
+
+  return order.flatMap((facility) =>
+    (groups.get(facility) || [])
+      .sort((a, b) => Number(b.perHour || 0) - Number(a.perHour || 0))
+      .map((row, index) => ({ row, continued: index > 0 })),
+  )
 }
 
 type Props = {
@@ -26,7 +65,7 @@ type Props = {
 export default function ResultsPanel({ plan, progress, running, error }: Props) {
   const stats = plan?.optimizerStats
   const pct = Math.max(0, Math.min(100, Number(progress?.progress || (running ? 0 : 1)) * 100))
-  const rows = [...(plan?.rows || [])].sort((a, b) => b.perHour - a.perHour)
+  const rows = groupedRows(plan?.rows || [])
   const engine = stats?.engine === 'cache'
     ? 'EXACT CACHE'
     : stats?.engine === 'main'
@@ -77,17 +116,18 @@ export default function ResultsPanel({ plan, progress, running, error }: Props) 
         {!rows.length ? (
           <div className="empty">{running ? 'Solver is working…' : 'No active production rows yet.'}</div>
         ) : (
-          <div className="modern-table-wrap">
-            <table className="modern-table">
+          <div className="modern-table-wrap production-table-wrap">
+            <table className="modern-table production-table">
               <thead><tr><th>Facility</th><th>Output</th><th>Batches / h</th><th>Use</th><th className="numeric">Coin / h</th></tr></thead>
               <tbody>
-                {rows.map((row) => {
+                {rows.map(({ row, continued }, index) => {
                   const facility = DATA.facilities.find((item) => item.slug === row.facility)
                   const output = outputId(row)
                   return (
-                    <tr key={`${row.facility}:${row.recipe.id}`}>
+                    <tr className={rowClasses(row, continued)} key={`${row.facility}:${row.recipe.id}:${index}`}>
                       <td>
-                        <span className="table-identity">
+                        <span className={continued ? 'table-identity grouped-facility continued' : 'table-identity grouped-facility'}>
+                          {continued && <span className="facility-group-arrow" aria-hidden="true">↳</span>}
                           {facility?.icon && <img src={facilityAsset(facility)} alt="" />}
                           <b>{facility?.name || row.facility}</b>
                         </span>

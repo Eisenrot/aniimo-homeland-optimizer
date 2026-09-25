@@ -1056,3 +1056,74 @@ body {
   .rewrite-plan-workspace .setting-tile-grid { grid-template-columns:1fr; }
   .plot-management-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+
+
+/* OG production-row grouping and climate intensity. */
+.production-table tbody tr {
+  transition:background 140ms ease;
+}
+.production-table tbody tr.facility-continuation td {
+  background:rgba(255,255,255,.008);
+}
+.production-table tbody tr.facility-continuation:hover td {
+  background:rgba(212,45,70,.035);
+}
+.grouped-facility.continued {
+  padding-left:10px;
+}
+.facility-group-arrow {
+  width:14px;
+  flex:0 0 14px;
+  color:#78838e;
+  font-size:14px;
+  line-height:1;
+  text-align:center;
+  margin-right:-2px;
+}
+.grouped-facility.continued > img {
+  opacity:.86;
+}
+
+/* The old page used stronger gradients for more extreme climate states. */
+.production-table tr.climate-row {
+  --env-edge:#87919c;
+  --env-a:rgba(135,145,156,.08);
+  --env-b:rgba(12,15,19,.01);
+  background:linear-gradient(90deg,var(--env-a),var(--env-b) 72%);
+}
+.production-table tr.climate-row td {
+  background:transparent;
+}
+.production-table tr.climate-row td:first-child {
+  box-shadow:inset 3px 0 var(--env-edge);
+}
+.production-table tr.climate-row:hover {
+  background:linear-gradient(90deg,color-mix(in srgb,var(--env-edge) 15%,#0c0f13),#0c0f13 75%);
+}
+.production-table tr.climate-row:hover td {
+  background:transparent;
+}
+.production-table tr.climate-cool {
+  --env-edge:#8edfff;
+  --env-a:rgba(105,202,239,.13);
+}
+.production-table tr.climate-freeze {
+  --env-edge:#67aaf7;
+  --env-a:rgba(74,145,230,.16);
+}
+.production-table tr.climate-warm {
+  --env-edge:#ff9ca4;
+  --env-a:rgba(235,101,113,.12);
+}
+.production-table tr.climate-scorching {
+  --env-edge:#dc5366;
+  --env-a:rgba(191,55,76,.18);
+}
+.production-table tr.climate-adequate {
+  --env-edge:#e6cc78;
+  --env-a:rgba(194,157,78,.14);
+}
+.production-table tr.climate-electric {
+  --env-edge:#d9a928;
+  --env-a:rgba(177,126,31,.17);
+}

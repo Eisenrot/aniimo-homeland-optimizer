@@ -18,6 +18,7 @@ type Props = {
 }
 
 const utilityFacility = (slug: string) => DATA.facilities.find((facility) => facility.slug === slug)
+const GENERATOR_ICON = 'https://aniipedia.com/items/10400021.webp'
 
 export default function PlanSettings({ state, patch }: Props) {
   const cap = maxAniimoForLevel(state.homelandLevel)
@@ -180,7 +181,7 @@ export default function PlanSettings({ state, patch }: Props) {
                 checked={state.generatorAvailable}
                 onChange={(event) => patch((draft) => { draft.generatorAvailable = event.target.checked })}
               />
-              {facility?.icon && <img src={facilityAsset(facility)} alt="" />}
+              <img src={GENERATOR_ICON} alt="" />
               <div className="utility-main"><b>Crackle Generator</b><small>{state.generatorAvailable ? 'Available' : 'Disabled'}</small></div>
             </label>
           )
