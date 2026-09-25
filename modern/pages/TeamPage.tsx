@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, RefreshCw, ShieldCheck, Sparkles, UsersRound } from 'lucide-react'
 import AbilityPill from '../components/AbilityPill'
 import AniimoAvatar from '../components/AniimoAvatar'
+import PersonalityCode from '../components/PersonalityCode'
 import { teamClient } from '../engine/teamClient'
 import { DATA } from '../state'
 import { fmt } from '../lib/presentation'
@@ -125,7 +126,7 @@ export default function TeamPage({ state, plan, planRunning }: Props) {
                         {Object.entries(member.abilities).map(([ability, level]) => <AbilityPill key={ability} ability={ability} level={level} compact />)}
                       </div>
                     </div>
-                    {hint && <div className="personality-profile"><Sparkles aria-hidden="true" /><span><small>Personality</small><b>{hint.profile}</b></span></div>}
+                    {hint && <div className="personality-profile"><Sparkles aria-hidden="true" /><span><small>Personality</small><PersonalityCode profile={hint.profile} /></span></div>}
                   </article>
                 )
               })}
