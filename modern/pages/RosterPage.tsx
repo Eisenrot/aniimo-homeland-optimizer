@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { PawPrint, Search, UsersRound } from 'lucide-react'
+import AniimoAvatar from '../components/AniimoAvatar'
 import { DATA } from '../state'
-import { palHeadUrl } from '../lib/presentation'
 import type { OptimizerState, Pal } from '../types'
 
 type Props = {
@@ -94,7 +94,7 @@ export default function RosterPage({ state, patch }: Props) {
             return (
               <article className={`roster-card ${owned.enabled ? '' : 'disabled'} ${pal.unavailable ? 'unavailable' : ''}`} key={id}>
                 <label className="roster-enable"><input type="checkbox" checked={owned.enabled} disabled={Boolean(pal.unavailable)} onChange={(event) => patch((draft) => { draft.owned[id].enabled = event.target.checked })} /><span /></label>
-                <img src={palHeadUrl(pal)} alt="" onError={(event) => { event.currentTarget.style.visibility = 'hidden' }} />
+                <AniimoAvatar pal={pal} />
                 <div className="roster-card-copy">
                   <span><b>{pal.speciesName || pal.name}</b><small>{pal.isForm ? String(pal.form || 'Form') : 'Base'}</small></span>
                   <div className="ability-chip-row">{Object.entries(pal.abilities || {}).map(([ability, level]) => <em key={ability}>{ability} Lv.{level}</em>)}</div>
