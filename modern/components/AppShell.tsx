@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Activity, Home, Map, UsersRound } from 'lucide-react'
-import { itemIcon, fmt } from '../lib/presentation'
+import { itemIcon, fmt } from '../lib/presentation'\nimport { DATA } from '../state'
 import type { AppPage } from '../lib/page'
 import type { OptimizerPlan, OptimizerState } from '../types'
 import OwnedAniimoDialog from './OwnedAniimoDialog'
@@ -35,7 +35,7 @@ export default function AppShell({
 }: Props) {
   const targetName = state.target === 'coin'
     ? 'Home Coin'
-    : (window as any).__ANIIMO_ITEM_NAME__?.[state.target] || 'Target'
+    : DATA.items[String(state.target)]?.name || 'Target'
   const constraints = state.guarantees.filter((item) => item.enabled !== false)
   const coMax = constraints.filter((item) => item.maximize).length
 
