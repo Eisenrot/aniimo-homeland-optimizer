@@ -1,0 +1,166 @@
+#root { min-height: 100vh; }
+
+.modern-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 999px;
+  color: rgba(255,255,255,.62);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.modern-migration-note p {
+  margin: 0;
+  color: rgba(255,255,255,.68);
+  line-height: 1.55;
+}
+
+.modern-checks {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.modern-utility-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.modern-utility-grid .utility-card {
+  min-height: 68px;
+}
+
+.modern-facility-list {
+  display: grid;
+  gap: 7px;
+}
+
+.modern-facility-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 84px 74px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 10px;
+  background: rgba(255,255,255,.018);
+}
+
+.modern-facility-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.modern-facility-row small,
+.modern-facility-row label span {
+  color: rgba(255,255,255,.42);
+  font-size: 10px;
+}
+
+.modern-facility-row label {
+  display: grid;
+  gap: 3px;
+}
+
+.modern-facility-row input {
+  width: 100%;
+}
+
+.modern-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.modern-progress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modern-progress span,
+.modern-progress small {
+  color: rgba(255,255,255,.48);
+}
+
+.modern-progress progress {
+  width: 100%;
+  height: 8px;
+}
+
+.modern-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.modern-kpis > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 10px;
+  background: rgba(255,255,255,.018);
+}
+
+.modern-kpis small {
+  color: rgba(255,255,255,.44);
+}
+
+.modern-kpis strong {
+  font-size: 18px;
+}
+
+.modern-stats {
+  margin-top: 10px;
+}
+
+.modern-error {
+  padding: 10px 12px;
+  border: 1px solid rgba(255,90,90,.35);
+  border-radius: 10px;
+  background: rgba(255,70,70,.08);
+  color: #ffb7b7;
+}
+
+.modern-table-wrap {
+  overflow: auto;
+}
+
+.modern-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.modern-table th,
+.modern-table td {
+  padding: 9px 8px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.modern-table th {
+  color: rgba(255,255,255,.44);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+@media (max-width: 900px) {
+  .modern-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .modern-facility-row { grid-template-columns: minmax(120px, 1fr) 74px 64px; }
+}
+
+@media (max-width: 620px) {
+  .modern-utility-grid,
+  .modern-kpis { grid-template-columns: 1fr; }
+  .modern-facility-row { grid-template-columns: 1fr 1fr; }
+  .modern-facility-row > div { grid-column: 1 / -1; }
+}

@@ -5,59 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0b0d10">
-  <meta name="aniimo-build" content="__BUILD__">
-  <title>Aniimo Homeland Optimizer</title>
-  <meta name="description" content="Aniimo Homeland production and real-team optimizer: recipes, climate options, material targets, worker rosters, personalities and anti-stall staffing in one place.">
-  <link rel="stylesheet" href="./styles.css?v=__BUILD__">
-  <link rel="stylesheet" href="./super.css?v=__BUILD__">
+  <title>Aniimo Homeland Optimizer · Experimental</title>
+  <meta name="description" content="Experimental React/TypeScript rewrite of Aniimo Homeland Optimizer.">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./super.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand"><div class="brand-mark" role="img" aria-label="Aniimo"></div><div><h1>Aniimo Homeland Optimizer</h1><p>production · staffing · personalities</p></div></div>
-    <nav class="top-actions">
-      <button id="ownership-toggle" class="ghost nav-icon" aria-expanded="false" aria-controls="ownership-modal" title="Aniimo you own">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.2" cy="7.1" r="2.3"/><circle cx="16.8" cy="7.1" r="2.3"/><circle cx="4.8" cy="12.5" r="2.1"/><circle cx="19.2" cy="12.5" r="2.1"/><path d="M12 10.2c-3 0-5.9 2.6-5.9 5.5 0 2.2 1.7 3.8 4 3.8.8 0 1.3-.3 1.9-.3s1.1.3 1.9.3c2.3 0 4-1.6 4-3.8 0-2.9-2.9-5.5-5.9-5.5Z"/></svg>
-      </button>
-      <button id="copy-link" class="ghost">Copy share link</button><span class="nav-divider" aria-hidden="true">|</span><a class="ghost link" href="https://github.com/Eisenrot/aniimo-homeland-optimizer" target="_blank" rel="noreferrer">GitHub ↗</a>
-    </nav>
-  </header>
-
-  <div id="ownership-overlay" class="ownership-overlay" aria-hidden="true">
-    <div id="ownership-modal" class="ownership-modal" role="dialog" aria-modal="true" aria-label="Aniimo you own">
-      <button id="ownership-close" class="modal-close" aria-label="Close Aniimo roster">×</button>
-      <section class="panel ownership-modal-panel" id="ownership-panel"></section>
-    </div>
-  </div>
-
-  <main class="shell">
-    <section class="panel import-panel">
-      <div class="section-title"><span></span><h3>Import / share</h3><i></i><em id="data-version" class="micro"></em></div>
-      <div class="import-row"><input id="import-url" type="text" placeholder="Paste a Hideout link or this optimizer's share link…"><button id="import-btn" class="primary">Import</button><button id="reset-btn" class="ghost">Reset</button></div>
-      <p class="micro">Hideout-style facility, module, speed, worker and ownership parameters are understood. This optimizer keeps the actual plan, roster simulation and personality pass in the same page.</p>
-    </section>
-
-    <div class="workspace">
-      <aside class="config-stack">
-        <section class="panel" id="objective-panel"></section>
-        <section class="panel" id="general-panel"></section>
-        <section class="panel" id="facilities-panel"></section>
-        <section class="panel" id="modules-panel"></section>
-        <section class="panel" id="notes-panel"></section>
-        <section class="panel" id="living-panel"></section>
-      </aside>
-
-      <section class="results-stack">
-        <section class="panel" id="plan-panel"></section>
-        <section class="panel" id="climate-panel" hidden></section>
-        <section class="panel" id="outputs-panel"></section>
-        <section class="panel" id="abilities-panel"></section>
-        <section class="panel" id="team-panel"></section>
-      </section>
-    </div>
-  </main>
-
-  <footer><span>Unofficial community tool. Game names and assets belong to their respective owners.</span><span>Solver and staffing logic run entirely in your browser.</span></footer>
-  <script type="module" src="./src/app.js?v=__BUILD__"></script>
-  <script type="module" src="./src/super.js?v=__BUILD__"></script>
+  <div id="root"></div>
+  <script type="module" src="/modern/main.tsx"></script>
 </body>
 </html>
