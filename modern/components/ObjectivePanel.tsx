@@ -1,3 +1,5 @@
+import { Plus, Target, Trash2 } from 'lucide-react'
+import ItemPicker from './ItemPicker'
 import { producedTargets } from '../state'
 import type { OptimizerState } from '../types'
 
@@ -21,22 +23,25 @@ export default function ObjectivePanel({ state, patch }: Props) {
   }
 
   return (
-    <section className="panel">
+    <section className="panel objective-panel">
       <div className="section-title">
         <span />
-        <h3>Objective</h3>
+        <h3><Target aria-hidden="true" /> Objective</h3>
         <i />
         <em className="micro">
           {state.guarantees.filter((item) => item.enabled !== false).length}/{state.guarantees.length} active
         </em>
       </div>
 
-      <div className="field">
+      <div className="field objective-primary">
         <label>Maximise</label>
-        <select value={state.target} onChange={(event) => patch((draft) => { draft.target = event.target.value })}>
-          <option value="coin">Home Coin</option>
-          {targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
-        </select>
+        <ItemPicker
+          value={state.target}
+          options={targets}
+          includeCoin
+          ariaLabel="Primary optimization target"
+          onChange={(value) => patch((draft) => { draft.target = value })}
+        />
       </div>
 
       <div className="micro-label objective-subtitle">
@@ -58,12 +63,12 @@ export default function ObjectivePanel({ state, patch }: Props) {
               />
             </label>
 
-            <select
+            <ItemPicker
               value={guarantee.item}
-              onChange={(event) => patch((draft) => { draft.guarantees[index].item = event.target.value })}
-            >
-              {targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
-            </select>
+              options={targets}
+              ariaLabel={`Requirement ${index + 1} item`}
+              onChange={(value) => patch((draft) => { draft.guarantees[index].item = value })}
+            />
 
             <label className="rate-field">
               <input
@@ -90,22 +95,23 @@ export default function ObjectivePanel({ state, patch }: Props) {
 
             <button
               className="ghost guarantee-remove"
+              type="button"
               aria-label="Remove requirement"
               onClick={() => patch((draft) => { draft.guarantees.splice(index, 1) })}
             >
-              ×
+              <Trash2 aria-hidden="true" />
             </button>
           </div>
         ))}
       </div>
 
       <div className="objective-actions">
-        <button className="ghost" onClick={addRequirement}>+ another requirement</button>
-        <button className="ghost" onClick={() => patch((draft) => { draft.guarantees = [] })}>Clear requirements</button>
+        <button className="ghost" type="button" onClick={addRequirement}><Plus aria-hidden="true" /> another requirement</button>
+        <button className="ghost" type="button" onClick={() => patch((draft) => { draft.guarantees = [] })}><Trash2 aria-hidden="true" /> Clear</button>
       </div>
 
-      <p className="micro">
-        Normal rows are hard minimums. MAX pauses the saved /h value and joins the normalised multi-objective solve.
+      <p className="micro objective-help">
+        Minimum rows are hard requirements. MAX joins the normalized multi-objective solve.
       </p>
     </section>
   )
