@@ -32,6 +32,8 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Verify optimizer
+        env:
+          VITE_BUILD_ID: ${{ github.sha }}
         run: |
           set -euo pipefail
           npm run build

@@ -17,7 +17,8 @@ const TeamPage = lazy(() => import('./pages/TeamPage'))
 const LayoutPage = lazy(() => import('./pages/LayoutPage'))
 
 const RUN_OPTIONS = { solverEngine: 'highs-mip-next', timeLimitSeconds: 8, maxClimateCuts: 24, mipRelativeGap: 0 } as const
-const BUILD_ID = `modern-v10-solver-next:${DATA.version || 'data'}`
+const DEPLOY_BUILD_ID = import.meta.env.VITE_BUILD_ID || (import.meta.env.DEV ? `dev-${Date.now()}` : 'local-build')
+const BUILD_ID = `modern-v11-solver-next:${DEPLOY_BUILD_ID}:${DATA.version || 'data'}`
 const TEAM_CACHE_STORE = 'aniimoModernTeamCacheV2'
 const TEAM_CACHE_VERSION = 14
 
@@ -49,6 +50,7 @@ function teamSignature(state: OptimizerState, plan: OptimizerPlan) {
   const { optimizerStats: _stats, ...stablePlan } = plan
   return stableStringify({
     version: TEAM_CACHE_VERSION,
+    build: BUILD_ID,
     state,
     plan: stablePlan,
   })
