@@ -3040,11 +3040,12 @@ html[data-optimizer-theme="dark"] .rewrite-owned-dialog .roster-card-copy small{
 }
 
 
-/* Team is a fixed viewport stage; no one-pixel document scroll. */
+/* Team fills the viewport when it fits, then grows naturally so shorter
+   displays can scroll instead of clipping additional Aniimo cards. */
 .team-theatre{
-  height:calc(100vh - 78px);
-  min-height:0;
-  overflow:hidden;
+  height:auto;
+  min-height:calc(100vh - 78px);
+  overflow:visible;
 }
 
 
