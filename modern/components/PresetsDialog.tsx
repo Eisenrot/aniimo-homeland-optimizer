@@ -1,11 +1,17 @@
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
-import { Copy, Library, Link2, RefreshCw, Save, Trash2, Upload, X } from 'lucide-react'
+import { Check, Code2, CopyPlus, Library, Link2, Pencil, RefreshCw, Save, Star, Trash2, Upload, X } from 'lucide-react'
 import { useState } from 'react'
 import {
+  buildShareCode,
+  buildShareCodeFromSnapshot,
   buildShareUrl,
+  buildShareUrlFromSnapshot,
   createPresetId,
+  parseSharedPresetInput,
+  readDefaultPresetId,
   readPresets,
   snapshotPresetState,
+  writeDefaultPresetId,
   writePresets,
   type OptimizerPreset,
   type PresetSnapshot,
@@ -50,15 +56,43 @@ async function copyText(value: string) {
   }
 }
 
+function sameName(a: string, b: string) {
+  return a.localeCompare(b, undefined, { sensitivity: 'accent' }) === 0
+}
+
+function uniqueName(base: string, presets: OptimizerPreset[], excludeId?: string) {
+  const taken = (value: string) => presets.some((preset) => preset.id !== excludeId && sameName(preset.name, value))
+  if (!taken(base)) return base
+  let index = 2
+  while (taken(`${base} ${index}`)) index += 1
+  return `${base} ${index}`
+}
+
 export default function PresetsDialog({ state, onLoadPreset }: Props) {
   const [open, setOpen] = useState(false)
-  const [presets, setPresets] = useState<OptimizerPreset[]>(() => readPresets())
+  const [presets, setPresets] = useState<OptimizerPreset[]>(() => {
+    const initialDefault = readDefaultPresetId()
+    return readPresets().sort((a, b) => {
+      if (a.id === initialDefault && b.id !== initialDefault) return -1
+      if (b.id === initialDefault && a.id !== initialDefault) return 1
+      return Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+    })
+  })
+  const [defaultId, setDefaultId] = useState<string | null>(() => readDefaultPresetId())
   const [name, setName] = useState('')
   const [notice, setNotice] = useState('')
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const [importValue, setImportValue] = useState('')
+  const [importName, setImportName] = useState('')
 
-  const persist = (next: OptimizerPreset[]) => {
-    const sorted = [...next].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+  const persist = (next: OptimizerPreset[], preferredDefaultId = defaultId) => {
+    const sorted = [...next].sort((a, b) => {
+      if (a.id === preferredDefaultId && b.id !== preferredDefaultId) return -1
+      if (b.id === preferredDefaultId && a.id !== preferredDefaultId) return 1
+      return Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+    })
     setPresets(sorted)
     writePresets(sorted)
   }
@@ -69,7 +103,7 @@ export default function PresetsDialog({ state, onLoadPreset }: Props) {
       setNotice('Give the preset a name first.')
       return
     }
-    if (presets.some((preset) => preset.name.localeCompare(trimmed, undefined, { sensitivity: 'accent' }) === 0)) {
+    if (presets.some((preset) => sameName(preset.name, trimmed))) {
       setNotice('That name already exists. Use Update on the existing preset.')
       return
     }
@@ -101,8 +135,15 @@ export default function PresetsDialog({ state, onLoadPreset }: Props) {
       setNotice(`Press delete again to remove “${preset.name}”.`)
       return
     }
-    persist(presets.filter((entry) => entry.id !== preset.id))
+    if (defaultId === preset.id) {
+      setDefaultId(null)
+      writeDefaultPresetId(null)
+      persist(presets.filter((entry) => entry.id !== preset.id), null)
+    } else {
+      persist(presets.filter((entry) => entry.id !== preset.id))
+    }
     setPendingDelete(null)
+    setEditingId(null)
     setNotice(`Deleted “${preset.name}”.`)
   }
 
@@ -112,10 +153,92 @@ export default function PresetsDialog({ state, onLoadPreset }: Props) {
     setOpen(false)
   }
 
-  const share = async () => {
-    await copyText(buildShareUrl(state))
+  const startRename = (preset: OptimizerPreset) => {
+    setEditingId(preset.id)
+    setEditingName(preset.name)
     setPendingDelete(null)
-    setNotice('Share link copied.')
+    setNotice('')
+  }
+
+  const finishRename = (preset: OptimizerPreset) => {
+    const trimmed = editingName.trim()
+    if (!trimmed) {
+      setNotice('Preset names cannot be empty.')
+      return
+    }
+    if (presets.some((entry) => entry.id !== preset.id && sameName(entry.name, trimmed))) {
+      setNotice('Another preset already uses that name.')
+      return
+    }
+    const now = new Date().toISOString()
+    persist(presets.map((entry) => entry.id === preset.id ? { ...entry, name: trimmed, updatedAt: now } : entry))
+    setEditingId(null)
+    setEditingName('')
+    setNotice(`Renamed to “${trimmed}”.`)
+  }
+
+  const duplicatePreset = (preset: OptimizerPreset) => {
+    const now = new Date().toISOString()
+    const duplicateName = uniqueName(`${preset.name} copy`, presets)
+    persist([{
+      id: createPresetId(),
+      name: duplicateName,
+      createdAt: now,
+      updatedAt: now,
+      state: structuredClone(preset.state),
+    }, ...presets])
+    setNotice(`Duplicated as “${duplicateName}”.`)
+  }
+
+  const toggleDefault = (preset: OptimizerPreset) => {
+    const next = defaultId === preset.id ? null : preset.id
+    setDefaultId(next)
+    writeDefaultPresetId(next)
+    persist(presets, next)
+    setNotice(next ? `“${preset.name}” is now the default preset.` : 'Default preset cleared.')
+  }
+
+  const importPreset = () => {
+    const snapshot = parseSharedPresetInput(importValue)
+    if (!snapshot) {
+      setNotice('That is not a valid Homeland share code or share link.')
+      return
+    }
+    const requested = importName.trim() || `Imported · RV ${snapshot.homelandLevel} · ${targetName(snapshot.target)}`
+    const finalName = uniqueName(requested, presets)
+    const now = new Date().toISOString()
+    persist([{
+      id: createPresetId(),
+      name: finalName,
+      createdAt: now,
+      updatedAt: now,
+      state: snapshot,
+    }, ...presets])
+    setImportValue('')
+    setImportName('')
+    setNotice(`Imported “${finalName}”.`)
+  }
+
+  const copyCurrentCode = async () => {
+    const value = buildShareCode(state)
+    await copyText(value)
+    setNotice(`Share code copied · ${value.length.toLocaleString()} characters.`)
+  }
+
+  const copyCurrentLink = async () => {
+    await copyText(buildShareUrl(state))
+    setNotice('Compact share link copied.')
+  }
+
+  const copyPresetCode = async (preset: OptimizerPreset) => {
+    const value = buildShareCodeFromSnapshot(preset.state)
+    await copyText(value)
+    setNotice(`“${preset.name}” code copied · ${value.length.toLocaleString()} characters.`)
+  }
+
+  const copyPresetLink = async (preset: OptimizerPreset) => {
+    await copyText(buildShareUrlFromSnapshot(preset.state))
+    setNotice(`“${preset.name}” link copied.`)
   }
 
   return (
@@ -133,7 +256,7 @@ export default function PresetsDialog({ state, onLoadPreset }: Props) {
               <div>
                 <DialogPrimitive.Title>Presets & share</DialogPrimitive.Title>
                 <DialogPrimitive.Description>
-                  Save plan setups and switch between them instantly. Your Owned Aniimo roster stays global and is never stored in a preset or share link.
+                  Save plan setups, import a friend's setup, or share a compact code. Your Owned Aniimo roster stays global.
                 </DialogPrimitive.Description>
               </div>
               <DialogPrimitive.Close className="rewrite-dialog-close" aria-label="Close presets">
@@ -144,10 +267,7 @@ export default function PresetsDialog({ state, onLoadPreset }: Props) {
             <div className="rewrite-presets-panel">
               <section className="preset-create-block">
                 <div className="preset-block-heading">
-                  <div>
-                    <small>CURRENT SETUP</small>
-                    <b>Save as preset</b>
-                  </div>
+                  <div><small>CURRENT SETUP</small><b>Save as preset</b></div>
                   <span>RV {state.homelandLevel} · {targetName(state.target)} · {state.teamSlots} Aniimo</span>
                 </div>
                 <div className="preset-create-row">
@@ -157,10 +277,7 @@ export default function PresetsDialog({ state, onLoadPreset }: Props) {
                       value={name}
                       maxLength={64}
                       placeholder="e.g. Harvest Moon"
-                      onChange={(event) => {
-                        setName(event.target.value)
-                        setNotice('')
-                      }}
+                      onChange={(event) => { setName(event.target.value); setNotice('') }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
                           event.preventDefault()
@@ -170,42 +287,93 @@ export default function PresetsDialog({ state, onLoadPreset }: Props) {
                     />
                   </label>
                   <button className="preset-primary-action" type="button" onClick={saveCurrent}>
-                    <Save aria-hidden="true" />
-                    Save current
+                    <Save aria-hidden="true" /> Save current
+                  </button>
+                </div>
+              </section>
+
+              <section className="preset-import-block">
+                <div className="preset-block-heading">
+                  <div><small>IMPORT</small><b>Code or share link</b></div>
+                  <span>Old long links are still accepted.</span>
+                </div>
+                <div className="preset-import-grid">
+                  <label className="preset-name-field preset-import-code">
+                    <span>Paste code or URL</span>
+                    <textarea
+                      value={importValue}
+                      placeholder="AH1.… or https://…/#code=…"
+                      onChange={(event) => { setImportValue(event.target.value); setNotice('') }}
+                    />
+                  </label>
+                  <label className="preset-name-field">
+                    <span>Name after import</span>
+                    <input
+                      value={importName}
+                      maxLength={64}
+                      placeholder="optional"
+                      onChange={(event) => setImportName(event.target.value)}
+                    />
+                  </label>
+                  <button className="preset-primary-action" type="button" onClick={importPreset}>
+                    <Upload aria-hidden="true" /> Import preset
                   </button>
                 </div>
               </section>
 
               <section className="preset-list-block">
                 <div className="preset-block-heading">
-                  <div>
-                    <small>SAVED LOCALLY</small>
-                    <b>Presets</b>
-                  </div>
+                  <div><small>SAVED LOCALLY</small><b>Presets</b></div>
                   <span>{presets.length} saved</span>
                 </div>
 
                 {presets.length ? (
                   <div className="preset-list">
                     {presets.map((preset) => (
-                      <article className="preset-row" key={preset.id}>
+                      <article className={preset.id === defaultId ? 'preset-row is-default' : 'preset-row'} key={preset.id}>
                         <div className="preset-row-copy">
-                          <b>{preset.name}</b>
+                          {editingId === preset.id ? (
+                            <div className="preset-rename-row">
+                              <input
+                                autoFocus
+                                value={editingName}
+                                maxLength={64}
+                                onChange={(event) => setEditingName(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') finishRename(preset)
+                                  if (event.key === 'Escape') setEditingId(null)
+                                }}
+                              />
+                              <button className="preset-icon-action" type="button" title="Save rename" onClick={() => finishRename(preset)}>
+                                <Check aria-hidden="true" />
+                              </button>
+                            </div>
+                          ) : (
+                            <b>{preset.name}{preset.id === defaultId ? <span className="preset-default-tag">DEFAULT</span> : null}</b>
+                          )}
                           <small>{presetMeta(preset)}</small>
                           <em>{updatedLabel(preset.updatedAt)}</em>
                         </div>
                         <div className="preset-row-actions">
                           <button type="button" className="preset-load-action" onClick={() => loadPreset(preset)}>
-                            <Upload aria-hidden="true" />
-                            Load
+                            <Upload aria-hidden="true" /> Load
                           </button>
-                          <button
-                            type="button"
-                            className="preset-icon-action"
-                            aria-label={`Update ${preset.name} with current setup`}
-                            title="Update with current setup"
-                            onClick={() => updatePreset(preset)}
-                          >
+                          <button type="button" className="preset-icon-action" title="Rename" aria-label={`Rename ${preset.name}`} onClick={() => startRename(preset)}>
+                            <Pencil aria-hidden="true" />
+                          </button>
+                          <button type="button" className="preset-icon-action" title="Duplicate" aria-label={`Duplicate ${preset.name}`} onClick={() => duplicatePreset(preset)}>
+                            <CopyPlus aria-hidden="true" />
+                          </button>
+                          <button type="button" className={preset.id === defaultId ? 'preset-icon-action active' : 'preset-icon-action'} title={preset.id === defaultId ? 'Clear default' : 'Make default'} aria-label={`Toggle default for ${preset.name}`} onClick={() => toggleDefault(preset)}>
+                            <Star aria-hidden="true" />
+                          </button>
+                          <button type="button" className="preset-icon-action" title="Copy compact code" aria-label={`Copy code for ${preset.name}`} onClick={() => void copyPresetCode(preset)}>
+                            <Code2 aria-hidden="true" />
+                          </button>
+                          <button type="button" className="preset-icon-action" title="Copy compact link" aria-label={`Copy link for ${preset.name}`} onClick={() => void copyPresetLink(preset)}>
+                            <Link2 aria-hidden="true" />
+                          </button>
+                          <button type="button" className="preset-icon-action" title="Update with current setup" aria-label={`Update ${preset.name} with current setup`} onClick={() => updatePreset(preset)}>
                             <RefreshCw aria-hidden="true" />
                           </button>
                           <button
@@ -224,32 +392,31 @@ export default function PresetsDialog({ state, onLoadPreset }: Props) {
                 ) : (
                   <div className="preset-empty">
                     <Library aria-hidden="true" />
-                    <div>
-                      <b>No presets yet.</b>
-                      <small>Save the current setup above and it will live here.</small>
-                    </div>
+                    <div><b>No presets yet.</b><small>Save the current setup above and it will live here.</small></div>
                   </div>
                 )}
               </section>
 
               <section className="preset-share-block">
                 <div className="preset-share-copy">
-                  <span className="preset-share-icon"><Link2 aria-hidden="true" /></span>
+                  <span className="preset-share-icon"><Code2 aria-hidden="true" /></span>
                   <div>
                     <small>SHARE CURRENT SETUP</small>
-                    <b>Copy a loadable link</b>
-                    <span>Plan settings only. Roster, theme, caches and other local data stay yours.</span>
+                    <b>Code first, link when useful</b>
+                    <span>Compact codes are made for chat. Links remain clickable and both formats load the same plan.</span>
                   </div>
                 </div>
-                <button className="preset-share-action" type="button" onClick={() => void share()}>
-                  <Copy aria-hidden="true" />
-                  Copy share link
-                </button>
+                <div className="preset-share-actions">
+                  <button className="preset-share-action" type="button" onClick={() => void copyCurrentCode()}>
+                    <Code2 aria-hidden="true" /> Copy code
+                  </button>
+                  <button className="preset-share-action" type="button" onClick={() => void copyCurrentLink()}>
+                    <Link2 aria-hidden="true" /> Copy link
+                  </button>
+                </div>
               </section>
 
-              <div className="preset-live-status" role="status" aria-live="polite">
-                {notice}
-              </div>
+              <div className="preset-live-status" role="status" aria-live="polite">{notice}</div>
             </div>
           </DialogPrimitive.Popup>
         </DialogPrimitive.Viewport>
