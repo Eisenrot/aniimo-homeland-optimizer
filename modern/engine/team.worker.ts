@@ -3,12 +3,18 @@
 import { GAME_DATA } from '../../src/data.js'
 import {
   buildTeamModel,
-  findBestTeam,
   planItemRates,
   recommendPersonalityRoles,
   requiredAbilities,
 } from '../../src/optimizer.js'
-import type { OptimizerPlan, OptimizerState, TeamAnalysisResult, TeamWorkerMessage } from '../types'
+import { loadNextHighs, solveNextWithHighs } from '../../src/solver-next/index.js'
+import type {
+  OptimizerPlan,
+  OptimizerState,
+  SolverProgress,
+  TeamAnalysisResult,
+  TeamWorkerMessage,
+} from '../types'
 
 type AnalyzeRequest = {
   id: number
@@ -16,7 +22,7 @@ type AnalyzeRequest = {
   plan: OptimizerPlan
 }
 
-const compactMember = (member: any) => {
+function compactMember(member: any) {
   const pal = member?.pal || member || {}
   return {
     id: String(pal.id ?? ''),
@@ -29,6 +35,18 @@ const compactMember = (member: any) => {
   }
 }
 
+function friendlyPhase(progress: SolverProgress) {
+  const raw = String(progress.phase || '')
+  if (raw === 'joint-fairness') return 'Balancing the real roster'
+  if (raw === 'joint-sum') return 'Rebuilding production around the team'
+  if (raw === 'final') return 'Rebuilding production around the team'
+  if (raw === 'automation-tiebreak') return 'Checking electrical automation'
+  if (raw === 'automation-max-coverage') return 'Pushing electrical coverage'
+  if (raw === 'roster-compact') return 'Sending decorative employees home'
+  if (raw.startsWith('calibrate:')) return 'Calibrating roster objective'
+  return progress.detail || raw || 'Solving real roster'
+}
+
 self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
   const { id, state, plan } = event.data
   const progress = (detail: string) => {
@@ -37,28 +55,36 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
   }
 
   try {
-    progress('Building team model')
-    const staffingPlan = {
-      ...plan,
-      optimizerStats: {
-        ...(plan.optimizerStats || {}),
-        engine: 'highs-mip-next',
+    progress('Loading roster solver')
+    const highs = await loadNextHighs()
+
+    progress('Rebuilding production around Owned Aniimo')
+    const rosterPlan = await solveNextWithHighs(highs, state, GAME_DATA, {
+      rosterAware: true,
+      objectiveWeights: plan.objectiveWeights,
+      timeLimitSeconds: 10,
+      maxClimateCuts: 24,
+      mipRelativeGap: 0,
+      mipAbsoluteGap: 1e-7,
+      onProgress(value: SolverProgress) {
+        progress(friendlyPhase(value))
       },
-      scenario: { ...(plan.scenario || {}), generatorLevel: Number(state.generatorLevel || 1) },
-    } as OptimizerPlan
-    const model = buildTeamModel(staffingPlan, state, GAME_DATA)
-    const solveBestTeam = findBestTeam as unknown as (
-      model: unknown,
-      state: OptimizerState,
-      data: typeof GAME_DATA,
-      options: { onProgress?: (detail: string) => void },
-    ) => Promise<any | null>
+    }) as OptimizerPlan
 
-    const best: any = await solveBestTeam(model, state, GAME_DATA, {
-      onProgress: progress,
-    })
+    if (rosterPlan.infeasible) {
+      throw new Error('The enabled roster cannot run a legal version of this production setup.')
+    }
+    if (rosterPlan.optimizerStats?.validationOk === false) {
+      const errors = rosterPlan.optimizerStats.validationErrors || []
+      throw new Error(
+        errors.length
+          ? `Roster validation failed: ${errors.join(' · ')}`
+          : 'Roster validation failed.',
+      )
+    }
 
-    if (!best) {
+    const selected = [...(rosterPlan.roster?.selected || [])]
+    if (!selected.length) {
       const result: TeamAnalysisResult = {
         best: null,
         itemRates: [],
@@ -70,60 +96,61 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
       return
     }
 
-    const activeModel = best.model || model
-    const actualPlan = {
-      ...(activeModel?.plan || plan),
-      rows: [...(best.eval?.rows || [])],
-    } as OptimizerPlan
-
-    progress('Assigning personality roles')
-    const personality: any = recommendPersonalityRoles(
-      model,
-      best.team,
-      staffingPlan.rows,
+    const workerIndex = new Map(selected.map((member, index) => [member.key, index]))
+    const assignmentMaps = Array.from(
+      { length: selected.length },
+      () => new Map<string, { facility: string; mode: 'permanent' | 'utility' | 'flex'; seconds: number }>(),
     )
+    const priority = { permanent: 3, utility: 2, flex: 1 }
 
-    const assignmentMaps = Array.from({ length: best.team.length }, () => new Map<string, { facility: string; mode: 'permanent' | 'utility' | 'flex'; seconds: number }>())
-    const addAssignment = (worker: number, facility: string, mode: 'permanent' | 'utility' | 'flex', seconds: number) => {
-      if (worker < 0 || worker >= assignmentMaps.length || !facility) return
-      const map = assignmentMaps[worker]
-      const previous = map.get(facility)
-      const priority = { permanent: 3, utility: 2, flex: 1 }
+    for (const assignment of rosterPlan.roster?.assignments || []) {
+      const index = workerIndex.get(assignment.workerKey)
+      if (index == null || !assignment.facility) continue
+      const mode = assignment.kind === 'permanent'
+        ? 'permanent'
+        : assignment.kind === 'utility'
+          ? 'utility'
+          : 'flex'
+      const map = assignmentMaps[index]
+      const previous = map.get(assignment.facility)
       if (previous) {
-        previous.seconds += Math.max(0, Number(seconds || 0))
+        previous.seconds += Math.max(0, Number(assignment.seconds || 0))
         if (priority[mode] > priority[previous.mode]) previous.mode = mode
       } else {
-        map.set(facility, { facility, mode, seconds: Math.max(0, Number(seconds || 0)) })
+        map.set(assignment.facility, {
+          facility: assignment.facility,
+          mode,
+          seconds: Math.max(0, Number(assignment.seconds || 0)),
+        })
       }
     }
-    for (const assignment of personality?.coverageMatch?.assignments || []) {
-      const mode = assignment?.slot?.mode
-      if (mode === 'permanent' || mode === 'utility') {
-        addAssignment(Number(assignment.worker), String(assignment.slot?.facility || ''), mode, 3600)
-      }
-    }
-    for (const assignment of personality?.assignments || []) {
-      if (assignment?.permanent) continue
-      addAssignment(Number(assignment.worker), String(assignment.facility || ''), 'flex', Number(assignment.seconds || 0))
-    }
-    const assignments = assignmentMaps.map((map) => [...map.values()].sort((a, b) => {
-      const priority = { permanent: 3, utility: 2, flex: 1 }
-      return priority[b.mode] - priority[a.mode] || b.seconds - a.seconds || a.facility.localeCompare(b.facility)
-    }))
+
+    const assignments = assignmentMaps.map((map) => [...map.values()].sort((a, b) =>
+      priority[b.mode] - priority[a.mode]
+      || b.seconds - a.seconds
+      || a.facility.localeCompare(b.facility)))
+
+    progress('Assigning personality roles')
+    const teamModel = buildTeamModel(rosterPlan, state, GAME_DATA)
+    const personality: any = recommendPersonalityRoles(
+      teamModel,
+      selected,
+      rosterPlan.rows,
+    )
 
     const result: TeamAnalysisResult = {
       best: {
-        team: best.team.map(compactMember),
-        rate: Number(best.eval?.rate || 0),
+        team: selected.map(compactMember),
+        rate: Number(rosterPlan.ratePerHour || 0),
       },
-      itemRates: planItemRates(actualPlan, GAME_DATA)
+      itemRates: planItemRates(rosterPlan, GAME_DATA)
         .filter((item: any) => Number(item.rate || 0) > 1e-8)
         .map((item: any) => ({
           item: String(item.item),
           rate: Number(item.rate || 0),
         })),
       assignments,
-      requiredAbilities: requiredAbilities(actualPlan),
+      requiredAbilities: requiredAbilities(rosterPlan),
       personality: {
         hints: (personality?.hints || []).map((hint: any) => ({
           profile: String(hint.profile || ''),

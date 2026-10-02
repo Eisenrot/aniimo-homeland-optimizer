@@ -157,11 +157,53 @@ export type OptimizerStats = {
   validationErrors?: string[]
 }
 
+export type ObjectiveWeightView = {
+  key: string
+  item: string
+  label?: string
+  scale: number
+  normalizer: number
+  max: number | null
+}
+
+export type RosterAssignmentView = {
+  workerKey: string
+  kind: 'flex' | 'permanent' | 'utility'
+  facility: string
+  recipeId?: number | string
+  utilityKey?: string
+  task?: {
+    key?: string
+    ability?: string
+    level?: number
+    family?: number | null
+    baselineSeconds?: number
+  }
+  seconds: number
+  speed?: number
+  cycle?: number
+}
+
+export type RosterSolveView = {
+  aware: true
+  cap: number
+  selectedCount: number
+  selected: Array<{
+    key: string
+    copy: number
+    pal: Pal
+  }>
+  assignments: RosterAssignmentView[]
+}
+
 export type OptimizerPlan = {
   ratePerHour: number
   targetRate: number
   objectiveRate: number
   rows: PlanRow[]
+  objectiveWeights?: ObjectiveWeightView[]
+  runnableRecipes?: Recipe[]
+  roster?: RosterSolveView | null
   scenario?: Record<string, unknown>
   scenarioLabel?: string
   infeasible?: boolean

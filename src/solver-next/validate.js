@@ -1,4 +1,5 @@
 import { evaluateClimateLayout } from '../climate.js'
+import { isGrowerRecipe } from '../optimizer.js'
 import {
   facilityStacks,
   globallyProducedItems,
@@ -8,9 +9,141 @@ import {
   recipeElectricDemand,
   utilityWorkerCount,
 } from './domain.js'
+import {
+  ROSTER_RESIDENT_FACILITIES,
+  ownedWorkerCopies,
+  recipeRosterTasks,
+  rosterWorkerCanDo,
+} from './roster.js'
 import { gridPowerEfficiency, totalGeneratorPower } from '../utility-system.js'
 
 const EPS = 1e-5
+
+function validateRosterPlan(plan, state, data) {
+  const errors = []
+  const roster = plan.roster
+  if (!roster?.aware) return { errors, laborHours: null }
+
+  const available = new Map(ownedWorkerCopies(state, data).map((worker) => [worker.key, worker]))
+  const cap = Math.max(0, Math.floor(Number(state.workerSlots ?? state.teamSlots ?? 0) || 0))
+  const selected = roster.selected || []
+  const assignments = roster.assignments || []
+  const selectedKeys = new Set(selected.map((worker) => worker.key))
+
+  if (selected.length > cap + EPS) errors.push(`Roster uses ${selected.length} workers, cap ${cap}`)
+  if (Number(roster.selectedCount || 0) !== selected.length) {
+    errors.push(`Roster selectedCount mismatch: ${roster.selectedCount} vs ${selected.length}`)
+  }
+
+  for (const worker of selected) {
+    if (!available.has(worker.key)) errors.push(`Roster selected unavailable worker ${worker.key}`)
+  }
+
+  const secondsByWorker = new Map()
+  for (const assignment of assignments) {
+    const worker = available.get(assignment.workerKey)
+    if (!worker) {
+      errors.push(`Roster assignment uses unavailable worker ${assignment.workerKey}`)
+      continue
+    }
+    if (!selectedKeys.has(assignment.workerKey)) {
+      errors.push(`Roster assignment uses unselected worker ${assignment.workerKey}`)
+    }
+    if (!rosterWorkerCanDo(worker, assignment.task || {})) {
+      errors.push(`${assignment.workerKey} cannot perform ${assignment.task?.ability || 'unknown'} Lv.${assignment.task?.level || '?'}`)
+    }
+    const seconds = Math.max(0, Number(assignment.seconds || 0))
+    secondsByWorker.set(assignment.workerKey, (secondsByWorker.get(assignment.workerKey) || 0) + seconds)
+  }
+
+  for (const [workerKey, seconds] of secondsByWorker) {
+    if (seconds > 3600 + EPS) errors.push(`${workerKey} is booked for ${seconds}s in one hour`)
+  }
+
+  const cooling = plan.scenario?.coolingUnits || []
+  const heat = plan.scenario?.heatUnits || []
+  const utilityExpected = new Map([
+    ['cooling:cool', cooling.filter((mode) => mode === 'Cool').length],
+    ['cooling:freeze', cooling.filter((mode) => mode === 'Freeze').length],
+    ['heat:warm', heat.filter((mode) => mode === 'Warm').length],
+    ['heat:scorching', heat.filter((mode) => mode === 'Scorching').length],
+    ['sunlamp', Math.max(0, Math.round(Number(plan.scenario?.sunlampCount || 0)))],
+    ['generator', Math.max(0, Math.round(Number(plan.scenario?.generatorCount || 0)))],
+  ])
+  for (const [key, expected] of utilityExpected) {
+    const actual = assignments.filter(
+      (assignment) => assignment.kind === 'utility' && assignment.utilityKey === key,
+    ).length
+    if (actual !== expected) errors.push(`Utility staffing ${key}: ${actual} workers, expected ${expected}`)
+  }
+
+  for (const row of plan.rows || []) {
+    if (row.recipe?.electric) continue
+    const recipeId = String(row.recipe?.id)
+    const baselineCycle = Math.max(0, Number(row.baselineCycleSeconds ?? row.cycleSeconds ?? 0))
+    const baselineManual = Math.max(0, Number(row.baselineManualSeconds ?? row.manualSeconds ?? 0))
+    const resident = ROSTER_RESIDENT_FACILITIES.has(row.facility)
+
+    if (resident) {
+      const residentAssignments = assignments.filter(
+        (assignment) => assignment.kind === 'permanent' && String(assignment.recipeId) === recipeId,
+      )
+      const expectedUnits = Math.max(0, Math.round(Number(row.units || 0)))
+      if (residentAssignments.length !== expectedUnits) {
+        errors.push(`Resident staffing recipe ${recipeId}: ${residentAssignments.length} workers, expected ${expectedUnits}`)
+      }
+      const capacity = residentAssignments.reduce(
+        (sum, assignment) => sum + (Number(assignment.cycle || 0) > EPS ? 3600 / Number(assignment.cycle) : 0),
+        0,
+      )
+      if (Number(row.batchesPerHour || 0) > capacity + EPS) {
+        errors.push(`Resident throughput recipe ${recipeId}: ${row.batchesPerHour} > ${capacity}`)
+      }
+      continue
+    }
+
+    const entry = {
+      recipe: row.recipe,
+      electric: false,
+      labor: baselineManual,
+      cycle: baselineCycle,
+    }
+    const tasks = recipeRosterTasks(entry)
+    const flex = assignments.filter(
+      (assignment) => assignment.kind === 'flex' && String(assignment.recipeId) === recipeId,
+    )
+
+    for (const task of tasks) {
+      const supplied = flex
+        .filter((assignment) => assignment.task?.key === task.key)
+        .reduce(
+          (sum, assignment) => sum + Number(assignment.seconds || 0) * Number(assignment.speed || 0),
+          0,
+        )
+      const required = task.baselineSeconds * Number(row.batchesPerHour || 0)
+      if (supplied + EPS < required) {
+        errors.push(`Roster task ${recipeId}/${task.key}: ${supplied} < ${required}`)
+      }
+    }
+
+    if (isGrowerRecipe(row.recipe)) {
+      const occupied = Number(row.batchesPerHour || 0) * baselineCycle
+      const capacity = Number(row.units || 0) * 3600
+      if (occupied > capacity + EPS) errors.push(`Grower occupancy recipe ${recipeId}: ${occupied}s > ${capacity}s`)
+    } else {
+      const fixed = Math.max(0, baselineCycle - baselineManual)
+      const workerSeconds = flex.reduce((sum, assignment) => sum + Number(assignment.seconds || 0), 0)
+      const occupied = Number(row.batchesPerHour || 0) * fixed + workerSeconds
+      const capacity = Number(row.units || 0) * 3600
+      if (occupied > capacity + EPS) errors.push(`Roster occupancy recipe ${recipeId}: ${occupied}s > ${capacity}s`)
+    }
+  }
+
+  return {
+    errors,
+    laborHours: [...secondsByWorker.values()].reduce((sum, seconds) => sum + seconds / 3600, 0),
+  }
+}
 
 export function validateNextPlan(plan, state, data) {
   const errors = []
@@ -95,14 +228,21 @@ export function validateNextPlan(plan, state, data) {
     }
   }
 
-  const workerRaw = state.workerSlots ?? state.teamSlots
-  const workerLimit = Math.max(0, Number(workerRaw) || 0)
-  const laborHours = rows.reduce((sum, row) => {
-    const seconds = laborSeconds(row.recipe, state, scenario, Number(row.cycleSeconds || 0))
-    return sum + Number(row.batchesPerHour || 0) * seconds / 3600
-  }, 0) + utilityWorkerCount(scenario)
-  if (workerRaw != null && laborHours > workerLimit + EPS) {
-    errors.push(`Worker capacity ${laborHours} > ${workerLimit}`)
+  let laborHours = 0
+  if (plan.roster?.aware) {
+    const rosterValidation = validateRosterPlan(plan, state, data)
+    errors.push(...rosterValidation.errors)
+    laborHours = Number(rosterValidation.laborHours || 0)
+  } else {
+    const workerRaw = state.workerSlots ?? state.teamSlots
+    const workerLimit = Math.max(0, Number(workerRaw) || 0)
+    laborHours = rows.reduce((sum, row) => {
+      const seconds = laborSeconds(row.recipe, state, scenario, Number(row.cycleSeconds || 0))
+      return sum + Number(row.batchesPerHour || 0) * seconds / 3600
+    }, 0) + utilityWorkerCount(scenario)
+    if (workerRaw != null && laborHours > workerLimit + EPS) {
+      errors.push(`Worker capacity ${laborHours} > ${workerLimit}`)
+    }
   }
 
   const climate = evaluateClimateLayout(plan, state, data, { maxOffset: 9 })

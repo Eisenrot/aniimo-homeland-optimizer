@@ -218,15 +218,19 @@ The production MIP answers:
 
 > What is the best legal production configuration within the theoretical worker limit?
 
-The Team pass then asks:
+The Team pass asks a stricter version of the same optimization problem:
 
-> Which Aniimo I actually own can operate it best?
+> What is the best legal production configuration my actual Owned Aniimo can run?
 
-That second pass uses the owned roster and copy counts, real Homeland ability levels, permanent resident jobs, dedicated utility jobs, burst/intermittent work, family restrictions and personality recommendations.
+Team therefore runs Solver Next again with roster-aware staffing constraints while reusing the Plan solve's objective normalizers. The economic intent stays the same; the available labour becomes concrete.
 
-Keeping the two questions separate is useful. It lets the Plan page expose the economic optimum while the Team page shows the real roster cost of achieving it.
+The roster-aware model selects **up to** the configured Aniimo cap from enabled copies and assigns actual worker time to recipe tasks. Ability levels gate jobs, measured-efficiency recipes use the selected worker's real speed, resident jobs reserve a compatible worker for the full hour, and climate/electrical utilities reserve qualified full-time workers. Resident-family recipes such as Susuta's Tidewhisper Sandcastle work require the correct family rather than any vaguely leisure-shaped volunteer.
 
-In the current mainline architecture, the Team pass does not silently replace the production objective or re-solve the economic plan. It optimizes roster selection and assignments against the production sheet produced by the Plan solver.
+All of the normal production constraints remain active in this second solve: material balance, facility counts and levels, collection limits, one-recipe-per-facility, climate geometry, the shared Crackle grid, hard minimums and the multi-MAX fairness policy. A higher Aniimo cap expands the feasible set; it does not force extra workers into the result.
+
+For performance, workers that are mathematically identical for every currently runnable task are grouped into exact archetypes inside the MIP, then expanded back into real owned copies for the Team UI. Strictly dominated archetypes are removed only when enough better substitutes already exist to fill the entire team cap. No top-N candidate heuristic is used.
+
+The Team result may exceed the theoretical Plan rate when the owned roster contains workers whose actual Homeland ability levels are faster than the required-level baseline used by the theoretical pass. Personality is recommended afterward and is not silently counted as a production bonus.
 
 ## 11. Physical layout
 
@@ -273,6 +277,7 @@ A validation failure is surfaced as a solver failure rather than silently shippi
 The main pieces are:
 
 - `src/solver-next/model.js` — mixed-integer model construction;
+- `src/solver-next/roster.js` — Owned Aniimo archetypes, job eligibility and real worker-speed helpers;
 - `src/solver-next/solve.js` — staged objectives, climate-cut loop and plan reconstruction;
 - `src/solver-next/domain.js` — recipe timing, facility stacks and domain helpers;
 - `src/solver-next/validate.js` — independent post-solve validation;

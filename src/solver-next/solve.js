@@ -12,6 +12,8 @@ import { entries } from './sparse.js'
 import { validateNextPlan } from './validate.js'
 
 const EPS = 1e-8
+const PLAN_EPS = 1e-5
+const ASSIGNMENT_EPS = 1e-4
 
 function modelStatusName(highs, status) {
   const table = highs.constants?.modelStatus || {}
@@ -129,9 +131,135 @@ function selectedScenario(values, built) {
   }
 }
 
+function resolveRosterSolution(values, built) {
+  if (!built.rosterAware || !built.roster) return null
+
+  const assignments = []
+  const flexSecondsByEntry = new Map()
+  const selected = []
+  const buckets = new Map()
+
+  for (const item of built.roster.selectVars || []) {
+    const count = Math.max(0, Math.round(Number(values[item.selectCol] || 0)))
+    if (!count) continue
+    const members = (item.archetype.workers || []).slice(0, count).map((worker) => ({
+      worker,
+      usedSeconds: 0,
+    }))
+    buckets.set(item.archetype.key, members)
+  }
+
+  const claimFullTime = (archetypeKey) => {
+    const members = buckets.get(archetypeKey) || []
+    const member = members.find((candidate) => candidate.usedSeconds <= ASSIGNMENT_EPS)
+    if (!member) return null
+    member.usedSeconds = 3600
+    return member.worker
+  }
+
+  for (const item of built.roster.residentVars || []) {
+    const count = Math.max(0, Math.round(Number(values[item.assignCol] || 0)))
+    for (let copy = 0; copy < count; copy++) {
+      const worker = claimFullTime(item.archetype.key)
+      if (!worker) continue
+      assignments.push({
+        workerKey: worker.key,
+        kind: 'permanent',
+        facility: item.entry.recipe.facility,
+        recipeId: item.entry.recipe.id,
+        task: {
+          key: item.task.key,
+          ability: item.task.ability,
+          level: item.task.level,
+          family: item.task.family,
+        },
+        seconds: 3600,
+        cycle: item.cycle,
+      })
+    }
+  }
+
+  for (const item of built.roster.utilityVars || []) {
+    const count = Math.max(0, Math.round(Number(values[item.assignCol] || 0)))
+    for (let copy = 0; copy < count; copy++) {
+      const worker = claimFullTime(item.archetype.key)
+      if (!worker) continue
+      assignments.push({
+        workerKey: worker.key,
+        kind: 'utility',
+        facility: item.spec.utility === 'cooling' ? 'cooling-unit'
+          : item.spec.utility === 'heat' ? 'heat-furnace'
+            : item.spec.utility === 'sunlamp' ? 'sunlamp'
+              : 'crackle-generator',
+        utilityKey: item.spec.key,
+        task: {
+          key: item.spec.key,
+          ability: item.spec.ability,
+          level: item.spec.level,
+          family: null,
+        },
+        seconds: 3600,
+      })
+    }
+  }
+
+  for (const item of built.roster.flexVars || []) {
+    let seconds = Math.max(0, Number(values[item.timeCol] || 0))
+    if (seconds <= ASSIGNMENT_EPS) continue
+    flexSecondsByEntry.set(item.entry, (flexSecondsByEntry.get(item.entry) || 0) + seconds)
+
+    const members = buckets.get(item.archetype.key) || []
+    for (const member of members) {
+      if (seconds <= ASSIGNMENT_EPS) break
+      const spare = Math.max(0, 3600 - member.usedSeconds)
+      if (spare <= ASSIGNMENT_EPS) continue
+      const used = Math.min(spare, seconds)
+      member.usedSeconds += used
+      seconds -= used
+      assignments.push({
+        workerKey: member.worker.key,
+        kind: 'flex',
+        facility: item.entry.recipe.facility,
+        recipeId: item.entry.recipe.id,
+        task: {
+          key: item.task.key,
+          ability: item.task.ability,
+          level: item.task.level,
+          family: item.task.family,
+          baselineSeconds: item.task.baselineSeconds,
+        },
+        seconds: used,
+        speed: item.speed,
+      })
+    }
+  }
+
+  for (const members of buckets.values()) {
+    for (const member of members) {
+      if (member.usedSeconds <= ASSIGNMENT_EPS) continue
+      selected.push({
+        key: member.worker.key,
+        copy: member.worker.copy,
+        pal: member.worker.pal,
+      })
+    }
+  }
+
+  return {
+    flexSecondsByEntry,
+    public: {
+      aware: true,
+      cap: built.roster.cap,
+      selectedCount: selected.length,
+      selected,
+      assignments,
+    },
+  }
+}
 function solutionToPlan(model, built, solution, stage, climateLayout = null) {
   const values = solution.colValue
   const scenario = selectedScenario(values, built)
+  const roster = resolveRosterSolution(values, built)
   const rows = []
   let coin = 0
   let target = 0
@@ -139,7 +267,7 @@ function solutionToPlan(model, built, solution, stage, climateLayout = null) {
 
   for (const entry of built.recipeVars) {
     const batches = Math.max(0, Number(values[entry.rateCol] || 0))
-    if (batches <= EPS) continue
+    if (batches <= PLAN_EPS) continue
 
     const units = Math.max(0, Number(values[entry.unitCol] || 0))
     const coinPart = recipeNetValue(entry.recipe, built.data) * batches
@@ -155,6 +283,15 @@ function solutionToPlan(model, built, solution, stage, climateLayout = null) {
         * batches
     }
 
+    const assignedSeconds = roster?.flexSecondsByEntry.get(entry) || 0
+    const rosterManual = roster && batches > EPS ? assignedSeconds / batches : entry.labor
+    const fixedSeconds = Math.max(0, Number(entry.cycle || 0) - Number(entry.labor || 0))
+    const rosterCycle = roster && !entry.electric && assignedSeconds > EPS
+      ? (entry.recipe.facility === 'farmland' || entry.recipe.facility === 'woodland'
+          ? entry.cycle
+          : fixedSeconds + rosterManual)
+      : entry.cycle
+
     rows.push({
       facility: entry.recipe.facility,
       recipe: entry.recipe,
@@ -164,8 +301,10 @@ function solutionToPlan(model, built, solution, stage, climateLayout = null) {
       targetPerHour: targetPart,
       cycleSeconds: entry.electric && scenario.powerEfficiency > 1e-9
         ? entry.cycle / scenario.powerEfficiency
-        : entry.cycle,
-      manualSeconds: entry.labor,
+        : rosterCycle,
+      manualSeconds: rosterManual,
+      baselineCycleSeconds: entry.cycle,
+      baselineManualSeconds: entry.labor,
       effectiveEnv: entry.env,
       executionMode: entry.recipe.executionMode || 'normal',
       netValue: recipeNetValue(entry.recipe, built.data),
@@ -183,6 +322,7 @@ function solutionToPlan(model, built, solution, stage, climateLayout = null) {
     utilityWorkers: utilityWorkerCount(scenario),
     infeasible: false,
     climateLayout,
+    roster: roster?.public || null,
     jointMinShare: stage.jointMinShare ?? null,
     objectiveWeights: (stage.weights || []).map((weight) => ({
       ...weight.spec,
@@ -295,7 +435,7 @@ async function solveStage({
 
 export async function solveNextWithHighs(highs, state, data, options = {}) {
   const started = performance.now()
-  const built = buildNextModel(highs, state, data)
+  const built = buildNextModel(highs, state, data, options)
   const buildMs = performance.now() - started
   const model = highs.createModel(built.modelData)
   const maxClimateCuts = Math.max(0, Number(options.maxClimateCuts ?? 24))
@@ -313,77 +453,97 @@ export async function solveNextWithHighs(highs, state, data, options = {}) {
     })
 
     const climate = createClimateCutManager(highs, model, built)
+    const suppliedWeights = Array.isArray(options.objectiveWeights) ? options.objectiveWeights : []
+    const suppliedByKey = new Map(suppliedWeights.map((weight) => [String(weight.key || ''), weight]))
     const maxima = new Map()
     let latest = null
+    let activeWeights = []
 
-    for (let i = 0; i < built.specs.length; i++) {
-      const spec = built.specs[i]
-      const vector = built.objectiveVectors.get(spec.key)
-      const result = await solveStage({
-        highs,
-        model,
-        built,
-        climate,
-        objective: vector,
-        stage: {
-          name: `calibrate:${spec.key}`,
-          weights: [{ spec, scale: 1, normalizer: 1, max: null }],
-        },
-        maxClimateCuts,
-        onProgress,
-      })
+    if (suppliedByKey.size) {
+      activeWeights = built.specs
+        .map((spec) => {
+          const supplied = suppliedByKey.get(spec.key)
+          if (!supplied) return spec.key === 'primary' ? { spec, max: 0, normalizer: 1, scale: 1 } : null
+          const max = Math.max(0, Number(supplied.max || 0))
+          if (spec.key !== 'primary' && max <= EPS) return null
+          const normalizer = Math.max(EPS, Number(supplied.normalizer || Math.abs(max) || 1))
+          return {
+            spec,
+            max,
+            normalizer,
+            scale: Number(supplied.scale || 1 / normalizer),
+          }
+        })
+        .filter(Boolean)
+    } else {
+      for (let i = 0; i < built.specs.length; i++) {
+        const spec = built.specs[i]
+        const vector = built.objectiveVectors.get(spec.key)
+        const result = await solveStage({
+          highs,
+          model,
+          built,
+          climate,
+          objective: vector,
+          stage: {
+            name: 'calibrate:' + spec.key,
+            weights: [{ spec, scale: 1, normalizer: 1, max: null }],
+          },
+          maxClimateCuts,
+          onProgress,
+        })
 
-      if (!result.feasible || !result.plan) {
-        return {
-          ratePerHour: 0,
-          targetRate: 0,
-          objectiveRate: 0,
-          rows: [],
-          runnableRecipes: [],
-          scenario: {},
-          scenarioLabel: 'No feasible plan',
-          utilityWorkers: 0,
-          infeasible: true,
-          climateLayout: result.climate || {
-            feasible: false,
-            status: result.status,
-            message: 'The MIP or climate layer found no feasible plan.',
-          },
-          objectiveWeights: [],
-          optimizerStats: {
-            engine: 'highs-mip-next',
-            elapsedMs: performance.now() - started,
-            buildMs,
-            climateCuts: climate.count,
-            modelStatus: result.status,
-          },
+        if (!result.feasible || !result.plan) {
+          return {
+            ratePerHour: 0,
+            targetRate: 0,
+            objectiveRate: 0,
+            rows: [],
+            runnableRecipes: [],
+            scenario: {},
+            scenarioLabel: 'No feasible plan',
+            utilityWorkers: 0,
+            infeasible: true,
+            climateLayout: result.climate || {
+              feasible: false,
+              status: result.status,
+              message: 'The MIP or climate layer found no feasible plan.',
+            },
+            objectiveWeights: [],
+            optimizerStats: {
+              engine: 'highs-mip-next',
+              elapsedMs: performance.now() - started,
+              buildMs,
+              climateCuts: climate.count,
+              modelStatus: result.status,
+            },
+          }
         }
+
+        latest = result
+        const vectorNow = built.objectiveVectors.get(spec.key)
+        const values = result.solution.colValue
+        let maximum = 0
+        for (let col = 0; col < Math.min(vectorNow.length, values.length); col++) {
+          maximum += Number(vectorNow[col] || 0) * Number(values[col] || 0)
+        }
+        maxima.set(spec.key, Math.max(0, maximum))
       }
 
-      latest = result
-      const vectorNow = built.objectiveVectors.get(spec.key)
-      const values = result.solution.colValue
-      let maximum = 0
-      for (let col = 0; col < Math.min(vectorNow.length, values.length); col++) {
-        maximum += Number(vectorNow[col] || 0) * Number(values[col] || 0)
-      }
-      maxima.set(spec.key, Math.max(0, maximum))
+      activeWeights = built.specs
+        .map((spec) => {
+          const max = Number(maxima.get(spec.key) || 0)
+          if (spec.key !== 'primary' && max <= EPS) return null
+          const normalizer = Math.max(EPS, Math.abs(max))
+          return {
+            spec,
+            max,
+            normalizer,
+            scale: 1 / normalizer,
+          }
+        })
+        .filter(Boolean)
     }
-
-    const activeWeights = built.specs
-      .map((spec) => {
-        const max = Number(maxima.get(spec.key) || 0)
-        if (spec.key !== 'primary' && max <= EPS) return null
-        const normalizer = Math.max(EPS, Math.abs(max))
-        return {
-          spec,
-          max,
-          normalizer,
-          scale: 1 / normalizer,
-        }
-      })
-      .filter(Boolean)
-
     let finalResult = latest
     let jointMinShare = null
     let economicObjective = null

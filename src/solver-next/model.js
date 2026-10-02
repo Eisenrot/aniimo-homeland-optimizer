@@ -1,4 +1,14 @@
 import { generatorPowerAtLevel } from '../utility-system.js'
+import { isGrowerRecipe } from '../optimizer.js'
+import {
+  ROSTER_RESIDENT_FACILITIES,
+  rosterWorkerArchetypes,
+  recipeRosterTasks,
+  rosterWorkerCanDo,
+  utilityRosterSpecs,
+  workerAdjustedCycle,
+  workerTaskSpeed,
+} from './roster.js'
 import {
   enumerateScenarios,
   facilityCount,
@@ -12,7 +22,9 @@ import {
 } from './domain.js'
 import { csr } from './sparse.js'
 
-export function buildNextModel(highs, state, data) {
+export function buildNextModel(highs, state, data, options = {}) {
+  const rosterAware = Boolean(options.rosterAware)
+  const recipeState = rosterAware ? { ...state, abilityLevel: 'auto' } : state
   const specs = objectiveSpecs(state, data)
   const columns = []
   const colCost = []
@@ -65,7 +77,7 @@ export function buildNextModel(highs, state, data) {
     ),
   }
 
-  const active = staticRecipeVariants(state, data)
+  const active = staticRecipeVariants(recipeState, data)
   const recipeVars = []
 
   for (let recipeIndex = 0; recipeIndex < active.length; recipeIndex++) {
@@ -90,7 +102,7 @@ export function buildNextModel(highs, state, data) {
       env: entry.env,
       electric,
       powerDemand,
-    }, 0, count, Boolean(state.oneRecipePerFacility || electric))
+    }, 0, count, Boolean(state.oneRecipePerFacility || electric || (rosterAware && ROSTER_RESIDENT_FACILITIES.has(entry.recipe.facility))))
 
     recipeVars.push({
       recipeIndex,
@@ -133,6 +145,92 @@ export function buildNextModel(highs, state, data) {
     }
   }
 
+  const rosterArchetypes = rosterAware ? rosterWorkerArchetypes(state, data, recipeVars) : []
+  const rosterWorkerCount = rosterArchetypes.reduce((sum, archetype) => sum + archetype.count, 0)
+  const rosterCap = rosterAware
+    ? Math.max(0, Math.min(rosterWorkerCount, Math.floor(Number(state.workerSlots ?? state.teamSlots ?? 0) || 0)))
+    : 0
+  const rosterSelectVars = []
+  const rosterFlexVars = []
+  const rosterResidentVars = []
+  const rosterUtilityVars = []
+  const rosterTasksByEntry = new Map()
+
+  if (rosterAware) {
+    for (const archetype of rosterArchetypes) {
+      const cap = Math.min(archetype.count, rosterCap)
+      if (cap <= 0) continue
+      rosterSelectVars.push({
+        archetype,
+        selectCol: addColumn({ kind: 'roster-worker-selected', archetypeKey: archetype.key }, 0, cap, true),
+      })
+    }
+
+    for (const entry of recipeVars) {
+      if (entry.electric) continue
+      const tasks = recipeRosterTasks(entry)
+      rosterTasksByEntry.set(entry, tasks)
+      const resident = ROSTER_RESIDENT_FACILITIES.has(entry.recipe.facility)
+
+      if (resident) {
+        const task = tasks[0]
+        if (!task) continue
+        for (const archetype of rosterArchetypes) {
+          const worker = archetype.representative
+          if (!rosterWorkerCanDo(worker, task)) continue
+          const cycle = workerAdjustedCycle(entry, worker, task, state)
+          if (!Number.isFinite(cycle) || cycle <= 1e-12) continue
+          const cap = Math.min(archetype.count, rosterCap)
+          if (cap <= 0) continue
+          rosterResidentVars.push({
+            entry, task, archetype, cycle,
+            assignCol: addColumn({
+              kind: 'roster-resident-assignment',
+              archetypeKey: archetype.key,
+              recipeId: entry.recipe.id,
+            }, 0, cap, true),
+          })
+        }
+        continue
+      }
+
+      for (const task of tasks) {
+        for (const archetype of rosterArchetypes) {
+          const worker = archetype.representative
+          const speed = workerTaskSpeed(entry, worker, task, state)
+          if (speed <= 1e-12) continue
+          const cap = Math.min(archetype.count, rosterCap)
+          if (cap <= 0) continue
+          rosterFlexVars.push({
+            entry, task, archetype, speed,
+            timeCol: addColumn({
+              kind: 'roster-flex-time',
+              archetypeKey: archetype.key,
+              recipeId: entry.recipe.id,
+              taskKey: task.key,
+            }, 0, 3600 * cap, false),
+          })
+        }
+      }
+    }
+
+    for (const spec of utilityRosterSpecs(state)) {
+      for (const archetype of rosterArchetypes) {
+        if (!rosterWorkerCanDo(archetype.representative, spec)) continue
+        const cap = Math.min(archetype.count, rosterCap)
+        if (cap <= 0) continue
+        rosterUtilityVars.push({
+          spec, archetype,
+          assignCol: addColumn({
+            kind: 'roster-utility-assignment',
+            archetypeKey: archetype.key,
+            utility: spec.utility,
+            mode: spec.mode,
+          }, 0, cap, true),
+        })
+      }
+    }
+  }
   const rows = []
   const rowLower = []
   const rowUpper = []
@@ -173,9 +271,10 @@ export function buildNextModel(highs, state, data) {
   for (const entry of recipeVars) {
     const cap = facilityCount(state, entry.recipe.facility)
 
-    // Manual/grower occupancy is linear directly. Electric occupancy is
-    // supplied later by the selected finite power-grid state.
-    if (!entry.electric) {
+    // The theoretical sheet gets the simple cycle link. The roster solve is
+    // fussier: growers still sit on the plot for the full grow cycle, while
+    // staffed machines use the real worker seconds we assign further down.
+    if (!entry.electric && (!rosterAware || isGrowerRecipe(entry.recipe))) {
       addRow([
         [entry.rateCol, entry.cycle / 3600],
         [entry.unitCol, -1],
@@ -294,38 +393,158 @@ export function buildNextModel(highs, state, data) {
     })
   }
 
-  const workerRaw = state.workerSlots ?? state.teamSlots
-  if (workerRaw != null) {
-    const workerLimit = Math.max(0, Number(workerRaw) || 0)
-    const terms = []
-    const residentFacilities = new Set([
-      'mine', 'well', 'dewy-house', 'tidewhisper-sandcastle',
-      'nimbus-bed', 'starfall-hammock', 'floral-windmill',
-    ])
-    for (const entry of recipeVars) {
-      if (entry.electric) continue
-      // Resident facilities consume one physical Aniimo for every active
-      // manual facility unit, even when its measured work time is short.
-      // They cannot lend the idle-looking remainder of the hour elsewhere.
-      if (residentFacilities.has(entry.recipe.facility)) {
-        terms.push([entry.unitCol, 1])
-      } else if (entry.labor > 1e-14) {
-        terms.push([entry.rateCol, entry.labor / 3600])
+  if (!rosterAware) {
+    const workerRaw = state.workerSlots ?? state.teamSlots
+    if (workerRaw != null) {
+      const workerLimit = Math.max(0, Number(workerRaw) || 0)
+      const terms = []
+      const residentFacilities = new Set([
+        'mine', 'well', 'dewy-house', 'tidewhisper-sandcastle',
+        'nimbus-bed', 'starfall-hammock', 'floral-windmill',
+      ])
+      for (const entry of recipeVars) {
+        if (entry.electric) continue
+        // Resident facilities consume one physical Aniimo for every active
+        // manual facility unit, even when its measured work time is short.
+        // They cannot lend the idle-looking remainder of the hour elsewhere.
+        if (residentFacilities.has(entry.recipe.facility)) {
+          terms.push([entry.unitCol, 1])
+        } else if (entry.labor > 1e-14) {
+          terms.push([entry.rateCol, entry.labor / 3600])
+        }
       }
+      terms.push([utilityCols.cooling.cool, 1])
+      terms.push([utilityCols.cooling.freeze, 1])
+      terms.push([utilityCols.heat.warm, 1])
+      terms.push([utilityCols.heat.scorching, 1])
+      terms.push([utilityCols.sunlamp, 1])
+      terms.push([utilityCols.generator, 1])
+      addRow(terms, -highs.infinity, workerLimit, {
+        kind: 'worker-capacity',
+        workerLimit,
+        residentsAreDedicated: true,
+      })
     }
-    terms.push([utilityCols.cooling.cool, 1])
-    terms.push([utilityCols.cooling.freeze, 1])
-    terms.push([utilityCols.heat.warm, 1])
-    terms.push([utilityCols.heat.scorching, 1])
-    terms.push([utilityCols.sunlamp, 1])
-    terms.push([utilityCols.generator, 1])
-    addRow(terms, -highs.infinity, workerLimit, {
-      kind: 'worker-capacity',
-      workerLimit,
-      residentsAreDedicated: true,
-    })
+
   }
 
+  if (rosterAware) {
+    const selectByArchetype = new Map(rosterSelectVars.map((item) => [item.archetype.key, item.selectCol]))
+    const flexByArchetype = new Map()
+    const residentByArchetype = new Map()
+    const utilityByArchetype = new Map()
+    const flexByEntry = new Map()
+    const residentByEntry = new Map()
+
+    for (const item of rosterFlexVars) {
+      const byType = flexByArchetype.get(item.archetype.key) || []
+      byType.push(item)
+      flexByArchetype.set(item.archetype.key, byType)
+      const byEntry = flexByEntry.get(item.entry) || []
+      byEntry.push(item)
+      flexByEntry.set(item.entry, byEntry)
+    }
+    for (const item of rosterResidentVars) {
+      const byType = residentByArchetype.get(item.archetype.key) || []
+      byType.push(item)
+      residentByArchetype.set(item.archetype.key, byType)
+      const byEntry = residentByEntry.get(item.entry) || []
+      byEntry.push(item)
+      residentByEntry.set(item.entry, byEntry)
+    }
+    for (const item of rosterUtilityVars) {
+      const byType = utilityByArchetype.get(item.archetype.key) || []
+      byType.push(item)
+      utilityByArchetype.set(item.archetype.key, byType)
+    }
+
+    // Internally we fill the cap with idle placeholders. That is the same
+    // feasible production set as "up to N", but gives the MIP less fog to stare at.
+    // The Team UI only materializes workers who actually received a job.
+    addRow(
+      rosterSelectVars.map((item) => [item.selectCol, 1]),
+      rosterCap,
+      rosterCap,
+      { kind: 'roster-worker-cap', workerLimit: rosterCap },
+    )
+
+    for (const archetype of rosterArchetypes) {
+      const selectCol = selectByArchetype.get(archetype.key)
+      if (selectCol == null) continue
+      const terms = [[selectCol, -1]]
+      for (const item of flexByArchetype.get(archetype.key) || []) terms.push([item.timeCol, 1 / 3600])
+      for (const item of residentByArchetype.get(archetype.key) || []) terms.push([item.assignCol, 1])
+      for (const item of utilityByArchetype.get(archetype.key) || []) terms.push([item.assignCol, 1])
+      addRow(terms, -highs.infinity, 0, {
+        kind: 'roster-worker-time',
+        archetypeKey: archetype.key,
+      })
+    }
+
+    const utilityColFor = (spec) => {
+      if (spec.key === 'cooling:cool') return utilityCols.cooling.cool
+      if (spec.key === 'cooling:freeze') return utilityCols.cooling.freeze
+      if (spec.key === 'heat:warm') return utilityCols.heat.warm
+      if (spec.key === 'heat:scorching') return utilityCols.heat.scorching
+      if (spec.key === 'sunlamp') return utilityCols.sunlamp
+      if (spec.key === 'generator') return utilityCols.generator
+      return null
+    }
+
+    for (const spec of utilityRosterSpecs(state)) {
+      const utilityCol = utilityColFor(spec)
+      if (utilityCol == null) continue
+      const terms = rosterUtilityVars
+        .filter((item) => item.spec.key === spec.key)
+        .map((item) => [item.assignCol, 1])
+      terms.push([utilityCol, -1])
+      addRow(terms, 0, 0, {
+        kind: 'roster-utility-cover',
+        utility: spec.utility,
+        mode: spec.mode,
+      })
+    }
+
+    for (const entry of recipeVars) {
+      if (entry.electric) continue
+      const resident = ROSTER_RESIDENT_FACILITIES.has(entry.recipe.facility)
+      const tasks = rosterTasksByEntry.get(entry) || []
+
+      if (resident) {
+        const candidates = residentByEntry.get(entry) || []
+        addRow([
+          ...candidates.map((item) => [item.assignCol, 1]),
+          [entry.unitCol, -1],
+        ], 0, 0, { kind: 'roster-resident-cover', recipeId: entry.recipe.id })
+        addRow([
+          [entry.rateCol, 1],
+          ...candidates.map((item) => [item.assignCol, -3600 / item.cycle]),
+        ], -highs.infinity, 0, { kind: 'roster-resident-throughput', recipeId: entry.recipe.id })
+        continue
+      }
+
+      const flex = flexByEntry.get(entry) || []
+      for (const task of tasks) {
+        addRow([
+          [entry.rateCol, task.baselineSeconds],
+          ...flex.filter((item) => item.task.key === task.key).map((item) => [item.timeCol, -item.speed]),
+        ], -highs.infinity, 0, {
+          kind: 'roster-task-demand',
+          recipeId: entry.recipe.id,
+          taskKey: task.key,
+        })
+      }
+
+      if (!isGrowerRecipe(entry.recipe)) {
+        const fixedSeconds = Math.max(0, Number(entry.cycle || 0) - Number(entry.labor || 0))
+        addRow([
+          [entry.rateCol, fixedSeconds / 3600],
+          ...flex.map((item) => [item.timeCol, 1 / 3600]),
+          [entry.unitCol, -1],
+        ], -highs.infinity, 0, { kind: 'roster-rate-unit-link', recipeId: entry.recipe.id })
+      }
+    }
+  }
   // Shared Crackle grid efficiency without power-state enumeration.
   const powerBitsByEntry = new Map()
   for (const bit of powerBitVars) {
@@ -428,6 +647,16 @@ export function buildNextModel(highs, state, data) {
     powerEtaCol,
     powerBitVars,
     availableUtilities: available,
+    rosterAware,
+    roster: rosterAware ? {
+      cap: rosterCap,
+      archetypes: rosterArchetypes,
+      selectVars: rosterSelectVars,
+      flexVars: rosterFlexVars,
+      residentVars: rosterResidentVars,
+      utilityVars: rosterUtilityVars,
+      tasksByEntry: rosterTasksByEntry,
+    } : null,
     scenarioTotal: enumerateScenarios(state).length,
     modelData,
   }

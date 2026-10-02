@@ -76,13 +76,15 @@ So no, the lightning checkbox is not secretly just `+20% speed go brrr`.
 
 The theoretical production solve answers:
 
-> What is the best legal production plan?
+> What is the best legal production plan under the configured worker capacity?
 
-The Team pass answers:
+The Team pass answers the stricter question:
 
-> Which Aniimo I actually own should run it?
+> What is the best legal production plan my actual Owned Aniimo can run?
 
-It uses enabled Aniimo, copy counts, Homeland abilities, resident-family restrictions, utility jobs, measured efficiency, and personality requirements. The result includes facility assignments, ability coverage, and the optimized team rate.
+Team runs a roster-aware Solver Next pass with the same objective calibration as Plan. It uses enabled Aniimo and copy counts, real Homeland abilities, resident-family restrictions, dedicated utility jobs, measured efficiency, facility limits, material balance, climate geometry, the shared Crackle grid, and the same one-recipe rule. The configured Aniimo number is a cap, not a compulsory headcount: if 14 useful workers already saturate the Homeland, setting 20 does not invent six decorative jobs.
+
+The result includes the real roster-aware production rate, selected workers, facility assignments, and ability coverage. Personality remains a recommendation layer rather than a hidden production bonus.
 
 ## Layout
 
