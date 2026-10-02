@@ -1,0 +1,570 @@
+import { gridPowerEfficiency, totalGeneratorPower } from '../utility-system.js'
+import {
+  objectiveCoefficient,
+  recipeNetItem,
+  recipeNetValue,
+  scenarioLabel,
+  utilityWorkerCount,
+} from './domain.js'
+import { buildNextModel } from './model.js'
+import { createClimateCutManager } from './climate-cuts.js'
+import { entries } from './sparse.js'
+import { validateNextPlan } from './validate.js'
+
+const EPS = 1e-8
+
+function modelStatusName(highs, status) {
+  const table = highs.constants?.modelStatus || {}
+  for (const [key, value] of Object.entries(table)) {
+    if (value === status) return key
+  }
+  return String(status)
+}
+
+function hasUsableSolution(model) {
+  try {
+    const solution = model.getSolution()
+    return Boolean(solution?.colValue?.length)
+  } catch {
+    return false
+  }
+}
+
+function setObjective(model, vector, colCount) {
+  for (let col = 0; col < colCount; col++) {
+    model.changeColCost(col, Number(vector[col] || 0))
+  }
+}
+
+function extendVector(vector, length) {
+  if (vector.length >= length) return vector
+  const next = new Float64Array(length)
+  next.set(vector)
+  return next
+}
+
+function vectorValue(vector, values) {
+  let total = 0
+  const limit = Math.min(vector.length, values.length)
+  for (let col = 0; col < limit; col++) {
+    total += Number(vector[col] || 0) * Number(values[col] || 0)
+  }
+  return total
+}
+
+function addObjectiveFloor(highs, model, vector, achieved, retention = 1) {
+  const terms = []
+  const extended = extendVector(vector, model.getDimensions().numCols)
+  for (let col = 0; col < extended.length; col++) {
+    const value = Number(extended[col] || 0)
+    if (Math.abs(value) > 1e-14) terms.push([col, value])
+  }
+  const keep = Math.max(0, Math.min(1, Number(retention) || 0))
+  const numeric = Number(achieved) || 0
+  const protectedValue = numeric >= 0 ? numeric * keep : numeric / Math.max(keep, 1e-9)
+  const tolerance = Math.max(1e-8, Math.abs(protectedValue) * 1e-7)
+  model.addRow(
+    protectedValue - tolerance,
+    highs.infinity,
+    entries(terms),
+  )
+}
+
+function electricalAutomationObjective(built, colCount) {
+  const objective = new Float64Array(colCount)
+  for (const entry of built.recipeVars) {
+    if (entry.electric) {
+      // Reward actual E-mode throughput as base machine occupancy. This cannot
+      // be gamed by switching on an idle electric facility with zero batches.
+      objective[entry.rateCol] += Math.max(0, Number(entry.cycle || 0)) / 3600
+    } else if (entry.labor > EPS) {
+      // Equivalent economic plans should prefer requiring less Aniimo labor.
+      objective[entry.rateCol] -= Math.max(0, Number(entry.labor || 0)) / 3600
+    }
+  }
+  return objective
+}
+
+function selectedScenario(values, built) {
+  const coolCount = Math.max(0, Math.round(Number(values[built.utilityCols.cooling.cool] || 0)))
+  const freezeCount = Math.max(0, Math.round(Number(values[built.utilityCols.cooling.freeze] || 0)))
+  const warmCount = Math.max(0, Math.round(Number(values[built.utilityCols.heat.warm] || 0)))
+  const scorchingCount = Math.max(0, Math.round(Number(values[built.utilityCols.heat.scorching] || 0)))
+  const sunlampCount = Math.max(0, Math.round(Number(values[built.utilityCols.sunlamp] || 0)))
+  const generatorCount = Math.max(0, Math.round(Number(values[built.utilityCols.generator] || 0)))
+  const coolingUnits = [
+    ...Array(coolCount).fill('Cool'),
+    ...Array(freezeCount).fill('Freeze'),
+  ]
+  const heatUnits = [
+    ...Array(warmCount).fill('Warm'),
+    ...Array(scorchingCount).fill('Scorching'),
+  ]
+
+  const powerDemand = built.recipeVars.reduce((sum, entry) => {
+    if (!entry.electric || !entry.powerDemand) return sum
+    return sum + Math.max(0, Math.round(Number(values[entry.unitCol] || 0))) * entry.powerDemand
+  }, 0)
+  const powerSupply = totalGeneratorPower(generatorCount, Number(built.state.generatorLevel || 1))
+  const powerEfficiency = powerDemand > 0 ? gridPowerEfficiency(powerSupply, powerDemand) : 0
+
+  return {
+    cooling: coolingUnits[0] || null,
+    heat: heatUnits[0] || null,
+    coolingUnits,
+    heatUnits,
+    coolingCount: coolingUnits.length,
+    heatCount: heatUnits.length,
+    sunlamp: sunlampCount > 0,
+    sunlampCount,
+    generator: generatorCount > 0,
+    generatorCount,
+    generatorLevel: Number(built.state.generatorLevel || 1),
+    overlapColdCount: Math.max(0, Math.round(Number(values[built.utilityCols.pairCold] || 0))),
+    overlapWarmCount: Math.max(0, Math.round(Number(values[built.utilityCols.pairWarm] || 0))),
+    powerDemand,
+    powerSupply,
+    powerEfficiency,
+    modelPowerEfficiency: Math.max(0, Number(values[built.powerEtaCol] || 0)),
+  }
+}
+
+function solutionToPlan(model, built, solution, stage, climateLayout = null) {
+  const values = solution.colValue
+  const scenario = selectedScenario(values, built)
+  const rows = []
+  let coin = 0
+  let target = 0
+  let objective = 0
+
+  for (const entry of built.recipeVars) {
+    const batches = Math.max(0, Number(values[entry.rateCol] || 0))
+    if (batches <= EPS) continue
+
+    const units = Math.max(0, Number(values[entry.unitCol] || 0))
+    const coinPart = recipeNetValue(entry.recipe, built.data) * batches
+    const targetPart = built.state.target && built.state.target !== 'coin'
+      ? recipeNetItem(entry.recipe, built.state.target) * batches
+      : coinPart
+    coin += coinPart
+    target += targetPart
+
+    for (const weight of stage.weights || []) {
+      objective += objectiveCoefficient(entry.recipe, weight.spec, built.data)
+        * Number(weight.scale || 0)
+        * batches
+    }
+
+    rows.push({
+      facility: entry.recipe.facility,
+      recipe: entry.recipe,
+      batchesPerHour: batches,
+      units,
+      perHour: coinPart,
+      targetPerHour: targetPart,
+      cycleSeconds: entry.electric && scenario.powerEfficiency > 1e-9
+        ? entry.cycle / scenario.powerEfficiency
+        : entry.cycle,
+      manualSeconds: entry.labor,
+      effectiveEnv: entry.env,
+      executionMode: entry.recipe.executionMode || 'normal',
+      netValue: recipeNetValue(entry.recipe, built.data),
+    })
+  }
+
+  return {
+    ratePerHour: coin,
+    targetRate: target,
+    objectiveRate: objective,
+    rows,
+    runnableRecipes: built.recipeVars.map((entry) => entry.recipe),
+    scenario,
+    scenarioLabel: scenarioLabel(scenario),
+    utilityWorkers: utilityWorkerCount(scenario),
+    infeasible: false,
+    climateLayout,
+    jointMinShare: stage.jointMinShare ?? null,
+    objectiveWeights: (stage.weights || []).map((weight) => ({
+      ...weight.spec,
+      scale: weight.scale,
+      normalizer: weight.normalizer,
+      max: weight.max,
+    })),
+  }
+}
+
+function addFairnessRows(highs, model, built, weights) {
+  const fairnessCol = built.fairnessCol
+  for (const weight of weights) {
+    const vector = extendVector(
+      built.objectiveVectors.get(weight.spec.key),
+      model.getDimensions().numCols,
+    )
+    const terms = [[fairnessCol, -weight.normalizer]]
+    for (let col = 0; col < vector.length; col++) {
+      const value = Number(vector[col] || 0)
+      if (Math.abs(value) > 1e-14) terms.push([col, value])
+    }
+    model.addRow(0, highs.infinity, entries(terms))
+  }
+}
+
+async function solveStage({
+  highs,
+  model,
+  built,
+  climate,
+  objective,
+  stage,
+  maxClimateCuts,
+  onProgress,
+}) {
+  let cuts = 0
+  let lastSolution = null
+  let lastStatus = null
+  let lastPlan = null
+  let lastLayout = null
+
+  while (cuts <= maxClimateCuts) {
+    const colCount = model.getDimensions().numCols
+    const costs = extendVector(objective, colCount)
+    setObjective(model, costs, colCount)
+
+    if (lastSolution?.colValue?.length === colCount) {
+      try {
+        model.setSolution({ colValue: lastSolution.colValue })
+      } catch {
+        // MIP starts are opportunistic.
+      }
+    }
+
+    onProgress?.({
+      phase: stage.name,
+      climateCuts: climate.count,
+      detail: cuts ? `Re-solving after climate cut ${cuts}` : 'Solving MIP',
+    })
+
+    model.run()
+    lastStatus = model.getModelStatus()
+    if (!hasUsableSolution(model)) {
+      return {
+        feasible: false,
+        status: modelStatusName(highs, lastStatus),
+        plan: null,
+        solution: null,
+        climate: null,
+      }
+    }
+
+    lastSolution = model.getSolution()
+    lastPlan = solutionToPlan(model, built, lastSolution, stage)
+    lastLayout = climate.validate(lastPlan)
+    lastPlan.climateLayout = lastLayout
+
+    if (lastLayout.feasible) {
+      return {
+        feasible: true,
+        status: modelStatusName(highs, lastStatus),
+        plan: lastPlan,
+        solution: lastSolution,
+        climate: lastLayout,
+      }
+    }
+
+    const added = climate.addDisjunctiveCut(lastPlan, lastLayout)
+    if (!added.added) {
+      return {
+        feasible: false,
+        status: `climate-${added.reason}`,
+        plan: lastPlan,
+        solution: lastSolution,
+        climate: lastLayout,
+      }
+    }
+    cuts++
+  }
+
+  return {
+    feasible: false,
+    status: 'climate-cut-limit',
+    plan: lastPlan,
+    solution: lastSolution,
+    climate: lastLayout,
+  }
+}
+
+export async function solveNextWithHighs(highs, state, data, options = {}) {
+  const started = performance.now()
+  const built = buildNextModel(highs, state, data)
+  const buildMs = performance.now() - started
+  const model = highs.createModel(built.modelData)
+  const maxClimateCuts = Math.max(0, Number(options.maxClimateCuts ?? 24))
+  const timeLimit = Math.max(0.1, Number(options.timeLimitSeconds ?? 4))
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null
+
+  try {
+    model.options.set({
+      output_flag: Boolean(options.solverOutput),
+      presolve: 'on',
+      solver: 'choose',
+      mip_rel_gap: Number(options.mipRelativeGap ?? 0),
+      mip_abs_gap: Number(options.mipAbsoluteGap ?? 1e-7),
+      time_limit: timeLimit,
+    })
+
+    const climate = createClimateCutManager(highs, model, built)
+    const maxima = new Map()
+    let latest = null
+
+    for (let i = 0; i < built.specs.length; i++) {
+      const spec = built.specs[i]
+      const vector = built.objectiveVectors.get(spec.key)
+      const result = await solveStage({
+        highs,
+        model,
+        built,
+        climate,
+        objective: vector,
+        stage: {
+          name: `calibrate:${spec.key}`,
+          weights: [{ spec, scale: 1, normalizer: 1, max: null }],
+        },
+        maxClimateCuts,
+        onProgress,
+      })
+
+      if (!result.feasible || !result.plan) {
+        return {
+          ratePerHour: 0,
+          targetRate: 0,
+          objectiveRate: 0,
+          rows: [],
+          runnableRecipes: [],
+          scenario: {},
+          scenarioLabel: 'No feasible plan',
+          utilityWorkers: 0,
+          infeasible: true,
+          climateLayout: result.climate || {
+            feasible: false,
+            status: result.status,
+            message: 'The MIP or climate layer found no feasible plan.',
+          },
+          objectiveWeights: [],
+          optimizerStats: {
+            engine: 'highs-mip-next',
+            elapsedMs: performance.now() - started,
+            buildMs,
+            climateCuts: climate.count,
+            modelStatus: result.status,
+          },
+        }
+      }
+
+      latest = result
+      const vectorNow = built.objectiveVectors.get(spec.key)
+      const values = result.solution.colValue
+      let maximum = 0
+      for (let col = 0; col < Math.min(vectorNow.length, values.length); col++) {
+        maximum += Number(vectorNow[col] || 0) * Number(values[col] || 0)
+      }
+      maxima.set(spec.key, Math.max(0, maximum))
+    }
+
+    const activeWeights = built.specs
+      .map((spec) => {
+        const max = Number(maxima.get(spec.key) || 0)
+        if (spec.key !== 'primary' && max <= EPS) return null
+        const normalizer = Math.max(EPS, Math.abs(max))
+        return {
+          spec,
+          max,
+          normalizer,
+          scale: 1 / normalizer,
+        }
+      })
+      .filter(Boolean)
+
+    let finalResult = latest
+    let jointMinShare = null
+    let economicObjective = null
+
+    if (activeWeights.length > 1) {
+      addFairnessRows(highs, model, built, activeWeights)
+
+      const fairObjective = new Float64Array(model.getDimensions().numCols)
+      fairObjective[built.fairnessCol] = 1
+      const fair = await solveStage({
+        highs,
+        model,
+        built,
+        climate,
+        objective: fairObjective,
+        stage: {
+          name: 'joint-fairness',
+          weights: activeWeights,
+        },
+        maxClimateCuts,
+        onProgress,
+      })
+
+      if (!fair.feasible || !fair.plan) {
+        return fair.plan || {
+          infeasible: true,
+          rows: [],
+          climateLayout: fair.climate,
+        }
+      }
+
+      jointMinShare = Math.max(
+        0,
+        Number(fair.solution.colValue[built.fairnessCol] || 0),
+      )
+      model.addRow(
+        Math.max(0, jointMinShare - 1e-7),
+        highs.infinity,
+        entries([[built.fairnessCol, 1]]),
+      )
+
+      const sumObjective = new Float64Array(model.getDimensions().numCols)
+      for (const weight of activeWeights) {
+        const vector = built.objectiveVectors.get(weight.spec.key)
+        for (let col = 0; col < vector.length; col++) {
+          sumObjective[col] += Number(vector[col] || 0) * weight.scale
+        }
+      }
+
+      economicObjective = sumObjective
+      finalResult = await solveStage({
+        highs,
+        model,
+        built,
+        climate,
+        objective: sumObjective,
+        stage: {
+          name: 'joint-sum',
+          weights: activeWeights,
+          jointMinShare,
+        },
+        maxClimateCuts,
+        onProgress,
+      })
+    } else {
+      const weight = activeWeights[0] || {
+        spec: built.specs[0],
+        max: Number(maxima.get(built.specs[0].key) || 0),
+        normalizer: 1,
+        scale: 1,
+      }
+      economicObjective = built.objectiveVectors.get(weight.spec.key)
+      finalResult = await solveStage({
+        highs,
+        model,
+        built,
+        climate,
+        objective: economicObjective,
+        stage: {
+          name: 'final',
+          weights: [weight],
+        },
+        maxClimateCuts,
+        onProgress,
+      })
+    }
+
+    if (
+      state.preferElectricalAutomation
+      && finalResult?.feasible
+      && finalResult.plan
+      && finalResult.solution
+      && economicObjective
+    ) {
+      // Automation is a preference, never an on/off gate for Crackle.
+      // Base automation is a strict economic tie-break. Max electrical coverage
+      // may spend at most 3% of each active objective to push E-mode farther and
+      // reduce staffed-machine demand. Hard minimum guarantees stay exact.
+      const automationRetention = state.maximizeElectricalCoverage ? 0.97 : 1
+      for (const weight of activeWeights) {
+        const vector = built.objectiveVectors.get(weight.spec.key)
+        if (!vector) continue
+        const achieved = vectorValue(vector, finalResult.solution.colValue)
+        addObjectiveFloor(highs, model, vector, achieved, automationRetention)
+      }
+      const automationObjective = electricalAutomationObjective(
+        built,
+        model.getDimensions().numCols,
+      )
+      const automated = await solveStage({
+        highs,
+        model,
+        built,
+        climate,
+        objective: automationObjective,
+        stage: {
+          name: state.maximizeElectricalCoverage ? 'automation-max-coverage' : 'automation-tiebreak',
+          weights: activeWeights,
+          jointMinShare,
+        },
+        maxClimateCuts,
+        onProgress,
+      })
+      if (automated?.feasible && automated.plan) finalResult = automated
+    }
+
+    if (!finalResult?.feasible || !finalResult.plan) {
+      return {
+        ratePerHour: 0,
+        targetRate: 0,
+        objectiveRate: 0,
+        rows: [],
+        runnableRecipes: [],
+        scenario: {},
+        scenarioLabel: 'No feasible plan',
+        utilityWorkers: 0,
+        infeasible: true,
+        climateLayout: finalResult?.climate || null,
+        objectiveWeights: activeWeights.map((weight) => ({
+          ...weight.spec,
+          scale: weight.scale,
+          normalizer: weight.normalizer,
+          max: weight.max,
+        })),
+        optimizerStats: {
+          engine: 'highs-mip-next',
+          elapsedMs: performance.now() - started,
+          buildMs,
+          climateCuts: climate.count,
+          modelStatus: finalResult?.status || 'unknown',
+        },
+      }
+    }
+
+    finalResult.plan.jointMinShare = jointMinShare
+    finalResult.plan.objectiveWeights = activeWeights.map((weight) => ({
+      ...weight.spec,
+      scale: weight.scale,
+      normalizer: weight.normalizer,
+      max: weight.max,
+    }))
+
+    const validation = validateNextPlan(finalResult.plan, state, data)
+    finalResult.plan.optimizerStats = {
+      engine: 'highs-mip-next',
+      elapsedMs: performance.now() - started,
+      buildMs,
+      solveMs: performance.now() - started - buildMs,
+      climateCuts: climate.count,
+      scenarioTotal: built.scenarioTotal,
+      modelCols: model.getDimensions().numCols,
+      modelRows: model.getDimensions().numRows,
+      mipNodes: String(model.info.get('mip_node_count') ?? ''),
+      mipGap: Number(model.info.get('mip_gap') ?? 0),
+      modelStatus: finalResult.status,
+      validationOk: validation.ok,
+      validationErrors: validation.errors,
+    }
+
+    return finalResult.plan
+  } finally {
+    model.dispose()
+  }
+}

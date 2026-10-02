@@ -1,0 +1,23 @@
+export const DEFAULT_STATE = {
+  homelandLevel: 1,
+  workerSlots: 0,
+  teamSlots: 0,
+  abilityLevel: 'auto',
+  collectHours: 0,
+  oneRecipePerFacility: false,
+  preferElectricalAutomation: false,
+  maximizeElectricalCoverage: false,
+  generatorAvailable: false,
+  generatorLevel: 1,
+  utilityCounts: { cooling:0, heat:0, sunlamp:0, generator:0, powerPole:0 },
+  manualSpeeds: false,
+  climateOptions: { cooling:false, heat:false, sunlamp:false },
+  target: 'coin',
+  guarantees: [],
+  goal: '',
+  facilities: {},
+  modules: {},
+  speeds: {},
+  recipeNotes: {},
+  owned: {}
+};
