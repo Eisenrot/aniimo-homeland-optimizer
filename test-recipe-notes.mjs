@@ -64,4 +64,29 @@ const blockedPlan=optimizePlan(blocked,DATA),blockedDiag=diagnoseObjective(block
 if(blockedDiag.ok)throw new Error('Potato Kvass unexpectedly remained reachable with Bouncy Brew Keg Lv.1');
 if(!/Bouncy Brew Keg needs Lv\.2/i.test(blockedDiag.detail))throw new Error('objective diagnostics failed to identify blocked recipe chain: '+blockedDiag.detail);
 
+const festival=fillHomelandForRV({...clone(DEFAULT_STATE),homelandLevel:12,abilityLevel:4},DATA);
+festival.workerSlots=20;
+festival.teamSlots=20;
+festival.target='4010148';
+festival.recipeNotes={
+  '4040039':false,
+  '4040040':false,
+  '4040042':true,
+  '4040043':true,
+  '4040044':true,
+  '4040045':false,
+  '4040046':false,
+  '4040047':true,
+};
+const festivalScenario={cooling:'Cool',heat:'Warm',sunlamp:true,generator:true};
+for(const id of [4001066,4001067,4010149,4010150]){
+  const recipe=DATA.recipes.find(r=>Number(r.outputs?.[0]?.item)===id&&!r.electric);
+  if(!recipe)throw new Error('Festival recipe missing for '+id);
+  if(!recipeRunnable(recipe,festival,DATA,festivalScenario))throw new Error('Hidden festival note still gates '+id);
+}
+const platter=DATA.recipes.find(r=>Number(r.outputs?.[0]?.item)===4010148&&!r.electric);
+if(!platter||!recipeRunnable(platter,festival,DATA,festivalScenario))throw new Error('Visible Harvest Platter note should be runnable when enabled');
+festival.recipeNotes['4040044']=false;
+if(recipeRunnable(platter,festival,DATA,festivalScenario))throw new Error('Visible Harvest Platter note no longer gates its recipe');
+console.log('festival hidden-note gating fixed');
 console.log('recipe-note MAX gating works');

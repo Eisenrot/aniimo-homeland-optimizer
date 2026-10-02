@@ -18,7 +18,6 @@ const UNLOCKS: Record<string, string> = {
 
 const FESTIVAL_NOTE_ORDER = ['4040044', '4040043', '4040042', '4040047']
 const FESTIVAL_NOTE_IDS = new Set(FESTIVAL_NOTE_ORDER)
-const HIDDEN_FESTIVAL_NOTE_IDS = new Set(['4040039', '4040040', '4040045', '4040046'])
 
 type NoteView = RecipeNote & {
   outputItem?: number
@@ -57,7 +56,7 @@ export default function RecipeNotesPanel({ state, patch }: Props) {
   const byKey = new Map(all.map((note) => [String(note.item), note]))
   const standard = all.filter((note) => {
     const key = String(note.item)
-    return !FESTIVAL_NOTE_IDS.has(key) && !HIDDEN_FESTIVAL_NOTE_IDS.has(key)
+    return !FESTIVAL_NOTE_IDS.has(key)
   })
   const festival = FESTIVAL_NOTE_ORDER.flatMap((key) => {
     const note = byKey.get(key)

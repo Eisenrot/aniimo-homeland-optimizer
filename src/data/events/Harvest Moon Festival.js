@@ -47,13 +47,9 @@ export const HARVEST_MOON_ITEMS = Object.freeze({
 })
 
 const notes = Object.freeze({
-  radish: { item: 4040039, name: 'Recipe Note: Moondew Radish' },
-  pepper: { item: 4040040, name: 'Recipe Note: Waxing Moon Pepper' },
   pickle: { item: 4040042, name: 'Recipe Note: Umbral Pickle' },
   hotPot: { item: 4040043, name: 'Recipe Note: Umbral Hot Pot' },
   platter: { item: 4040044, name: 'Recipe Note: Harvest Platter' },
-  roastedPepper: { item: 4040045, name: 'Recipe Note: Roasted Waxing Moon Pepper' },
-  radishSlices: { item: 4040046, name: 'Recipe Note: Moondew Radish Slices' },
   sauce: { item: 4040047, name: 'Recipe Note: Umbral Sweet and Spicy Sauce' },
 })
 
@@ -109,7 +105,7 @@ const standardProducts = [
     outputs: [{ item: 4010149, qty: 1 }],
     workload: 162,
     steps: [{ name: 'Cooking', ability: 'Fire', level: 3, workload: 0 }],
-  }, notes.roastedPepper),
+  }, null),
   seasonal({
     id: 4010150,
     facility: 'blazing-stove',
@@ -118,7 +114,7 @@ const standardProducts = [
     outputs: [{ item: 4010150, qty: 1 }],
     workload: 203,
     steps: [{ name: 'Cooking', ability: 'Fire', level: 2, workload: 0 }],
-  }, notes.radishSlices),
+  }, null),
   seasonal({
     id: 4010151,
     facility: 'simmering-pot',
@@ -142,7 +138,7 @@ export const HARVEST_MOON_RECIPES = Object.freeze([
       { name: 'Sowing', ability: 'Grass', level: 1, workload: 3 },
       { name: 'Reaping', ability: 'Dark', level: 1, workload: 3 },
     ],
-  }, notes.radish),
+  }, null),
   seasonal({
     id: 4001067,
     facility: 'farmland',
@@ -154,7 +150,7 @@ export const HARVEST_MOON_RECIPES = Object.freeze([
       { name: 'Sowing', ability: 'Grass', level: 1, workload: 3 },
       { name: 'Reaping', ability: 'Dark', level: 1, workload: 3 },
     ],
-  }, notes.pepper),
+  }, null),
   ...standardProducts,
   electric(standardProducts[0], 180),
   electric(standardProducts[1], 180),
