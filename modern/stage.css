@@ -1960,10 +1960,15 @@ html[data-optimizer-theme="dark"] body{background:#060507}
 .rewrite-shell[data-theme="light"] .plan-result-stage .section-title{
   border-color:rgba(26,21,26,.16);
 }
+.rewrite-shell[data-theme="light"] .plan-result-stage>.panel,
 .rewrite-shell[data-theme="light"] .plan-result-stage .rewrite-collapse-body>.panel,
 .rewrite-shell[data-theme="light"] .plan-result-stage .result-overview-panel{
   color:#1a151a;
-  background:transparent;
+  background:#fffaf5;
+  border-color:rgba(26,21,26,.16);
+}
+.rewrite-shell[data-theme="light"] .plan-result-stage>.panel:before{
+  background:var(--red);
 }
 .rewrite-shell[data-theme="light"] .plan-result-stage .rewrite-collapse-toggle{
   background:#fffaf5;
