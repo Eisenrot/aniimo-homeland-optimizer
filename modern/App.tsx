@@ -20,7 +20,7 @@ const RUN_OPTIONS = { solverEngine: 'highs-mip-next', timeLimitSeconds: 8, maxCl
 const DEPLOY_BUILD_ID = import.meta.env.VITE_BUILD_ID || (import.meta.env.DEV ? `dev-${Date.now()}` : 'local-build')
 const BUILD_ID = `modern-v11-solver-next:${DEPLOY_BUILD_ID}:${DATA.version || 'data'}`
 const TEAM_CACHE_STORE = 'aniimoModernTeamCacheV2'
-const TEAM_CACHE_VERSION = 14
+const TEAM_CACHE_VERSION = 15
 
 function loadInitialState() {
   const stored = loadState()

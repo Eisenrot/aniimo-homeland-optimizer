@@ -1,4 +1,5 @@
 import { generatorPowerAtLevel } from '../utility-system.js'
+import { productionPlacementCounts } from '../climate.js'
 import { isGrowerRecipe } from '../optimizer.js'
 import {
   ROSTER_RESIDENT_FACILITIES,
@@ -24,6 +25,32 @@ import { csr } from './sparse.js'
 
 export function buildNextModel(highs, state, data, options = {}) {
   const rosterAware = Boolean(options.rosterAware)
+  const fixedPlan = rosterAware && options.fixedPlan ? options.fixedPlan : null
+  const fixedRows = fixedPlan
+    ? [...(fixedPlan.rows || [])].filter((row) => Number(row.batchesPerHour || 0) > 1e-8)
+    : []
+  const fixedRowsByRecipe = new Map(fixedRows.map((row) => [String(row.recipe?.id), row]))
+  const fixedUnitsByRecipe = new Map()
+
+  if (fixedPlan) {
+    const byFacility = new Map()
+    for (const row of fixedRows) {
+      const list = byFacility.get(row.facility) || []
+      list.push(row)
+      byFacility.set(row.facility, list)
+    }
+    for (const [facility, rows] of byFacility) {
+      const placements = productionPlacementCounts(facility, rows, state, data)
+      for (const row of rows) {
+        const rawUnits = Math.max(0, Number(row.units || 0))
+        const targetUnits = ROSTER_RESIDENT_FACILITIES.has(facility) && !row.recipe?.electric
+          ? Math.max(0, Number(placements.get(row) || 0))
+          : rawUnits
+        fixedUnitsByRecipe.set(String(row.recipe?.id), targetUnits)
+      }
+    }
+  }
+
   const recipeState = rosterAware ? { ...state, abilityLevel: 'auto' } : state
   const specs = objectiveSpecs(state, data)
   const columns = []
@@ -77,7 +104,19 @@ export function buildNextModel(highs, state, data, options = {}) {
     ),
   }
 
-  const active = staticRecipeVariants(recipeState, data)
+  const allActive = staticRecipeVariants(recipeState, data)
+  const active = fixedPlan
+    ? allActive.filter((entry) => fixedRowsByRecipe.has(String(entry.recipe.id)))
+    : allActive
+
+  if (fixedPlan) {
+    const availableIds = new Set(active.map((entry) => String(entry.recipe.id)))
+    const missing = [...fixedRowsByRecipe.keys()].filter((id) => !availableIds.has(id))
+    if (missing.length) {
+      throw new Error('Team plan references recipe rows that are no longer runnable: ' + missing.join(', '))
+    }
+  }
+
   const recipeVars = []
 
   for (let recipeIndex = 0; recipeIndex < active.length; recipeIndex++) {
@@ -145,7 +184,7 @@ export function buildNextModel(highs, state, data, options = {}) {
     }
   }
 
-  const rosterArchetypes = rosterAware ? rosterWorkerArchetypes(state, data, recipeVars) : []
+  const rosterArchetypes = rosterAware ? rosterWorkerArchetypes(state, data, recipeVars, { pruneDominated: !fixedPlan }) : []
   const rosterWorkerCount = rosterArchetypes.reduce((sum, archetype) => sum + archetype.count, 0)
   const rosterCap = rosterAware
     ? Math.max(0, Math.min(rosterWorkerCount, Math.floor(Number(state.workerSlots ?? state.teamSlots ?? 0) || 0)))
@@ -240,6 +279,48 @@ export function buildNextModel(highs, state, data, options = {}) {
     rowLower.push(lower)
     rowUpper.push(upper)
     rowMeta.push(meta)
+  }
+
+  if (fixedPlan) {
+    const scenario = fixedPlan.scenario || {}
+    const modes = (key) => {
+      const list = scenario[key + 'Units']
+      if (Array.isArray(list)) return list.map(String)
+      const value = scenario[key]
+      return value ? [String(value)] : []
+    }
+    const cooling = modes('cooling')
+    const heat = modes('heat')
+    const fixedUtilities = [
+      [utilityCols.cooling.cool, cooling.filter((mode) => mode === 'Cool').length, 'cooling:cool'],
+      [utilityCols.cooling.freeze, cooling.filter((mode) => mode === 'Freeze').length, 'cooling:freeze'],
+      [utilityCols.heat.warm, heat.filter((mode) => mode === 'Warm').length, 'heat:warm'],
+      [utilityCols.heat.scorching, heat.filter((mode) => mode === 'Scorching').length, 'heat:scorching'],
+      [utilityCols.sunlamp, Math.max(0, Math.round(Number(scenario.sunlampCount ?? (scenario.sunlamp ? 1 : 0)) || 0)), 'sunlamp'],
+      [utilityCols.generator, Math.max(0, Math.round(Number(scenario.generatorCount ?? (scenario.generator ? 1 : 0)) || 0)), 'generator'],
+      [utilityCols.pairCold, Math.max(0, Math.round(Number(scenario.overlapColdCount || 0))), 'overlap:cold'],
+      [utilityCols.pairWarm, Math.max(0, Math.round(Number(scenario.overlapWarmCount || 0))), 'overlap:warm'],
+    ]
+    for (const [col, value, key] of fixedUtilities) {
+      addRow([[col, 1]], value, value, { kind: 'team-plan-utility-lock', key, value })
+    }
+
+    for (const entry of recipeVars) {
+      const row = fixedRowsByRecipe.get(String(entry.recipe.id))
+      if (!row) continue
+      const units = Math.max(0, Number(fixedUnitsByRecipe.get(String(entry.recipe.id)) ?? row.units ?? 0))
+      const baselineRate = Math.max(0, Number(row.batchesPerHour || 0))
+      addRow([[entry.unitCol, 1]], units, units, {
+        kind: 'team-plan-unit-lock',
+        recipeId: entry.recipe.id,
+        units,
+      })
+      addRow([[entry.rateCol, 1]], baselineRate, highs.infinity, {
+        kind: 'team-plan-rate-floor',
+        recipeId: entry.recipe.id,
+        baselineRate,
+      })
+    }
   }
 
   // Utility copy availability. A selected count is a maximum the solver may use.
@@ -458,14 +539,14 @@ export function buildNextModel(highs, state, data, options = {}) {
       utilityByArchetype.set(item.archetype.key, byType)
     }
 
-    // Internally we fill the cap with idle placeholders. That is the same
-    // feasible production set as "up to N", but gives the MIP less fog to stare at.
-    // The Team UI only materializes workers who actually received a job.
+    // Free Team solves fill the cap because HiGHS behaves better with less fog.
+    // A plan-locked Team solve keeps this as a real "up to N" cap so the final
+    // compacting pass can stop hiring decorative employees for emotional support.
     addRow(
       rosterSelectVars.map((item) => [item.selectCol, 1]),
+      fixedPlan ? -highs.infinity : rosterCap,
       rosterCap,
-      rosterCap,
-      { kind: 'roster-worker-cap', workerLimit: rosterCap },
+      { kind: 'roster-worker-cap', workerLimit: rosterCap, fixedPlan: Boolean(fixedPlan) },
     )
 
     for (const archetype of rosterArchetypes) {
@@ -648,6 +729,9 @@ export function buildNextModel(highs, state, data, options = {}) {
     powerBitVars,
     availableUtilities: available,
     rosterAware,
+    fixedPlan: Boolean(fixedPlan),
+    fixedRows,
+    fixedUnitsByRecipe,
     roster: rosterAware ? {
       cap: rosterCap,
       archetypes: rosterArchetypes,

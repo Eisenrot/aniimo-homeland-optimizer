@@ -99,7 +99,7 @@ export function workerAdjustedCycle(entry, worker, task, state) {
   return fixed + Number(entry.labor || 0) / speed
 }
 
-export function rosterWorkerArchetypes(state, data, entries) {
+export function rosterWorkerArchetypes(state, data, entries, { pruneDominated = true } = {}) {
   const workers = ownedWorkerCopies(state, data)
   const utilities = utilityRosterSpecs(state)
   const groups = new Map()
@@ -136,7 +136,7 @@ export function rosterWorkerArchetypes(state, data, entries) {
   }))
 
   const cap = Math.max(0, Math.floor(Number(state.workerSlots ?? state.teamSlots ?? 0) || 0))
-  if (cap <= 0) return archetypes
+  if (cap <= 0 || !pruneDominated) return archetypes
 
   const dominates = (left, right) => {
     let strictlyBetter = false

@@ -1,13 +1,16 @@
 /// <reference lib="webworker" />
 
 import { GAME_DATA } from '../../src/data.js'
+import { productionPlacementCounts } from '../../src/climate.js'
 import {
-  buildTeamModel,
+  FACILITY_PERSONALITY,
+  PERSONALITY_PAIRS,
+  PERSONALITY_PROFILES,
   planItemRates,
-  recommendPersonalityRoles,
   requiredAbilities,
 } from '../../src/optimizer.js'
 import { loadNextHighs, solveNextWithHighs } from '../../src/solver-next/index.js'
+import { ROSTER_RESIDENT_FACILITIES } from '../../src/solver-next/roster.js'
 import type {
   OptimizerPlan,
   OptimizerState,
@@ -35,14 +38,128 @@ function compactMember(member: any) {
   }
 }
 
+function utilitySignature(plan: OptimizerPlan) {
+  const scenario = plan.scenario || {}
+  const list = (key: string) => {
+    const modes = scenario[`${key}Units`]
+    if (Array.isArray(modes)) return modes.map(String).sort()
+    return scenario[key] ? [String(scenario[key])] : []
+  }
+  return JSON.stringify({
+    cooling: list('cooling'),
+    heat: list('heat'),
+    sunlamp: Math.max(0, Math.round(Number(scenario.sunlampCount ?? (scenario.sunlamp ? 1 : 0)) || 0)),
+    generator: Math.max(0, Math.round(Number(scenario.generatorCount ?? (scenario.generator ? 1 : 0)) || 0)),
+    pairCold: Math.max(0, Math.round(Number(scenario.overlapColdCount || 0))),
+    pairWarm: Math.max(0, Math.round(Number(scenario.overlapWarmCount || 0))),
+  })
+}
+
+function expectedPlanUnits(plan: OptimizerPlan, state: OptimizerState) {
+  const rows = (plan.rows || []).filter((row) => Number(row.batchesPerHour || 0) > 1e-8)
+  const byFacility = new Map<string, typeof rows>()
+  for (const row of rows) {
+    const list = byFacility.get(row.facility) || []
+    list.push(row)
+    byFacility.set(row.facility, list)
+  }
+
+  const units = new Map<string, number>()
+  for (const [facility, facilityRows] of byFacility) {
+    const placements = productionPlacementCounts(facility, facilityRows, state, GAME_DATA)
+    for (const row of facilityRows) {
+      const value = ROSTER_RESIDENT_FACILITIES.has(facility) && !row.recipe.electric
+        ? Number(placements.get(row) || 0)
+        : Number(row.units || 0)
+      units.set(String(row.recipe.id), Math.max(0, value))
+    }
+  }
+  return units
+}
+
+function assertPlanFidelity(source: OptimizerPlan, staffed: OptimizerPlan, state: OptimizerState) {
+  const sourceRows = (source.rows || []).filter((row) => Number(row.batchesPerHour || 0) > 1e-8)
+  const staffedRows = (staffed.rows || []).filter((row) => Number(row.batchesPerHour || 0) > 1e-8)
+  const sourceById = new Map(sourceRows.map((row) => [String(row.recipe.id), row]))
+  const staffedById = new Map(staffedRows.map((row) => [String(row.recipe.id), row]))
+  const expectedUnits = expectedPlanUnits(source, state)
+
+  const added = [...staffedById.keys()].filter((id) => !sourceById.has(id))
+  const dropped = [...sourceById.keys()].filter((id) => !staffedById.has(id))
+  if (added.length || dropped.length) {
+    throw new Error(
+      `Team changed the Plan recipe set. Added: ${added.join(', ') || 'none'} · dropped: ${dropped.join(', ') || 'none'}`,
+    )
+  }
+
+  for (const [id, sourceRow] of sourceById) {
+    const staffedRow = staffedById.get(id)!
+    const expected = Number(expectedUnits.get(id) ?? sourceRow.units ?? 0)
+    const actual = Number(staffedRow.units || 0)
+    if (Math.abs(actual - expected) > 1e-5) {
+      throw new Error(`Team changed recipe ${id} from ${expected} physical units to ${actual}.`)
+    }
+    const baseline = Number(sourceRow.batchesPerHour || 0)
+    if (Number(staffedRow.batchesPerHour || 0) + 1e-5 < baseline) {
+      throw new Error(`Team under-ran recipe ${id}: ${staffedRow.batchesPerHour}/h < Plan ${baseline}/h.`)
+    }
+  }
+
+  if (utilitySignature(source) !== utilitySignature(staffed)) {
+    throw new Error('Team changed the Plan utility/electrical setup.')
+  }
+}
+
+function personalityFromAssignments(
+  assignments: Array<Array<{ facility: string; mode: 'permanent' | 'utility' | 'flex'; seconds: number }>>,
+) {
+  return {
+    hints: assignments.map((workerAssignments) => {
+      const weights = new Map<string, number>()
+      const facilities = new Map<string, Set<string>>()
+
+      for (const assignment of workerAssignments) {
+        const letter = (FACILITY_PERSONALITY as Record<string, string>)[assignment.facility]
+        if (!letter) continue
+        const weight = Math.max(1e-9, Number(assignment.seconds || 0))
+        weights.set(letter, (weights.get(letter) || 0) + weight)
+        const set = facilities.get(letter) || new Set<string>()
+        set.add(assignment.facility)
+        facilities.set(letter, set)
+      }
+
+      const chosen: string[] = []
+      const display = PERSONALITY_PAIRS.map((pair) => {
+        const relevant = pair.filter((letter) => weights.has(letter))
+        if (!relevant.length) return { char: '-', status: 'none', facilities: [] }
+        const char = relevant.sort((a, b) =>
+          Number(weights.get(b) || 0) - Number(weights.get(a) || 0)
+          || a.localeCompare(b))[0]
+        chosen.push(char)
+        return {
+          char,
+          status: 'must',
+          facilities: [...(facilities.get(char) || [])].sort(),
+        }
+      })
+
+      const profile = PERSONALITY_PROFILES.find((candidate) =>
+        chosen.every((letter) => candidate.includes(letter))) || PERSONALITY_PROFILES[0] || ''
+
+      return { profile, display }
+    }),
+  }
+}
+
 function friendlyPhase(progress: SolverProgress) {
   const raw = String(progress.phase || '')
-  if (raw === 'joint-fairness') return 'Balancing the real roster'
-  if (raw === 'joint-sum') return 'Rebuilding production around the team'
-  if (raw === 'final') return 'Rebuilding production around the team'
+  if (raw === 'joint-fairness') return 'Balancing the current plan around the roster'
+  if (raw === 'joint-sum') return 'Staffing the current production plan'
+  if (raw === 'final') return 'Staffing the current production plan'
   if (raw === 'automation-tiebreak') return 'Checking electrical automation'
   if (raw === 'automation-max-coverage') return 'Pushing electrical coverage'
   if (raw === 'roster-compact') return 'Sending decorative employees home'
+  if (raw === 'roster-shape') return 'Keeping the useful specialists out of boring chairs'
   if (raw.startsWith('calibrate:')) return 'Calibrating roster objective'
   return progress.detail || raw || 'Solving real roster'
 }
@@ -58,9 +175,10 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
     progress('Loading roster solver')
     const highs = await loadNextHighs()
 
-    progress('Rebuilding production around Owned Aniimo')
+    progress('Staffing the current Plan with Owned Aniimo')
     const rosterPlan = await solveNextWithHighs(highs, state, GAME_DATA, {
       rosterAware: true,
+      fixedPlan: plan,
       objectiveWeights: plan.objectiveWeights,
       timeLimitSeconds: 10,
       maxClimateCuts: 24,
@@ -72,7 +190,7 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
     }) as OptimizerPlan
 
     if (rosterPlan.infeasible) {
-      throw new Error('The enabled roster cannot run a legal version of this production setup.')
+      throw new Error('The enabled roster cannot fully staff the current Plan within the configured Aniimo cap. Team will not rewrite the Plan to fake a fit.')
     }
     if (rosterPlan.optimizerStats?.validationOk === false) {
       const errors = rosterPlan.optimizerStats.validationErrors || []
@@ -82,6 +200,8 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
           : 'Roster validation failed.',
       )
     }
+
+    assertPlanFidelity(plan, rosterPlan, state)
 
     const selected = [...(rosterPlan.roster?.selected || [])]
     if (!selected.length) {
@@ -131,12 +251,10 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
       || a.facility.localeCompare(b.facility)))
 
     progress('Assigning personality roles')
-    const teamModel = buildTeamModel(rosterPlan, state, GAME_DATA)
-    const personality: any = recommendPersonalityRoles(
-      teamModel,
-      selected,
-      rosterPlan.rows,
-    )
+    // Personality follows the cast we actually solved. Running a second staffing
+    // matcher here used to let the badge say Mine while the personality hint had
+    // quietly reassigned the same Aniimo somewhere else. Tiny identity crisis.
+    const personality = personalityFromAssignments(assignments)
 
     const result: TeamAnalysisResult = {
       best: {

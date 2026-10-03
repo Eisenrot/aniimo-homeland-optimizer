@@ -78,13 +78,15 @@ The theoretical production solve answers:
 
 > What is the best legal production plan under the configured worker capacity?
 
-The Team pass answers the stricter question:
+The Team pass answers a different question:
 
-> What is the best legal production plan my actual Owned Aniimo can run?
+> Which Aniimo I actually own should run **this Plan**?
 
-Team runs a roster-aware Solver Next pass with the same objective calibration as Plan. It uses enabled Aniimo and copy counts, real Homeland abilities, resident-family restrictions, dedicated utility jobs, measured efficiency, facility limits, material balance, climate geometry, the shared Crackle grid, and the same one-recipe rule. The configured Aniimo number is a cap, not a compulsory headcount: if 14 useful workers already saturate the Homeland, setting 20 does not invent six decorative jobs.
+Team keeps the visible Plan's active recipes, physical facility allocation, manual/E-mode split, and utility setup locked. It then solves the staffing problem with enabled Aniimo copies, real Homeland abilities, resident-family restrictions, dedicated utility jobs, and measured efficiency.
 
-The result includes the real roster-aware production rate, selected workers, facility assignments, and ability coverage. Personality remains a recommendation layer rather than a hidden production bonus.
+Higher-skill workers may make those same assigned structures run faster, so Team throughput can exceed the theoretical Plan baseline. What Team may **not** do is quietly drop a recipe, swap a normal structure to E-mode, repurpose a facility, or rebuild the Homeland into a different production plan just because that would score better with the roster. If the enabled roster cannot fully staff the current Plan within the configured Aniimo cap, Team reports that instead of inventing a replacement plan.
+
+The configured Aniimo number is a cap, not a compulsory headcount. The result includes the staffed-plan rate, selected workers, facility assignments, and ability coverage. Personality remains a recommendation layer rather than a hidden production bonus.
 
 ## Layout
 

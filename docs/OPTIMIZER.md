@@ -218,19 +218,21 @@ The production MIP answers:
 
 > What is the best legal production configuration within the theoretical worker limit?
 
-The Team pass asks a stricter version of the same optimization problem:
+The Team pass does **not** solve a second, different Homeland. It asks:
 
-> What is the best legal production configuration my actual Owned Aniimo can run?
+> Which Aniimo I actually own should run the production Plan already shown?
 
-Team therefore runs Solver Next again with roster-aware staffing constraints while reusing the Plan solve's objective normalizers. The economic intent stays the same; the available labour becomes concrete.
+The active Plan is therefore a hard contract for Team. Team keeps the same active recipe identities, physical facility allocation, normal-versus-E-mode split, and utility configuration. Every Plan row must remain present at no less than its Plan throughput. A roster solve is rejected if it adds or drops recipe rows, changes assigned physical copies, changes the utility/electrical setup, or under-runs the visible baseline.
 
-The roster-aware model selects **up to** the configured Aniimo cap from enabled copies and assigns actual worker time to recipe tasks. Ability levels gate jobs, measured-efficiency recipes use the selected worker's real speed, resident jobs reserve a compatible worker for the full hour, and climate/electrical utilities reserve qualified full-time workers. Resident-family recipes such as Susuta's Tidewhisper Sandcastle work require the correct family rather than any vaguely leisure-shaped volunteer.
+Inside that fixed physical Plan, staffing becomes concrete. The roster-aware model selects **up to** the configured Aniimo cap from enabled copies and assigns actual worker time to the existing jobs. Ability levels gate jobs, measured-efficiency recipes use the selected worker's real speed, resident jobs reserve a compatible worker for the full hour, and climate/electrical utilities reserve qualified full-time workers. Resident-family recipes such as Susuta's Tidewhisper Sandcastle work require the correct family rather than any vaguely leisure-shaped volunteer.
 
-All of the normal production constraints remain active in this second solve: material balance, facility counts and levels, collection limits, one-recipe-per-facility, climate geometry, the shared Crackle grid, hard minimums and the multi-MAX fairness policy. A higher Aniimo cap expands the feasible set; it does not force extra workers into the result.
+Higher-skill workers can make the same assigned structures complete more batches in an hour, so the staffed Team rate may exceed the theoretical Plan baseline. That extra throughput is allowed only while preserving the Plan's physical recipe allocation and all material balances. Team is not allowed to gain output by secretly replacing the Plan with a different recipe chain or a different electrical split.
 
-For performance, workers that are mathematically identical for every currently runnable task are grouped into exact archetypes inside the MIP, then expanded back into real owned copies for the Team UI. Strictly dominated archetypes are removed only when enough better substitutes already exist to fill the entire team cap. No top-N candidate heuristic is used.
+If the enabled roster cannot cover the Plan's baseline jobs within the Aniimo cap, the fixed-plan model is infeasible and Team reports that directly. It does not shrink resident counts, electrify another structure, delete an inconvenient recipe, or return a partial cast wearing a fake moustache.
 
-The Team result may exceed the theoretical Plan rate when the owned roster contains workers whose actual Homeland ability levels are faster than the required-level baseline used by the theoretical pass. Personality is recommended afterward and is not silently counted as a production bonus.
+For performance, workers that are mathematically identical for every relevant task are grouped into exact archetypes inside the MIP, then expanded back into real owned copies for the Team UI. Fixed-plan Team keeps the full set of relevant archetypes so a narrow specialist can still be preferred over wasting a broader worker on the same job. No top-N candidate heuristic is used.
+
+Personality is recommended afterward and is not silently counted as a production bonus.
 
 ## 11. Physical layout
 

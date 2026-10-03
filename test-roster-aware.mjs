@@ -264,6 +264,155 @@ function activeRecipeIds(plan, facilitySlug) {
   }
 }
 
+// Team staffs the Plan it was handed. It does not get to quietly remodel the
+// Homeland because a different electrical split looks shinier with the real roster.
+{
+  const data = {
+    version: 'roster-test-fixed-plan',
+    facilities: [
+      facility('mine', {
+        electricHomeLevel: 1,
+        electricPower: { 1: 100 },
+      }),
+      facility('crackle-generator', { kind: 'utility' }),
+    ],
+    items: {
+      '6': { name: 'Copper-ish Ore', value: 10 },
+      '7': { name: 'Tempting Wrong Ore', value: 999 },
+    },
+    recipes: [
+      {
+        id: 6,
+        facility: 'mine',
+        level: 1,
+        outputs: [{ item: 6, qty: 1 }],
+        workload: 1800,
+        steps: [{ name: 'Mining', ability: 'Earth', level: 1, workload: 0 }],
+      },
+      {
+        id: 61,
+        facility: 'mine',
+        level: 1,
+        outputs: [{ item: 6, qty: 1 }],
+        growSeconds: 3600,
+        electric: true,
+      },
+      {
+        id: 7,
+        facility: 'mine',
+        level: 1,
+        outputs: [{ item: 7, qty: 1 }],
+        workload: 900,
+        steps: [{ name: 'Mining', ability: 'Earth', level: 1, workload: 0 }],
+      },
+    ],
+    pals: [
+      pal(9005001, 'Miner', { Earth: 4 }),
+      pal(9005002, 'Battery Babysitter', { Lightning: 4 }),
+    ],
+  }
+  const state = baseState(data, {
+    homelandLevel: 20,
+    teamSlots: 5,
+    workerSlots: 5,
+    generatorAvailable: true,
+    generatorLevel: 1,
+    utilityCounts: { cooling: 0, heat: 0, sunlamp: 0, generator: 1, powerPole: 0 },
+    facilities: { mine: { count: 7, level: 1 } },
+  })
+  state.owned['9005001'] = { enabled: true, count: 8 }
+  state.owned['9005002'] = { enabled: true, count: 1 }
+
+  const fixedPlan = {
+    ratePerHour: 70,
+    targetRate: 70,
+    objectiveRate: 1,
+    rows: [
+      {
+        facility: 'mine',
+        recipe: data.recipes[0],
+        batchesPerHour: 4,
+        units: 4,
+        perHour: 40,
+        cycleSeconds: 1800,
+        manualSeconds: 1800,
+      },
+      {
+        facility: 'mine',
+        recipe: data.recipes[1],
+        batchesPerHour: 3,
+        units: 3,
+        perHour: 30,
+        cycleSeconds: 3600,
+        manualSeconds: 0,
+      },
+    ],
+    scenario: {
+      generator: true,
+      generatorCount: 1,
+      generatorLevel: 1,
+      coolingUnits: [],
+      heatUnits: [],
+      sunlampCount: 0,
+      overlapColdCount: 0,
+      overlapWarmCount: 0,
+    },
+    objectiveWeights: [{
+      key: 'primary',
+      item: 'coin',
+      label: 'Home Coin',
+      scale: 1 / 70,
+      normalizer: 70,
+      max: 70,
+    }],
+  }
+
+  const staffed = await solveNextWithHighs(highs, state, data, {
+    rosterAware: true,
+    fixedPlan,
+    objectiveWeights: fixedPlan.objectiveWeights,
+    timeLimitSeconds: 2,
+    maxClimateCuts: 4,
+    mipRelativeGap: 0,
+  })
+  const validation = validateNextPlan(staffed, state, data)
+  if (!validation.ok) throw new Error('fixed-plan roster validation failed: ' + validation.errors.join(' | '))
+
+  const rows = new Map(staffed.rows.map((row) => [String(row.recipe.id), row]))
+  if (rows.has('7')) throw new Error('Team activated a recipe that was not in the visible Plan')
+  if (!rows.has('6') || !rows.has('61')) throw new Error('Team dropped a recipe from the visible Plan')
+  if (Math.abs(Number(rows.get('6').units) - 4) > 1e-6) throw new Error('Team changed the four normal Mine copies')
+  if (Math.abs(Number(rows.get('61').units) - 3) > 1e-6) throw new Error('Team changed the three electric Mine copies')
+  if (Number(rows.get('6').batchesPerHour) + 1e-6 < 4) throw new Error('Team under-ran the normal Mine baseline')
+  if (Number(rows.get('61').batchesPerHour) + 1e-6 < 3) throw new Error('Team under-ran the electric Mine baseline')
+
+  const mineWorkers = new Set(
+    (staffed.roster?.assignments || [])
+      .filter((assignment) => assignment.kind === 'permanent' && assignment.facility === 'mine')
+      .map((assignment) => assignment.workerKey),
+  )
+  if (mineWorkers.size !== 4) {
+    throw new Error(`4 normal Mines need 4 resident workers, Team returned ${mineWorkers.size}`)
+  }
+  const generatorWorkers = (staffed.roster?.assignments || [])
+    .filter((assignment) => assignment.kind === 'utility' && assignment.utilityKey === 'generator')
+  if (generatorWorkers.length !== 1) throw new Error('fixed electric split lost its generator worker')
+
+  const shortState = structuredClone(state)
+  shortState.owned['9005001'] = { enabled: true, count: 3 }
+  const short = await solveNextWithHighs(highs, shortState, data, {
+    rosterAware: true,
+    fixedPlan,
+    objectiveWeights: fixedPlan.objectiveWeights,
+    timeLimitSeconds: 2,
+    maxClimateCuts: 4,
+    mipRelativeGap: 0,
+  })
+  if (!short.infeasible) {
+    throw new Error('Team rewrote or partially staffed a four-Mine Plan with only three valid Mine residents')
+  }
+}
+
 // Fresh RV1 / zero roster should be boring, not haunted. Zero means zero.
 {
   const data = { version: 'roster-test-empty', facilities: [], items: {}, recipes: [], pals: [] }
@@ -347,6 +496,61 @@ function activeRecipeIds(plan, facilitySlug) {
       )
     }
   }
+
+  const fixedState = makeRealState(45)
+  fixedState.oneRecipePerFacility = true
+  for (const candidate of GAME_DATA.pals) {
+    if (fixedState.owned[String(candidate.id)]?.enabled) fixedState.owned[String(candidate.id)].count = 8
+  }
+  const visiblePlan = await solveNextWithHighs(highs, fixedState, GAME_DATA, {
+    timeLimitSeconds: 2,
+    maxClimateCuts: 24,
+    mipRelativeGap: 0,
+  })
+  const staffedPlan = await solveNextWithHighs(highs, fixedState, GAME_DATA, {
+    rosterAware: true,
+    fixedPlan: visiblePlan,
+    objectiveWeights: visiblePlan.objectiveWeights,
+    timeLimitSeconds: 2,
+    maxClimateCuts: 24,
+    mipRelativeGap: 0,
+  })
+  const fixedValidation = validateNextPlan(staffedPlan, fixedState, GAME_DATA)
+  if (!fixedValidation.ok) {
+    throw new Error('real-data fixed Team validation failed: ' + fixedValidation.errors.join(' | '))
+  }
+  const visibleRows = new Map(
+    visiblePlan.rows
+      .filter((row) => Number(row.batchesPerHour || 0) > 1e-5)
+      .map((row) => [String(row.recipe.id), row]),
+  )
+  const staffedRows = new Map(
+    staffedPlan.rows
+      .filter((row) => Number(row.batchesPerHour || 0) > 1e-5)
+      .map((row) => [String(row.recipe.id), row]),
+  )
+  if (visibleRows.size !== staffedRows.size) {
+    throw new Error(`real-data fixed Team changed recipe count: ${visibleRows.size} -> ${staffedRows.size}`)
+  }
+  for (const [id, row] of visibleRows) {
+    const staffed = staffedRows.get(id)
+    if (!staffed) throw new Error(`real-data fixed Team dropped recipe ${id}`)
+    if (Math.abs(Number(staffed.units || 0) - Number(row.units || 0)) > 1e-5) {
+      throw new Error(`real-data fixed Team changed physical units for recipe ${id}`)
+    }
+    if (Number(staffed.batchesPerHour || 0) + 1e-5 < Number(row.batchesPerHour || 0)) {
+      throw new Error(`real-data fixed Team under-ran recipe ${id}`)
+    }
+  }
+  if ((staffedPlan.roster?.selectedCount || 0) > 45) {
+    throw new Error('real-data fixed Team selected workers over the configured cap')
+  }
+
+  console.log('real-data fixed Team OK', {
+    plan: visiblePlan.ratePerHour,
+    staffed: staffedPlan.ratePerHour,
+    workers: staffedPlan.roster?.selectedCount,
+  })
 
   console.log('real-data roster smoke OK', rates)
 }

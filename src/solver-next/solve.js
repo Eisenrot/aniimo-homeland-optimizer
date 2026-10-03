@@ -23,12 +23,33 @@ function modelStatusName(highs, status) {
   return String(status)
 }
 
-function hasUsableSolution(model) {
+function hasUsableSolution(highs, model, status) {
   try {
+    const primal = Number(model.info.get('primal_solution_status'))
+    if (primal !== highs.constants.solutionStatus.feasible) return false
     const solution = model.getSolution()
     return Boolean(solution?.colValue?.length)
   } catch {
-    return false
+    // If HiGHS cannot even tell us a primal exists, the zero-vector souvenir
+    // it sometimes hands back does not get to cosplay as a real solution.
+    const bad = new Set([
+      highs.constants.modelStatus.infeasible,
+      highs.constants.modelStatus.unboundedOrInfeasible,
+      highs.constants.modelStatus.unbounded,
+      highs.constants.modelStatus.loadError,
+      highs.constants.modelStatus.modelError,
+      highs.constants.modelStatus.presolveError,
+      highs.constants.modelStatus.solveError,
+      highs.constants.modelStatus.postsolveError,
+      highs.constants.modelStatus.unknown,
+    ])
+    if (bad.has(status)) return false
+    try {
+      const solution = model.getSolution()
+      return Boolean(solution?.colValue?.length)
+    } catch {
+      return false
+    }
   }
 }
 
@@ -333,6 +354,35 @@ function solutionToPlan(model, built, solution, stage, climateLayout = null) {
   }
 }
 
+function rosterCapabilityCost(archetype) {
+  const capabilities = archetype?.capabilities || []
+  const breadth = capabilities.filter((value) => Number(value || 0) > 1e-9).length
+  const strength = capabilities.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0)
+  return strength + breadth * 0.05
+}
+
+function rosterSelectionObjective(built, length, mode) {
+  const objective = new Float64Array(length)
+  for (const item of built.roster?.selectVars || []) {
+    objective[item.selectCol] = mode === 'shape'
+      ? -rosterCapabilityCost(item.archetype)
+      : -1
+  }
+  return objective
+}
+
+function lockCurrentRecipeRates(highs, model, built, values) {
+  for (const entry of built.recipeVars || []) {
+    const value = Math.max(0, Number(values[entry.rateCol] || 0))
+    const tolerance = Math.max(1e-8, Math.abs(value) * 1e-9)
+    model.addRow(
+      Math.max(0, value - tolerance),
+      value + tolerance,
+      entries([[entry.rateCol, 1]]),
+    )
+  }
+}
+
 function addFairnessRows(highs, model, built, weights) {
   const fairnessCol = built.fairnessCol
   for (const weight of weights) {
@@ -386,7 +436,7 @@ async function solveStage({
 
     model.run()
     lastStatus = model.getModelStatus()
-    if (!hasUsableSolution(model)) {
+    if (!hasUsableSolution(highs, model, lastStatus)) {
       return {
         feasible: false,
         status: modelStatusName(highs, lastStatus),
@@ -668,6 +718,65 @@ export async function solveNextWithHighs(highs, state, data, options = {}) {
         onProgress,
       })
       if (automated?.feasible && automated.plan) finalResult = automated
+    }
+
+    if (
+      built.fixedPlan
+      && built.rosterAware
+      && finalResult?.feasible
+      && finalResult.plan
+      && finalResult.solution
+      && built.roster?.selectVars?.length
+    ) {
+      // Production is frozen before cast cleanup. These passes can choose a
+      // smaller / less wasteful team; they do not get one crumb of recipe freedom.
+      lockCurrentRecipeRates(highs, model, built, finalResult.solution.colValue)
+
+      const compacted = await solveStage({
+        highs,
+        model,
+        built,
+        climate,
+        objective: rosterSelectionObjective(built, model.getDimensions().numCols, 'count'),
+        stage: {
+          name: 'roster-compact',
+          weights: activeWeights,
+          jointMinShare,
+        },
+        maxClimateCuts,
+        onProgress,
+      })
+
+      if (compacted?.feasible && compacted.plan && compacted.solution) {
+        finalResult = compacted
+        const selectedCount = Math.max(0, Math.round(
+          built.roster.selectVars.reduce(
+            (sum, item) => sum + Number(compacted.solution.colValue[item.selectCol] || 0),
+            0,
+          ),
+        ))
+        model.addRow(
+          selectedCount,
+          selectedCount,
+          entries(built.roster.selectVars.map((item) => [item.selectCol, 1])),
+        )
+
+        const shaped = await solveStage({
+          highs,
+          model,
+          built,
+          climate,
+          objective: rosterSelectionObjective(built, model.getDimensions().numCols, 'shape'),
+          stage: {
+            name: 'roster-shape',
+            weights: activeWeights,
+            jointMinShare,
+          },
+          maxClimateCuts,
+          onProgress,
+        })
+        if (shaped?.feasible && shaped.plan) finalResult = shaped
+      }
     }
 
     if (!finalResult?.feasible || !finalResult.plan) {

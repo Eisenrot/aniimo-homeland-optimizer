@@ -26,8 +26,11 @@ export default function TeamPage({
 }: Props) {
   const best = analysis?.best || null
   const personality = analysis?.personality
-  const enabled = useMemo(
-    () => DATA.pals.filter((pal) => state.owned[String(pal.id)]?.enabled).length,
+  const enabledCopies = useMemo(
+    () => DATA.pals.reduce((sum, pal) => {
+      const owned = state.owned[String(pal.id)]
+      return owned?.enabled ? sum + Math.max(0, Math.floor(Number(owned.count || 0))) : sum
+    }, 0),
     [state],
   )
 
@@ -55,7 +58,7 @@ export default function TeamPage({
             <span>TEAM / BEST CHOICE</span>
             <h1>{running ? detail : best ? 'The working cast.' : 'Casting…'}</h1>
             <p>{error || (best
-              ? `${best.team.length} workers selected from ${enabled} enabled roster entries.`
+              ? `${best.team.length} workers selected from ${enabledCopies} enabled owned copies.`
               : detail)}</p>
           </div>
           <button className="ui-button secondary" type="button" onClick={onAnalyze} disabled={running}>
