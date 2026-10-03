@@ -12,6 +12,7 @@ type Props = {
   state: OptimizerState
   patch: (update: (draft: OptimizerState) => void) => void
   plan: OptimizerPlan | null
+  planCurrent: boolean
   progress: SolverProgress | null
   running: boolean
   error: string | null
@@ -27,7 +28,7 @@ const SCENES = [
 
 type SceneKey = typeof SCENES[number]['key']
 
-export default function PlanPage({ state, patch, plan, progress, running, error }: Props) {
+export default function PlanPage({ state, patch, plan, planCurrent, progress, running, error }: Props) {
   const [scene, setScene] = useState<SceneKey>('objective')
   const active = SCENES.find((item) => item.key === scene) || SCENES[0]
 
@@ -83,7 +84,7 @@ export default function PlanPage({ state, patch, plan, progress, running, error 
         </header>
 
         <div className="plan-editor-body" key={scene}>
-          {scene === 'objective' && <ObjectivePanel state={state} patch={patch} />}
+          {scene === 'objective' && <ObjectivePanel state={state} plan={planCurrent ? plan : null} patch={patch} />}
           {scene === 'homeland' && <PlanSettings state={state} patch={patch} />}
           {scene === 'facilities' && <FacilitiesPanel state={state} patch={patch} />}
           {scene === 'modules' && <ModulesPanel state={state} patch={patch} />}

@@ -1,15 +1,31 @@
-import { Plus, Target, Trash2 } from 'lucide-react'
+import { CircleHelp, Equal, Plus, ShieldCheck, Target, Trash2 } from 'lucide-react'
+import { explainPlanObjectives } from '../../src/plan-explanation.js'
 import ItemPicker from './ItemPicker'
-import { objectiveTargets } from '../state'
-import type { OptimizerState } from '../types'
+import { DATA, objectiveTargets } from '../state'
+import { itemIcon } from '../lib/presentation'
+import type { OptimizerPlan, OptimizerState } from '../types'
 
 type Props = {
   state: OptimizerState
+  plan: OptimizerPlan | null
   patch: (update: (draft: OptimizerState) => void) => void
 }
 
-export default function ObjectivePanel({ state, patch }: Props) {
+function fmt(value: number | null, digits = 1) {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return Number(value).toLocaleString(undefined, { maximumFractionDigits: digits })
+}
+
+function pct(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return `${(value * 100).toFixed(value >= 0.995 ? 0 : 1)}%`
+}
+
+export default function ObjectivePanel({ state, plan, patch }: Props) {
   const targets = objectiveTargets()
+  const explanation = explainPlanObjectives(plan, state, DATA)
+  const fairness = explanation.mode === 'fairness'
+  const configuredCoMax = Math.max(0, explanation.configuredMaxCount - 1)
 
   const addRequirement = () => {
     patch((draft) => {
@@ -34,19 +50,27 @@ export default function ObjectivePanel({ state, patch }: Props) {
       </div>
 
       <div className="field objective-primary">
-        <label>Maximise</label>
+        <div className="objective-field-label">
+          <label>MAX objective</label>
+          {fairness && <em><Equal aria-hidden="true" /> co-equal</em>}
+        </div>
         <ItemPicker
           value={state.target}
           options={targets}
           includeCoin
-          ariaLabel="Primary optimization target"
+          ariaLabel="Optimization MAX objective"
           onChange={(value) => patch((draft) => { draft.target = value })}
         />
+        {fairness && (
+          <small className="objective-primary-note">
+            This is not priority #1. Every enabled MAX objective below enters the same fairness solve.
+          </small>
+        )}
       </div>
 
       <div className="micro-label objective-subtitle">
-        <span>Also make at least</span>
-        <b>{state.guarantees.filter((item) => item.maximize && item.enabled !== false).length} co-max</b>
+        <span>Additional objectives / requirements</span>
+        <b>{configuredCoMax} co-max</b>
       </div>
 
       <div className="modern-objectives">
@@ -84,13 +108,18 @@ export default function ObjectivePanel({ state, patch }: Props) {
               <span>{guarantee.maximize ? 'MAX' : '/h'}</span>
             </label>
 
-            <label className="maximize-toggle" title="Maximise this item together with the primary objective">
+            <label
+              className="maximize-toggle"
+              title={guarantee.maximize
+                ? 'Co-equal MAX objective'
+                : 'Turn this hard minimum into a co-equal MAX objective'}
+            >
               <input
                 type="checkbox"
                 checked={guarantee.maximize}
                 onChange={(event) => patch((draft) => { draft.guarantees[index].maximize = event.target.checked })}
               />
-              <span>MAX</span>
+              <span>{guarantee.maximize ? 'MAX' : 'MIN'}</span>
             </label>
 
             <button
@@ -110,8 +139,66 @@ export default function ObjectivePanel({ state, patch }: Props) {
         <button className="ghost" type="button" onClick={() => patch((draft) => { draft.guarantees = [] })}><Trash2 aria-hidden="true" /> Clear</button>
       </div>
 
+      <div className={`objective-explanation ${fairness ? 'fairness' : 'single'}`}>
+        <div className="objective-explanation-head">
+          <span>
+            <CircleHelp aria-hidden="true" />
+            <b>{fairness ? 'Why these MAX numbers?' : 'How this objective is solved'}</b>
+          </span>
+          {fairness && explanation.fairnessFloor != null && (
+            <em>fairness floor {pct(explanation.fairnessFloor)}</em>
+          )}
+        </div>
+
+        <p>
+          {fairness
+            ? 'Each MAX target is compared with the best result it could reach alone. The solver first raises the weakest retained share across all active MAX targets, then spends the remaining room improving their combined result.'
+            : 'With one active MAX objective, the solver pushes it directly after every hard minimum is satisfied.'}
+        </p>
+
+        <div className="objective-breakdown">
+          {explanation.maxObjectives.map((objective) => (
+            <div className={`objective-breakdown-row ${objective.active ? '' : 'inactive'}`} key={objective.key}>
+              <img src={itemIcon(objective.item)} alt="" />
+              <span>
+                <b>{objective.label}</b>
+                <small>
+                  {objective.active
+                    ? objective.soloMax != null
+                      ? `${fmt(objective.achieved)} / ${fmt(objective.soloMax)} solo max`
+                      : 'Waiting for solved calibration'
+                    : 'No positive solo maximum under the current assumptions'}
+                </small>
+              </span>
+              <strong>{objective.active ? pct(objective.share) : 'inactive'}</strong>
+            </div>
+          ))}
+        </div>
+
+        {explanation.minimums.length > 0 && (
+          <div className="objective-minimums">
+            <div className="objective-minimums-title">
+              <ShieldCheck aria-hidden="true" />
+              <span><b>Hard minimums</b><small>These are constraints, not fairness targets.</small></span>
+            </div>
+            {explanation.minimums.map((minimum: { key: string; item: string; label: string; minimum: number; achieved: number | null; satisfied: boolean | null }) => (
+              <div className="objective-minimum-row" key={minimum.key}>
+                <img src={itemIcon(minimum.item)} alt="" />
+                <span>
+                  <b>{minimum.label}</b>
+                  <small>must stay at or above {fmt(minimum.minimum)} / h</small>
+                </span>
+                <strong className={minimum.satisfied === false ? 'failed' : ''}>
+                  {minimum.achieved == null ? '—' : `${fmt(minimum.achieved)} / h`}
+                </strong>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <p className="micro objective-help">
-        Minimum rows are hard requirements. MAX joins the normalized multi-objective solve.
+        MAX objectives share the normalized fairness solve. MIN rows are hard requirements that must be met first.
       </p>
     </section>
   )

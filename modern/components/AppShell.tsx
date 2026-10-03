@@ -56,7 +56,14 @@ export default function AppShell({
 }: Props) {
   const [theme, setTheme] = useState<Theme>(readTheme)
   const constraints = state.guarantees.filter((item) => item.enabled !== false)
-  const coMax = constraints.filter((item) => item.maximize).length
+  const hardMinimums = constraints.filter((item) => !item.maximize && Number(item.perHour || 0) > 0).length
+  const maxObjectiveItems = new Set<string>([
+    state.target && state.target !== 'coin' ? String(state.target) : 'coin',
+  ])
+  for (const item of constraints) {
+    if (item.maximize && item.item) maxObjectiveItems.add(String(item.item))
+  }
+  const maxObjectives = maxObjectiveItems.size
 
   const objectiveTargets = useMemo(() => {
     const ids: string[] = []
@@ -184,13 +191,13 @@ export default function AppShell({
           </div>
 
           <div className="rewrite-current-stat">
-            <small>REQ.</small>
-            <b>{String(constraints.length).padStart(2, '0')}</b>
+            <small>MIN</small>
+            <b>{String(hardMinimums).padStart(2, '0')}</b>
           </div>
 
           <div className="rewrite-current-stat">
             <small>MAX</small>
-            <b>{String(coMax).padStart(2, '0')}</b>
+            <b>{String(maxObjectives).padStart(2, '0')}</b>
           </div>
 
           <div className={busy ? 'rewrite-plan-state running' : 'rewrite-plan-state'}>

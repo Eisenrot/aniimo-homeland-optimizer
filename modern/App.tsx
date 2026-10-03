@@ -244,7 +244,15 @@ export default function App() {
       )
     : page === 'layout'
       ? <LayoutPage state={state} plan={plan} planRunning={running} />
-      : <PlanPage state={state} patch={patch} plan={plan} progress={progress} running={running} error={error} />
+      : <PlanPage
+          state={state}
+          patch={patch}
+          plan={plan}
+          planCurrent={planStateKey === stateKey}
+          progress={progress}
+          running={running}
+          error={error}
+        />
 
   return (
     <AppShell

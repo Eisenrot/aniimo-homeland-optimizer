@@ -40,6 +40,7 @@ jobs:
           node test.mjs
           node test-team.mjs
           node test-roster-aware.mjs
+          node test-objective-explanation.mjs
           node test-pals.mjs
           node test-climate.mjs
           node test-plan-cache.mjs

@@ -202,6 +202,7 @@ export type OptimizerPlan = {
   objectiveRate: number
   rows: PlanRow[]
   objectiveWeights?: ObjectiveWeightView[]
+  jointMinShare?: number | null
   runnableRecipes?: Recipe[]
   roster?: RosterSolveView | null
   scenario?: Record<string, unknown>
