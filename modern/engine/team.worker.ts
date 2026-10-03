@@ -11,6 +11,7 @@ import {
 } from '../../src/optimizer.js'
 import { loadNextHighs, solveNextWithHighs } from '../../src/solver-next/index.js'
 import { ROSTER_RESIDENT_FACILITIES } from '../../src/solver-next/roster.js'
+import { diagnoseFixedPlanRoster } from '../../src/solver-next/roster-diagnostics.js'
 import type {
   OptimizerPlan,
   OptimizerState,
@@ -172,6 +173,11 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
   }
 
   try {
+    const preflight = diagnoseFixedPlanRoster(plan, state, GAME_DATA)
+    if (['cap', 'resident-shortage', 'utility-shortage', 'mandatory-conflict', 'ability-shortage'].includes(preflight.kind)) {
+      throw new Error(preflight.message)
+    }
+
     progress('Loading roster solver')
     const highs = await loadNextHighs()
 
@@ -190,7 +196,11 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
     }) as OptimizerPlan
 
     if (rosterPlan.infeasible) {
-      throw new Error('The enabled roster cannot fully staff the current Plan within the configured Aniimo cap. Team will not rewrite the Plan to fake a fit.')
+      const diagnosis = diagnoseFixedPlanRoster(plan, state, GAME_DATA)
+      throw new Error(
+        diagnosis?.message
+        || 'The enabled roster cannot fully staff the current Plan within the configured Aniimo cap. Team will not rewrite the Plan to fake a fit.',
+      )
     }
     if (rosterPlan.optimizerStats?.validationOk === false) {
       const errors = rosterPlan.optimizerStats.validationErrors || []

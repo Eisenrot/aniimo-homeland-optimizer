@@ -104,18 +104,21 @@ export function buildNextModel(highs, state, data, options = {}) {
     ),
   }
 
-  const allActive = staticRecipeVariants(recipeState, data)
+  // Fixed Team staffs the recipe rows the user can actually see. Do not run
+  // them back through Owned-Aniimo eligibility first; a missing worker is the
+  // thing Team is supposed to diagnose, not a reason to make the row disappear.
   const active = fixedPlan
-    ? allActive.filter((entry) => fixedRowsByRecipe.has(String(entry.recipe.id)))
-    : allActive
-
-  if (fixedPlan) {
-    const availableIds = new Set(active.map((entry) => String(entry.recipe.id)))
-    const missing = [...fixedRowsByRecipe.keys()].filter((id) => !availableIds.has(id))
-    if (missing.length) {
-      throw new Error('Team plan references recipe rows that are no longer runnable: ' + missing.join(', '))
-    }
-  }
+    ? fixedRows.map((row) => ({
+        recipe: row.recipe,
+        cycle: Math.max(0, Number(row.baselineCycleSeconds ?? row.cycleSeconds ?? 0)),
+        labor: Math.max(0, Number(row.baselineManualSeconds ?? row.manualSeconds ?? 0)),
+        env: row.recipe?.executionMode === 'uncovered'
+          ? null
+          : (row.effectiveEnv !== undefined
+              ? row.effectiveEnv
+              : (row.recipe?.effectiveEnv ?? row.recipe?.env ?? null)),
+      }))
+    : staticRecipeVariants(recipeState, data)
 
   const recipeVars = []
 

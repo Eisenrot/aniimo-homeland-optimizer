@@ -40,7 +40,7 @@ export default function TeamPage({
         <section className="team-empty-stage">
           <span>TEAM / BEST CHOICE</span>
           <UsersRound aria-hidden="true" />
-          <h1>{error ? 'Search failed.' : 'The stage is empty.'}</h1>
+          <h1>{error ? 'Roster blocked.' : 'The stage is empty.'}</h1>
           <p>{error || 'The enabled roster is solved into the strongest working team automatically.'}</p>
           <button className="ui-button secondary" type="button" onClick={onAnalyze}>
             <RefreshCw aria-hidden="true" /> Analyze
