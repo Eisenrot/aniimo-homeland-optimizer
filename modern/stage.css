@@ -2122,6 +2122,25 @@ html[data-optimizer-theme="dark"] body{background:#060507}
   background:#f3eee8;
 }
 .rewrite-shell[data-theme="light"] .team-main-stage{border-color:rgba(26,21,26,.16)}
+.rewrite-shell[data-theme="light"] .team-empty-stage{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.18);
+  background:
+    radial-gradient(circle at center,rgba(223,49,77,.07),transparent 18rem),
+    #fffaf5;
+}
+.rewrite-shell[data-theme="light"] .team-empty-stage p{
+  color:#70676d;
+}
+.rewrite-shell[data-theme="light"] .team-empty-stage .ui-button.secondary{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.22);
+}
+.rewrite-shell[data-theme="light"] .team-empty-stage .ui-button.secondary:hover:not(:disabled){
+  color:#fffaf5;
+  border-color:#1a151a;
+  background:#1a151a;
+}
 .rewrite-shell[data-theme="light"] .team-stage-title,
 .rewrite-shell[data-theme="light"] .team-score-strip,
 .rewrite-shell[data-theme="light"] .team-candidate-deck{
@@ -3782,6 +3801,11 @@ html[data-optimizer-theme="light"] .preset-share-copy>div>span,
 html[data-optimizer-theme="light"] .preset-live-status{color:#70676d}
 html[data-optimizer-theme="light"] .preset-name-field input{
   color:#1a151a;border-color:rgba(26,21,26,.2);background:#fffaf5
+}
+html[data-optimizer-theme="light"] .preset-rename-row input{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.20);
+  background:#fffaf5;
 }
 html[data-optimizer-theme="light"] .preset-import-code textarea{
   color:#1a151a;
