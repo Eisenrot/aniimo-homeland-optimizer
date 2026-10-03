@@ -2948,6 +2948,108 @@ html[data-optimizer-theme="dark"] .rewrite-owned-dialog .roster-card-copy small{
   color:#b5abb2;
 }
 
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .rewrite-dialog-panel,
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-page{
+  color:#1a151a;
+  background:#f3eee8;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .surface-card,
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-toolbar,
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-grid-card{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.16);
+  background:#fffaf5;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-toolbar{
+  box-shadow:none;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .search-box{
+  color:#1a151a;
+  background:#fffaf5;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .search-box svg{
+  color:#70676d;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .search-box input{
+  color:#1a151a;
+  background:transparent;
+  border-bottom-color:rgba(26,21,26,.22);
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .search-box input::placeholder{
+  color:#81767d;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-toolbar .ui-button{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.20);
+  background:#fffaf5;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-toolbar .ui-button:hover{
+  color:#fffaf5;
+  border-color:#1a151a;
+  background:#1a151a;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-summary-grid .metric-tile{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.14);
+  background:#f1e9e2;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-card{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.14);
+  background:#fffaf5;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-card>img,
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-card>.aniimo-avatar-fallback{
+  border-color:rgba(26,21,26,.14);
+  background:#eee7e0;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .copy-field input{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.20);
+  background:#fffaf5;
+}
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .copy-field span,
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .surface-header,
+html[data-optimizer-theme="light"] .rewrite-owned-dialog .roster-card-copy small{
+  color:#70676d;
+}
+
+html[data-optimizer-theme="light"] .roster-copy-dialog{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.25);
+  background:#f3eee8;
+  box-shadow:14px 14px 0 rgba(72,56,65,.14);
+}
+html[data-optimizer-theme="light"] .roster-copy-dialog .rewrite-dialog-header{
+  border-color:rgba(26,21,26,.16);
+}
+html[data-optimizer-theme="light"] .roster-copy-dialog .rewrite-dialog-header [data-slot="dialog-description"],
+html[data-optimizer-theme="light"] .roster-copy-count small,
+html[data-optimizer-theme="light"] .roster-copy-types-head small,
+html[data-optimizer-theme="light"] .roster-copy-types small,
+html[data-optimizer-theme="light"] .roster-copy-actions>span{
+  color:#70676d;
+}
+html[data-optimizer-theme="light"] .roster-copy-count,
+html[data-optimizer-theme="light"] .roster-copy-types label{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.16);
+  background:#fffaf5;
+}
+html[data-optimizer-theme="light"] .roster-copy-types label.selected{
+  border-color:rgba(223,49,77,.55);
+  background:#f3dfe2;
+}
+html[data-optimizer-theme="light"] .roster-copy-count input{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.20);
+  background:#fffaf5;
+}
+html[data-optimizer-theme="light"] .roster-copy-dialog .ghost{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.20);
+}
+
 /* --------------------------------------------------------------------------
    Layout semantic geometry.
    Hatches are behind structures; outlines deliberately sit above structures.
@@ -3358,6 +3460,11 @@ html[data-optimizer-theme="dark"] .rewrite-owned-dialog .roster-card-copy small{
   letter-spacing:.08em;
   text-align:center;
 }
+html[data-optimizer-theme="light"] .modern-facility-row>label:last-child input[readonly]{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.22);
+  background:#fffaf5;
+}
 @media(max-width:720px){
   .modern-facility-row{
     grid-template-columns:minmax(160px,1fr) repeat(3,minmax(64px,78px));
@@ -3675,6 +3782,14 @@ html[data-optimizer-theme="light"] .preset-share-copy>div>span,
 html[data-optimizer-theme="light"] .preset-live-status{color:#70676d}
 html[data-optimizer-theme="light"] .preset-name-field input{
   color:#1a151a;border-color:rgba(26,21,26,.2);background:#fffaf5
+}
+html[data-optimizer-theme="light"] .preset-import-code textarea{
+  color:#1a151a;
+  border-color:rgba(26,21,26,.20);
+  background:#fffaf5;
+}
+html[data-optimizer-theme="light"] .preset-import-code textarea::placeholder{
+  color:#81767d;
 }
 html[data-optimizer-theme="light"] .preset-load-action,
 html[data-optimizer-theme="light"] .preset-share-action,
