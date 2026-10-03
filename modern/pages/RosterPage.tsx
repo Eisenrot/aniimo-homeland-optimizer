@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { PawPrint, Search, UsersRound } from 'lucide-react'
+import { PawPrint, Search } from 'lucide-react'
 import AbilityPill from '../components/AbilityPill'
 import AniimoAvatar from '../components/AniimoAvatar'
+import AddCopiesDialog from '../components/AddCopiesDialog'
 import { DATA } from '../state'
 import type { OptimizerState, Pal } from '../types'
 
@@ -75,6 +76,7 @@ export default function RosterPage({ state, patch }: Props) {
         <div className="search-box"><Search aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, form, ability or level…  Light >=2" aria-label="Filter Aniimo roster" /></div>
         <div className="roster-actions">
           <button className="ui-button secondary" type="button" onClick={() => patch((draft) => { for (const pal of DATA.pals) draft.owned[String(pal.id)].enabled = !pal.unavailable })}>Enable all</button>
+          <AddCopiesDialog state={state} patch={patch} />
           <button className="ui-button ghost" type="button" onClick={() => patch((draft) => { for (const pal of DATA.pals) draft.owned[String(pal.id)].enabled = false })}>Disable all</button>
         </div>
       </section>
@@ -100,7 +102,7 @@ export default function RosterPage({ state, patch }: Props) {
                   <span><b>{pal.speciesName || pal.name}</b><small>{pal.isForm ? String(pal.form || 'Form') : 'Base'}</small></span>
                   <div className="ability-chip-row">{Object.entries(pal.abilities || {}).map(([ability, level]) => <AbilityPill key={ability} ability={ability} level={level} compact />)}</div>
                 </div>
-                <label className="copy-field"><UsersRound aria-hidden="true" /><input type="number" min={1} max={99} value={owned.count} disabled={Boolean(pal.unavailable)} aria-label={`${pal.name} copies`} onChange={(event) => patch((draft) => { draft.owned[id].count = Math.max(1, Number(event.target.value) || 1) })} /></label>
+                <label className="copy-field"><span>Owned:</span><input type="number" min={1} max={99} value={owned.count} disabled={Boolean(pal.unavailable)} aria-label={`${pal.name} copies owned`} onChange={(event) => patch((draft) => { draft.owned[id].count = Math.max(1, Number(event.target.value) || 1) })} /></label>
               </article>
             )
           })}

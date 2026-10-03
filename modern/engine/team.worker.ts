@@ -12,6 +12,7 @@ import {
 import { loadNextHighs, solveNextWithHighs } from '../../src/solver-next/index.js'
 import { ROSTER_RESIDENT_FACILITIES } from '../../src/solver-next/roster.js'
 import { diagnoseFixedPlanRoster } from '../../src/solver-next/roster-diagnostics.js'
+import { findSingleCopyRescue } from '../../src/solver-next/roster-rescue.js'
 import type {
   OptimizerPlan,
   OptimizerState,
@@ -197,6 +198,13 @@ self.onmessage = async (event: MessageEvent<AnalyzeRequest>) => {
 
     if (rosterPlan.infeasible) {
       const diagnosis = diagnoseFixedPlanRoster(plan, state, GAME_DATA)
+      if (diagnosis?.kind === 'workload') {
+        const rescue = await findSingleCopyRescue(highs, plan, state, GAME_DATA, {
+          timeLimitSeconds: 8,
+          onProgress: progress,
+        })
+        if (rescue?.message) throw new Error(rescue.message)
+      }
       throw new Error(
         diagnosis?.message
         || 'The enabled roster cannot fully staff the current Plan within the configured Aniimo cap. Team will not rewrite the Plan to fake a fit.',

@@ -512,16 +512,16 @@ input[type="checkbox"]{width:14px;height:14px;min-height:0;padding:0;accent-colo
 .roster-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;background:var(--paper);color:#1a151a;box-shadow:var(--shadow)}
 .search-box{flex:1;display:grid;grid-template-columns:16px 1fr;align-items:center;gap:6px}
 .search-box svg{width:14px;height:14px;color:#6f656c}.search-box input{background:transparent;color:#1a151a;border:0;border-bottom:1px solid rgba(26,21,26,.22)}
-.roster-actions{display:flex;gap:6px}.roster-toolbar .ui-button{color:#1a151a;border-color:rgba(26,21,26,.2)}.roster-toolbar .ui-button:hover{background:#1a151a;color:var(--paper)}
+.roster-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.roster-toolbar .ui-button{color:#1a151a;border-color:rgba(26,21,26,.2)}.roster-toolbar .ui-button:hover{background:#1a151a;color:var(--paper)}
 .roster-summary-grid{grid-template-columns:repeat(4,1fr);border-color:var(--line)}
 .roster-summary-grid .metric-tile{border-color:var(--line);background:#141015}
 .roster-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
-.roster-card{display:grid;grid-template-columns:18px 50px 1fr 48px;align-items:center;gap:8px;padding:8px;border:1px solid var(--line);background:#110e12}
+.roster-card{display:grid;grid-template-columns:18px 50px minmax(0,1fr) 92px;align-items:center;gap:8px;padding:8px;border:1px solid var(--line);background:#110e12}
 .roster-card.disabled{opacity:.48}.roster-card.unavailable{filter:saturate(.3)}
 .roster-card>img,.roster-card>.aniimo-avatar-fallback{width:48px;height:48px;object-fit:contain;border:1px solid var(--line);background:#0b090c}
 .roster-enable{display:grid;place-items:center}
 .roster-card-copy{display:grid;gap:5px;min-width:0}.roster-card-copy>span{display:grid;gap:2px}.roster-card-copy b{font-size:9px}.roster-card-copy small{font-size:7px;color:var(--ash)}
-.copy-field{display:grid;grid-template-columns:12px 1fr;align-items:center;gap:4px}.copy-field svg{width:12px;height:12px;color:var(--ash)}.copy-field input{min-height:30px;padding:0 5px}
+.copy-field{display:grid;grid-template-columns:auto 42px;align-items:center;justify-content:end;gap:6px;min-width:0}.copy-field span{font:700 7px "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ash);white-space:nowrap}.copy-field input{min-height:30px;padding:0 5px;text-align:center}
 
 /* layout */
 .layout-command-bar{display:grid;grid-template-columns:minmax(190px,.7fr) minmax(480px,1.4fr) auto;align-items:end;gap:14px;padding:12px;background:var(--paper);color:#1a151a;box-shadow:var(--shadow)}
@@ -585,6 +585,33 @@ input[type="checkbox"]{width:14px;height:14px;min-height:0;padding:0;accent-colo
 .plot-management-dialog-head>div>span{color:var(--red);font:700 8px "IBM Plex Mono",monospace;letter-spacing:.12em}
 .rewrite-dialog-close{width:32px;height:32px;display:grid;place-items:center;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer}.rewrite-dialog-close svg{width:14px;height:14px}
 .rewrite-dialog-panel{padding:16px}
+.roster-copy-backdrop{z-index:130}
+.roster-copy-viewport{z-index:131}
+.roster-copy-dialog{
+  width:min(760px,calc(100vw - 44px));max-height:calc(100vh - 44px);overflow:auto;
+  border:1px solid var(--line-strong);background:#0d0a0e;color:var(--chalk);
+  box-shadow:16px 16px 0 rgba(0,0,0,.42);outline:none
+}
+.roster-copy-body{display:grid;gap:14px;padding:16px}
+.roster-copy-count{
+  display:grid;grid-template-columns:minmax(0,1fr) 92px;align-items:center;gap:18px;
+  padding:12px;border:1px solid var(--line);background:#151116
+}
+.roster-copy-count>span{display:grid;gap:4px}.roster-copy-count b{font-size:11px}.roster-copy-count small{font-size:8px;color:var(--ash)}
+.roster-copy-count input{text-align:center;font:700 14px "IBM Plex Mono",monospace}
+.roster-copy-types-head{display:flex;align-items:end;justify-content:space-between;gap:12px}
+.roster-copy-types-head>span{display:grid;gap:3px}.roster-copy-types-head b{font-size:10px}.roster-copy-types-head small{font-size:8px;color:var(--ash)}
+.roster-copy-types-head>div{display:flex;gap:5px}.roster-copy-types-head .ghost{min-height:30px;padding:0 9px;font-size:8px}
+.roster-copy-types{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.roster-copy-types label{
+  min-width:0;display:grid;grid-template-columns:15px minmax(0,1fr);align-items:center;gap:8px;
+  padding:9px;border:1px solid var(--line);background:#121014;cursor:pointer
+}
+.roster-copy-types label.selected{border-color:rgba(223,49,77,.66);background:#1d1218;box-shadow:inset 2px 0 0 var(--red)}
+.roster-copy-types label>span{min-width:0;display:grid;gap:2px}.roster-copy-types b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}
+.roster-copy-types small{font-size:7px;color:var(--ash)}
+.roster-copy-actions{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:7px;padding-top:3px}
+.roster-copy-actions>span{font-size:8px;color:var(--ash);line-height:1.45}
 .plot-management-summary{display:flex;align-items:center;gap:10px;margin:14px 16px 0;padding:9px;border:1px solid rgba(26,21,26,.16)}
 .plot-management-summary svg{width:16px;height:16px;color:var(--red)}.plot-management-summary>span{display:flex;gap:4px;align-items:baseline}.plot-management-summary b{font-family:"Bodoni Moda",serif;font-size:18px}.plot-management-summary small{font-size:8px;color:#746a71}.plot-management-summary i{width:1px;height:20px;background:rgba(26,21,26,.18)}
 .plot-management-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px 16px}
@@ -632,6 +659,8 @@ input[type="checkbox"]{width:14px;height:14px;min-height:0;padding:0;accent-colo
   .layout-canvas-card{min-height:520px}.layout-map-shell{min-height:450px}
   .rewrite-owned-dialog,.plot-management-dialog{width:calc(100vw - 20px);max-height:calc(100vh - 20px)}
   .plot-management-grid{grid-template-columns:repeat(2,1fr)}
+  .roster-copy-types{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .roster-copy-actions{grid-template-columns:1fr 1fr}.roster-copy-actions>span{grid-column:1/-1}
 }
 @media(max-width:500px){
   .rewrite-brand-copy b{font-size:18px}.rewrite-brand-mark{width:38px;height:44px}
@@ -639,7 +668,7 @@ input[type="checkbox"]{width:14px;height:14px;min-height:0;padding:0;accent-colo
   .setting-tile-grid{grid-template-columns:1fr}.setting-tile,.setting-tile:nth-child(4),.setting-tile:nth-child(5){grid-column:1}
   .team-summary-grid,.roster-summary-grid{grid-template-columns:1fr}
   .metric-tile{border-right:0;border-bottom:1px solid var(--line)}.metric-tile:last-child{border-bottom:0}
-  .roster-card{grid-template-columns:16px 42px 1fr 42px}.roster-card>img,.roster-card>.aniimo-avatar-fallback{width:40px;height:40px}
+  .roster-card{grid-template-columns:16px 42px minmax(0,1fr) 84px}.roster-card>img,.roster-card>.aniimo-avatar-fallback{width:40px;height:40px}
 }
 @media(prefers-reduced-motion:reduce){
   *,*:before,*:after{scroll-behavior:auto!important;animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}

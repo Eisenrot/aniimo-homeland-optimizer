@@ -41,6 +41,8 @@ jobs:
           node test-team.mjs
           node test-roster-aware.mjs
           node test-roster-diagnostics.mjs
+          node test-copy-rescue.mjs
+          node test-owned-copies.mjs
           node test-objective-explanation.mjs
           node test-pals.mjs
           node test-climate.mjs
