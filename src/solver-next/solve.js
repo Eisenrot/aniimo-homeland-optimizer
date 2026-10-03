@@ -354,11 +354,38 @@ function solutionToPlan(model, built, solution, stage, climateLayout = null) {
   }
 }
 
-function rosterCapabilityCost(archetype) {
-  const capabilities = archetype?.capabilities || []
+function capabilityCost(values) {
+  const capabilities = values || []
   const breadth = capabilities.filter((value) => Number(value || 0) > 1e-9).length
   const strength = capabilities.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0)
   return strength + breadth * 0.05
+}
+
+function rosterCapabilityCost(archetype) {
+  return capabilityCost(archetype?.capabilities)
+}
+
+function rosterProductionOpportunityCost(archetype) {
+  return capabilityCost(archetype?.productionCapabilities)
+}
+
+function utilityAssignmentCost(item) {
+  const pal = item.archetype?.representative?.pal || item.archetype?.representative || {}
+  const required = Math.max(0, Number(item.spec?.level || 0))
+  const actual = Math.max(0, Number(pal.abilities?.[item.spec?.ability] || 0))
+  const overqualified = Math.max(0, actual - required)
+  const productionOpportunity = rosterProductionOpportunityCost(item.archetype)
+  const abilityValues = Object.values(pal.abilities || {}).map((value) => Math.max(0, Number(value || 0)))
+  const generalStrength = abilityValues.reduce((sum, value) => sum + value, 0)
+  const generalBreadth = abilityValues.filter((value) => value > 0).length
+
+  // Utilities are static jobs. Fire 4 does not warm harder than Fire 1.
+  // Spend the cheapest qualified worker first and keep the shiny murder-goblin
+  // available for jobs where those extra levels can actually do something.
+  return overqualified * 1_000_000
+    + productionOpportunity * 1_000
+    + generalStrength * 0.1
+    + generalBreadth * 0.01
 }
 
 function rosterSelectionObjective(built, length, mode) {
@@ -367,6 +394,11 @@ function rosterSelectionObjective(built, length, mode) {
     objective[item.selectCol] = mode === 'shape'
       ? -rosterCapabilityCost(item.archetype)
       : -1
+  }
+  if (mode === 'shape') {
+    for (const item of built.roster?.utilityVars || []) {
+      objective[item.assignCol] = -utilityAssignmentCost(item)
+    }
   }
   return objective
 }

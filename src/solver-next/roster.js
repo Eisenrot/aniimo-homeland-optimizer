@@ -119,10 +119,11 @@ export function rosterWorkerArchetypes(state, data, entries, { pruneDominated = 
       }
       for (const task of tasks) capabilities.push(workerTaskSpeed(entry, worker, task, state))
     }
+    const productionCapabilities = [...capabilities]
     for (const spec of utilities) capabilities.push(rosterWorkerCanDo(worker, spec) ? 1 : 0)
 
     const key = capabilities.map((value) => value.toFixed(9)).join('|')
-    const group = groups.get(key) || { capabilities, workers: [] }
+    const group = groups.get(key) || { capabilities, productionCapabilities, workers: [] }
     group.workers.push(worker)
     groups.set(key, group)
   }
@@ -133,6 +134,7 @@ export function rosterWorkerArchetypes(state, data, entries, { pruneDominated = 
     representative: group.workers[0],
     workers: group.workers,
     capabilities: group.capabilities,
+    productionCapabilities: group.productionCapabilities,
   }))
 
   const cap = Math.max(0, Math.floor(Number(state.workerSlots ?? state.teamSlots ?? 0) || 0))

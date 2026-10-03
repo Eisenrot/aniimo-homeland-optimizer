@@ -240,6 +240,7 @@ function activeRecipeIds(plan, facilitySlug) {
     }],
     pals: [
       pal(1022100, 'Bolty', { Lightning: 1 }),
+      pal(9004002, 'Overqualified Prismana', { Lightning: 4, Artisanship: 4 }),
       pal(9004001, 'No Lightning Here', { Artisanship: 4 }),
     ],
   }
@@ -258,6 +259,13 @@ function activeRecipeIds(plan, facilitySlug) {
   }
 
   state.owned['1022100'].enabled = false
+  const fallback = await solveRoster(state, data)
+  const fallbackUtility = fallback.roster.roster?.assignments?.find((assignment) => assignment.kind === 'utility')
+  if (!(fallback.roster.targetRate > 1e-6) || fallbackUtility?.workerKey !== '9004002#1') {
+    throw new Error('overqualified Lightning worker did not act as the legal fallback')
+  }
+
+  state.owned['9004002'].enabled = false
   const unpowered = await solveRoster(state, data)
   if (unpowered.roster.targetRate > 1e-6) {
     throw new Error('electric production ran without a qualified generator worker')
