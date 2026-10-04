@@ -50,6 +50,7 @@ jobs:
           node test-plan-cache.mjs
           node test-full-layout.mjs
           node test-progression.mjs
+          node test-generator-power.mjs
           node test-speed.mjs
           node test-recipe-notes.mjs
           node test-presets.mjs

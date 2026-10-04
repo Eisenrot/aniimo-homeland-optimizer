@@ -4,6 +4,8 @@
 // facilities that are not mentioned again. Bulk plot counts follow the game ladder; processor
 // copy unlocks below are the actual placement caps, not the old RV11 fossil wearing a fake moustache.
 
+import {maxGeneratorLevelAtRv} from './utility-system.js';
+
 
 export const RV_BULK_FACILITIES={
   1:{farmland:4,woodland:0,mine:0,well:0},
@@ -107,6 +109,10 @@ export function fillHomelandForRV(source,data){
   for(const slug of Object.keys(MODULE_RV_UNLOCKS)){
     state.modules[slug]=maxModuleLevelAtRV(slug,rv);
   }
+
+  // Fill RV means strongest unlocked progression. Utility copy counts remain
+  // user-owned state, but an existing Generator should not stay haunted by Lv.1.
+  state.generatorLevel=maxGeneratorLevelAtRv(rv)||1;
 
   return state;
 }

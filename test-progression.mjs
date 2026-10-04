@@ -67,6 +67,12 @@ assert(rv18.facilities['woodworking-bench'].count===4,'RV18 should unlock a four
 assert(rv18.facilities['chimney-kiln'].count===4,'RV18 should unlock a fourth Chimney Kiln');
 assert(rv19.facilities.well.count===4,'RV19 should unlock a fourth Well');
 
+assert(rv14.generatorLevel===2,'RV14 Fill should use Crackle Generator Lv.2');
+assert(rv15.generatorLevel===2,'RV15 Fill should keep Crackle Generator Lv.2');
+assert(rv16.generatorLevel===3,'RV16 Fill should use Crackle Generator Lv.3');
+assert(rv18.generatorLevel===4,'RV18 Fill should use Crackle Generator Lv.4');
+assert(rv19.generatorLevel===4,'RV19 Fill should keep Crackle Generator Lv.4');
+
 assert(rv9.modules['ecological-module']===3,'RV9 Ecological Module should be Lv.3');
 assert(rv9.modules['kitchen-module']===3,'RV9 Kitchen Module should be Lv.3');
 assert(rv9.modules['resource-detector']===2,'RV9 Resource Detector should be Lv.2');

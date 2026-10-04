@@ -69,6 +69,7 @@ export default function PlanSettings({ state, patch }: Props) {
             const filled = fillHomelandForRV(draft, DATA)
             draft.facilities = filled.facilities
             draft.modules = filled.modules
+            draft.generatorLevel = filled.generatorLevel
           })}
         >
           <WandSparkles aria-hidden="true" />
