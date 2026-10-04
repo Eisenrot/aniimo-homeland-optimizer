@@ -37,6 +37,36 @@ assert(rv10.facilities['chimney-kiln'].count===2,'RV10 should unlock a second Ch
 assert(rv11.facilities['claw-game-cooker'].count===2,'RV11 should unlock a second Claw Game Cooker');
 assert(rv11.facilities['jukebox-dryer'].count===2,'RV11 should unlock a second Jukebox Dryer');
 
+const rv14=fillHomelandForRV({...base,homelandLevel:14},DATA);
+const rv15=fillHomelandForRV({...base,homelandLevel:15},DATA);
+const rv16=fillHomelandForRV({...base,homelandLevel:16},DATA);
+const rv17=fillHomelandForRV({...base,homelandLevel:17},DATA);
+const rv18=fillHomelandForRV({...base,homelandLevel:18},DATA);
+const rv19=fillHomelandForRV({...base,homelandLevel:19},DATA);
+
+const rv14Counts={
+  well:3,
+  'tidewhisper-sandcastle':2,
+  'phonolfactory-table':2,
+  'bouncy-brew-keg':2,
+  'simmering-pot':2,
+  'joy-wheel-loom':2,
+  'woodworking-bench':3,
+  'chimney-kiln':3,
+};
+for(const [slug,count] of Object.entries(rv14Counts)){
+  assert(rv14.facilities[slug].count===count,`RV14 ${slug} should allow ${count} copies`);
+}
+
+assert(rv15.facilities['blazing-stove'].count===2,'RV15 should unlock a second Blazing Stove');
+assert(rv15.facilities['pickling-jar'].count===2,'RV15 should unlock a second Pickling Jar');
+assert(rv16.facilities['nimbus-bed'].count===2,'RV16 should unlock a second Nimbus Bed');
+assert(rv17.facilities['dewy-house'].count===2,'RV17 should unlock a second Dewy House');
+assert(rv18.facilities['starfall-hammock'].count===2,'RV18 should unlock a second Starfall Hammock');
+assert(rv18.facilities['woodworking-bench'].count===4,'RV18 should unlock a fourth Woodworking Bench');
+assert(rv18.facilities['chimney-kiln'].count===4,'RV18 should unlock a fourth Chimney Kiln');
+assert(rv19.facilities.well.count===4,'RV19 should unlock a fourth Well');
+
 assert(rv9.modules['ecological-module']===3,'RV9 Ecological Module should be Lv.3');
 assert(rv9.modules['kitchen-module']===3,'RV9 Kitchen Module should be Lv.3');
 assert(rv9.modules['resource-detector']===2,'RV9 Resource Detector should be Lv.2');

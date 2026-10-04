@@ -1,7 +1,9 @@
 // RV progression used by the optimizer's "Fill for RV" and Super Optimizer passes.
 // Bulk production counts represent the strongest progression state reachable while still at
 // that RV level: i.e. the placed-facility targets for the next RV rung, carrying forward
-// facilities that are not mentioned again. RV20 keeps the final known 40/20/10/2 ceiling.
+// facilities that are not mentioned again. Bulk plot counts follow the game ladder; processor
+// copy unlocks below are the actual placement caps, not the old RV11 fossil wearing a fake moustache.
+
 
 export const RV_BULK_FACILITIES={
   1:{farmland:4,woodland:0,mine:0,well:0},
@@ -17,35 +19,37 @@ export const RV_BULK_FACILITIES={
   11:{farmland:24,woodland:12,mine:6,well:2},
   12:{farmland:26,woodland:13,mine:6,well:2},
   13:{farmland:28,woodland:14,mine:7,well:2},
-  14:{farmland:30,woodland:15,mine:7,well:2},
-  15:{farmland:32,woodland:16,mine:8,well:2},
-  16:{farmland:34,woodland:17,mine:8,well:2},
-  17:{farmland:36,woodland:18,mine:9,well:2},
-  18:{farmland:38,woodland:19,mine:9,well:2},
-  19:{farmland:40,woodland:20,mine:10,well:2},
-  20:{farmland:40,woodland:20,mine:10,well:2}
+  14:{farmland:30,woodland:15,mine:7,well:3},
+  15:{farmland:32,woodland:16,mine:8,well:3},
+  16:{farmland:34,woodland:17,mine:8,well:3},
+  17:{farmland:36,woodland:18,mine:9,well:3},
+  18:{farmland:38,woodland:19,mine:9,well:3},
+  19:{farmland:40,woodland:20,mine:10,well:4},
+  20:{farmland:40,woodland:20,mine:10,well:4}
 };
 
+// Refreshed from current station placement caps + an in-game RV14 sanity check.
+// No more dragging RV11 fossils into RV20 and calling it progression.
 export const FACILITY_RV_COUNTS={
-  'tidewhisper-sandcastle':[0,0,0,0,1,1,1,1,1,1,1],
-  'dewy-house':[0,0,0,0,0,1,1,1,1,1,1],
-  'nimbus-bed':[0,0,0,0,0,0,0,0,0,1,1],
-  'starfall-hammock':[0,0,0,0,0,0,0,0,0,0,0,1],
-  'floral-windmill':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  'carousel-mill':[0,1,1,1,1,1,1,1,2],
-  'crafting-table':[0,0,1,1,1,1,1,1,1,2],
-  'claw-game-cooker':[0,0,0,1,1,1,1,1,1,1,2],
-  'jukebox-dryer':[0,0,0,1,1,1,1,1,1,1,2],
-  'simmering-pot':[0,0,0,0,1,1,1,1,1,1,1],
-  'phonolfactory-table':[0,0,0,0,0,1,1,1,1,1,1],
-  'bouncy-brew-keg':[0,0,0,0,0,1,1,1,1,1,1],
-  'blazing-stove':[0,0,0,0,0,0,0,1,1,1,1],
-  'pickling-jar':[0,0,0,0,0,0,0,1,1,1,1],
-  'joy-wheel-loom':[0,0,0,0,0,0,1,1,1,1,1],
-  'dance-pad-polisher':[0,1],
-  'aniipod-maker':[0,0,1],
-  'woodworking-bench':[0,0,0,0,0,1,1,1,1,2],
-  'chimney-kiln':[0,0,0,0,0,1,1,1,1,2]
+  'tidewhisper-sandcastle':[0,0,0,0,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2],
+  'dewy-house':[0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2],
+  'nimbus-bed':[0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2,2,2],
+  'starfall-hammock':[0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2,2,2],
+  'floral-windmill':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1],
+  'carousel-mill':[0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2],
+  'crafting-table':[0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2],
+  'claw-game-cooker':[0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2],
+  'jukebox-dryer':[0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2],
+  'simmering-pot':[0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2],
+  'phonolfactory-table':[0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2],
+  'bouncy-brew-keg':[0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2],
+  'blazing-stove':[0,0,0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2],
+  'pickling-jar':[0,0,0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2],
+  'joy-wheel-loom':[0,0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2],
+  'dance-pad-polisher':[0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  'aniipod-maker':[0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  'woodworking-bench':[0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4],
+  'chimney-kiln':[0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4]
 };
 
 export function facilityCountAtRV(slug,rv){
@@ -103,6 +107,7 @@ export function fillHomelandForRV(source,data){
   for(const slug of Object.keys(MODULE_RV_UNLOCKS)){
     state.modules[slug]=maxModuleLevelAtRV(slug,rv);
   }
+
   return state;
 }
 
