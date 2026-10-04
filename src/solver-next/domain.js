@@ -14,6 +14,7 @@ import {
   recipeNetValue,
   recipeRunnable,
 } from '../optimizer.js'
+import { isGuaranteeEnabled } from '../objective-status.js'
 
 export function facilityStacks(state, slug) {
   const cfg = state.facilities?.[slug]
@@ -185,7 +186,7 @@ export function objectiveSpecs(state, data) {
 
   for (const guarantee of state.guarantees || []) {
     const item = String(guarantee.item || '')
-    if (guarantee.enabled === false || !guarantee.maximize || !item || seen.has(item)) continue
+    if (!isGuaranteeEnabled(guarantee) || !guarantee.maximize || !item || seen.has(item)) continue
     seen.add(item)
     specs.push({
       key: `co:${item}`,

@@ -1,4 +1,5 @@
 import { generatorPowerAtLevel } from '../utility-system.js'
+import { isGuaranteeEnabled } from '../objective-status.js'
 import { productionPlacementCounts } from '../climate.js'
 import { isGrowerRecipe } from '../optimizer.js'
 import {
@@ -455,7 +456,7 @@ export function buildNextModel(highs, state, data, options = {}) {
   }
 
   for (const guarantee of state.guarantees || []) {
-    if (guarantee.enabled === false || guarantee.maximize) continue
+    if (!isGuaranteeEnabled(guarantee) || guarantee.maximize) continue
     const item = Number(guarantee.item)
     const minimum = Math.max(0, Number(guarantee.perHour || 0))
     if (!item || minimum <= 0) continue

@@ -245,7 +245,15 @@ input[type="checkbox"]{width:14px;height:14px;min-height:0;padding:0;accent-colo
 }
 .objective-row.disabled{opacity:.48}
 .objective-row.maxed{border-color:rgba(223,49,77,.58);background:#eadfda}
-.guarantee-enabled-toggle{display:grid;place-items:center}
+.objective-row.excluded{border-color:rgba(223,49,77,.72);background:#efdce0;box-shadow:inset 3px 0 0 var(--red)}
+.objective-row.excluded .rate-field,.objective-row.excluded .maximize-toggle{opacity:.58}
+.guarantee-state-toggle{
+  width:18px;height:18px;display:grid;place-items:center;padding:0;border:1px solid rgba(26,21,26,.28);
+  background:transparent;color:#776d73;cursor:pointer
+}
+.guarantee-state-toggle svg{width:11px;height:11px}
+.guarantee-state-toggle.enabled{border-color:var(--red);background:var(--red);color:#fff}
+.guarantee-state-toggle.excluded{border-color:var(--red);color:var(--red);background:rgba(223,49,77,.06)}
 .rate-field{position:relative}
 .rate-field input{padding-right:29px}
 .rate-field span{position:absolute;right:8px;top:50%;transform:translateY(-50%);font:700 8px "IBM Plex Mono",monospace;color:#776d73}
@@ -291,6 +299,8 @@ input[type="checkbox"]{width:14px;height:14px;min-height:0;padding:0;accent-colo
 .objective-breakdown-row.inactive{opacity:.5}
 .objective-breakdown-row.inactive>strong{font-size:7px;text-transform:uppercase}
 .objective-minimums{margin-top:9px;padding-top:9px;border-top:1px solid rgba(26,21,26,.16)}
+.objective-exclusions{margin-top:9px;padding-top:9px;border-top:1px solid rgba(223,49,77,.28)}
+.objective-minimum-row.excluded strong{color:#b5233b}
 .objective-minimums-title{display:flex;align-items:center;gap:7px;margin-bottom:3px}
 .objective-minimums-title svg{width:14px;height:14px}
 .objective-minimums-title b{display:block;font-size:9px}
@@ -2300,6 +2310,20 @@ html[data-optimizer-theme="dark"] body{background:#060507}
   border-color:rgba(223,49,77,.58);
   background:#211419;
 }
+.rewrite-shell[data-theme="dark"] .plan-editor-body .objective-row.excluded{
+  border-color:rgba(255,82,108,.7);
+  background:#261419;
+  box-shadow:inset 3px 0 0 var(--red);
+}
+.rewrite-shell[data-theme="dark"] .plan-editor-body .guarantee-state-toggle{
+  border-color:rgba(255,255,255,.24);color:var(--ash)
+}
+.rewrite-shell[data-theme="dark"] .plan-editor-body .guarantee-state-toggle.enabled{
+  border-color:var(--red);background:var(--red);color:#fff
+}
+.rewrite-shell[data-theme="dark"] .plan-editor-body .guarantee-state-toggle.excluded{
+  border-color:#ff667f;color:#ff667f;background:rgba(223,49,77,.08)
+}
 .rewrite-shell[data-theme="dark"] .plan-editor-body .objective-field-label>em,
 .rewrite-shell[data-theme="dark"] .plan-editor-body .objective-explanation-head>em{
   color:#ff768b;border-color:rgba(255,118,139,.4)
@@ -2317,6 +2341,7 @@ html[data-optimizer-theme="dark"] body{background:#060507}
 .rewrite-shell[data-theme="dark"] .plan-editor-body .objective-breakdown-row,
 .rewrite-shell[data-theme="dark"] .plan-editor-body .objective-minimum-row,
 .rewrite-shell[data-theme="dark"] .plan-editor-body .objective-minimums{border-color:rgba(255,255,255,.1)}
+.rewrite-shell[data-theme="dark"] .plan-editor-body .objective-exclusions{border-color:rgba(255,102,127,.24)}
 .rewrite-shell[data-theme="dark"] .plan-editor-body .ghost,
 .rewrite-shell[data-theme="dark"] .plan-editor-body .fill-rv-button{
   border-color:rgba(255,255,255,.14);

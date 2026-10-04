@@ -1,7 +1,8 @@
 import { DEFAULT_STATE } from '../src/defaults.js'
 import { GAME_DATA } from '../src/data.js'
 import { maxGeneratorLevelAtRv, utilityCapAtRv } from '../src/utility-system.js'
-import type { GameData, OptimizerState } from './types'
+import { guaranteeStatus } from '../src/objective-status.js'
+import type { GameData, Guarantee, OptimizerState } from './types'
 
 export const DATA = GAME_DATA as GameData
 export const STORE_KEY = 'aniimoHomelandOptimizerStateV1'
@@ -168,12 +169,17 @@ export function normalizeState(raw?: LegacyState | null): OptimizerState {
 
   state.guarantees = Array.isArray(incoming.guarantees)
     ? incoming.guarantees
-        .map((guarantee) => ({
-          item: String(guarantee.item || ''),
-          perHour: Math.max(0, Number(guarantee.perHour || 0)),
-          maximize: Boolean(guarantee.maximize),
-          enabled: guarantee.enabled !== false,
-        }))
+        .map((guarantee) => {
+          const status = guaranteeStatus(guarantee) as NonNullable<Guarantee['status']>
+          return {
+            item: String(guarantee.item || ''),
+            perHour: Math.max(0, Number(guarantee.perHour || 0)),
+            maximize: Boolean(guarantee.maximize),
+            status,
+            // Excluded degrades to disabled if an older build sees this state.
+            enabled: status === 'enabled',
+          }
+        })
         .filter((guarantee) => validTargets.has(guarantee.item))
     : []
 

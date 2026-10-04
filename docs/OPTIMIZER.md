@@ -212,6 +212,10 @@ This is why one MAX target should not simply devour the others because its raw n
 
 Hard minimum requirements are different from MAX objectives: they are inserted directly as lower-bound constraints and must be satisfied for the plan to be feasible.
 
+Objective rows also have an **Excluded** state. An excluded item is not a negative weight or a soft preference: every recipe that produces that item is removed from the runnable recipe set before the model is built. This can also remove downstream chains naturally when their required material can no longer be produced.
+
+The Objective UI cycles additional rows through **Enabled → Disabled → Excluded**. MAX and MIN controls only participate while the row is Enabled; excluded rows instead show the banned item explicitly in the explanation panel.
+
 The Objective UI exposes the same reasoning instead of making the user infer it from the final production sheet: each MAX objective can show its achieved value, its individually calibrated solo maximum and the retained share, while the shared fairness floor is shown separately. Hard minimums are reported as constraints with their required and achieved rates.
 
 That explanation is intentionally produced by `src/plan-explanation.js` rather than being calculated ad hoc inside React. Future diagnostics such as a broader **Why this plan?** inspector should reuse that explanation layer and extend it with bottlenecks, rejected alternatives and marginal trade-offs instead of inventing a second interpretation of the solve.
@@ -288,6 +292,7 @@ The main pieces are:
 - `src/solver-next/domain.js` — recipe timing, facility stacks and domain helpers;
 - `src/solver-next/validate.js` — independent post-solve validation;
 - `src/plan-explanation.js` — reusable MAX fairness and hard-minimum explanation data for the Objective UI and future diagnostics;
+- `src/objective-status.js` — shared Enabled / Disabled / Excluded semantics and item-level recipe bans;
 - `src/climate.js` — climate geometry;
 - `src/utility-system.js` — utility progression, generator power and grid arithmetic;
 - `src/full-layout.js` — complete physical Homeland placement;

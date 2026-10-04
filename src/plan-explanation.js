@@ -1,4 +1,5 @@
 import { recipeNetItem } from './optimizer.js'
+import { isGuaranteeEnabled, isGuaranteeExcluded } from './objective-status.js'
 
 const EPS = 1e-8
 
@@ -27,7 +28,7 @@ function configuredMaxObjectives(state, data) {
 
   for (const guarantee of state.guarantees || []) {
     const item = String(guarantee.item || '')
-    if (guarantee.enabled === false || !guarantee.maximize || !item || seen.has(item)) continue
+    if (!isGuaranteeEnabled(guarantee) || !guarantee.maximize || !item || seen.has(item)) continue
     seen.add(item)
     objectives.push({
       key: `co:${item}`,
@@ -70,7 +71,7 @@ export function explainPlanObjectives(plan, state, data) {
 
   const minimums = (state.guarantees || [])
     .filter((guarantee) =>
-      guarantee.enabled !== false
+      isGuaranteeEnabled(guarantee)
       && !guarantee.maximize
       && String(guarantee.item || '')
       && Number(guarantee.perHour || 0) > 0)
@@ -88,6 +89,18 @@ export function explainPlanObjectives(plan, state, data) {
       }
     })
 
+  const exclusions = (state.guarantees || [])
+    .filter(isGuaranteeExcluded)
+    .map((guarantee, index) => {
+      const item = String(guarantee.item || '')
+      return {
+        key: `excluded:${index}:${item}`,
+        item,
+        label: itemLabel(item, data),
+      }
+    })
+    .filter((entry) => entry.item)
+
   const activeMax = maxObjectives.filter((objective) => objective.active)
   const fairnessCount = solved ? activeMax.length : maxObjectives.length
   const fairnessFloor = solved && activeMax.length > 1 && plan?.jointMinShare != null
@@ -102,5 +115,6 @@ export function explainPlanObjectives(plan, state, data) {
     fairnessFloor,
     maxObjectives,
     minimums,
+    exclusions,
   }
 }

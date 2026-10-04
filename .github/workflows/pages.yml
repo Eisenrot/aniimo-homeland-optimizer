@@ -44,6 +44,7 @@ jobs:
           node test-copy-rescue.mjs
           node test-owned-copies.mjs
           node test-objective-explanation.mjs
+          node test-objective-exclusion.mjs
           node test-pals.mjs
           node test-climate.mjs
           node test-plan-cache.mjs

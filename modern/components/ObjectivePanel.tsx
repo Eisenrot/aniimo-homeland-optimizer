@@ -1,5 +1,6 @@
-import { CircleHelp, Equal, Plus, ShieldCheck, Target, Trash2 } from 'lucide-react'
+import { Ban, Check, CircleHelp, Equal, Minus, Plus, ShieldCheck, Target, Trash2 } from 'lucide-react'
 import { explainPlanObjectives } from '../../src/plan-explanation.js'
+import { guaranteeStatus, nextGuaranteeStatus } from '../../src/objective-status.js'
 import ItemPicker from './ItemPicker'
 import { DATA, objectiveTargets } from '../state'
 import { itemIcon } from '../lib/presentation'
@@ -26,6 +27,8 @@ export default function ObjectivePanel({ state, plan, patch }: Props) {
   const explanation = explainPlanObjectives(plan, state, DATA)
   const fairness = explanation.mode === 'fairness'
   const configuredCoMax = Math.max(0, explanation.configuredMaxCount - 1)
+  const enabledCount = state.guarantees.filter((item) => guaranteeStatus(item) === 'enabled').length
+  const excludedCount = state.guarantees.filter((item) => guaranteeStatus(item) === 'excluded').length
 
   const addRequirement = () => {
     patch((draft) => {
@@ -34,6 +37,7 @@ export default function ObjectivePanel({ state, plan, patch }: Props) {
         perHour: 1,
         maximize: false,
         enabled: true,
+        status: 'enabled',
       })
     })
   }
@@ -45,7 +49,7 @@ export default function ObjectivePanel({ state, plan, patch }: Props) {
         <h3><Target aria-hidden="true" /> Objective</h3>
         <i />
         <em className="micro">
-          {state.guarantees.filter((item) => item.enabled !== false).length}/{state.guarantees.length} active
+          {enabledCount}/{state.guarantees.length} active{excludedCount ? ` · ${excludedCount} excl` : ''}
         </em>
       </div>
 
@@ -74,64 +78,85 @@ export default function ObjectivePanel({ state, plan, patch }: Props) {
       </div>
 
       <div className="modern-objectives">
-        {state.guarantees.map((guarantee, index) => (
-          <div
-            className={`objective-row ${guarantee.enabled === false ? 'disabled' : ''} ${guarantee.maximize ? 'maxed' : ''}`}
-            key={index}
-          >
-            <label className="guarantee-enabled-toggle" title="Enable requirement">
-              <input
-                type="checkbox"
-                checked={guarantee.enabled !== false}
-                onChange={(event) => patch((draft) => { draft.guarantees[index].enabled = event.target.checked })}
-              />
-            </label>
-
-            <ItemPicker
-              value={guarantee.item}
-              options={targets}
-              ariaLabel={`Requirement ${index + 1} item`}
-              onChange={(value) => patch((draft) => { draft.guarantees[index].item = value })}
-            />
-
-            <label className="rate-field">
-              <input
-                type="number"
-                min={0}
-                step="any"
-                value={guarantee.perHour}
-                disabled={guarantee.maximize}
-                onChange={(event) => patch((draft) => {
-                  draft.guarantees[index].perHour = Math.max(0, Number(event.target.value) || 0)
+        {state.guarantees.map((guarantee, index) => {
+          const status = guaranteeStatus(guarantee)
+          return (
+            <div
+              className={`objective-row ${status === 'disabled' ? 'disabled' : ''} ${status === 'excluded' ? 'excluded' : ''} ${guarantee.maximize && status === 'enabled' ? 'maxed' : ''}`}
+              key={index}
+            >
+              <button
+                className={`guarantee-state-toggle ${status}`}
+                type="button"
+                aria-label={`Requirement ${index + 1} state: ${status}`}
+                title={status === 'enabled'
+                  ? 'Enabled — click to disable'
+                  : status === 'disabled'
+                    ? 'Disabled — click to exclude'
+                    : 'Excluded — click to enable'}
+                onClick={() => patch((draft) => {
+                  const row = draft.guarantees[index]
+                  const next = nextGuaranteeStatus(row)
+                  row.status = next
+                  row.enabled = next === 'enabled'
                 })}
-              />
-              <span>{guarantee.maximize ? 'MAX' : '/h'}</span>
-            </label>
+              >
+                {status === 'enabled'
+                  ? <Check aria-hidden="true" />
+                  : status === 'excluded'
+                    ? <Ban aria-hidden="true" />
+                    : <Minus aria-hidden="true" />}
+              </button>
 
-            <label
-              className="maximize-toggle"
-              title={guarantee.maximize
-                ? 'Co-equal MAX objective'
-                : 'Turn this hard minimum into a co-equal MAX objective'}
-            >
-              <input
-                type="checkbox"
-                checked={guarantee.maximize}
-                onChange={(event) => patch((draft) => { draft.guarantees[index].maximize = event.target.checked })}
+              <ItemPicker
+                value={guarantee.item}
+                options={targets}
+                ariaLabel={`Requirement ${index + 1} item`}
+                onChange={(value) => patch((draft) => { draft.guarantees[index].item = value })}
               />
-              <span>{guarantee.maximize ? 'MAX' : 'MIN'}</span>
-            </label>
 
-            <button
-              className="ghost guarantee-remove"
-              type="button"
-              aria-label="Remove requirement"
-              onClick={() => patch((draft) => { draft.guarantees.splice(index, 1) })}
-            >
-              <Trash2 aria-hidden="true" />
-            </button>
-          </div>
-        ))}
+              <label className="rate-field">
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={guarantee.perHour}
+                  disabled={guarantee.maximize || status === 'excluded'}
+                  onChange={(event) => patch((draft) => {
+                    draft.guarantees[index].perHour = Math.max(0, Number(event.target.value) || 0)
+                  })}
+                />
+                <span>{status === 'excluded' ? 'OFF' : guarantee.maximize ? 'MAX' : '/h'}</span>
+              </label>
+
+              <label
+                className="maximize-toggle"
+                title={status === 'excluded'
+                  ? 'Excluded rows ban every recipe producing this item'
+                  : guarantee.maximize
+                    ? 'Co-equal MAX objective'
+                    : 'Turn this hard minimum into a co-equal MAX objective'}
+              >
+                <input
+                  type="checkbox"
+                  checked={guarantee.maximize}
+                  disabled={status === 'excluded'}
+                  onChange={(event) => patch((draft) => { draft.guarantees[index].maximize = event.target.checked })}
+                />
+                <span>{status === 'excluded' ? 'EXCL' : guarantee.maximize ? 'MAX' : 'MIN'}</span>
+              </label>
+
+              <button
+                className="ghost guarantee-remove"
+                type="button"
+                aria-label="Remove requirement"
+                onClick={() => patch((draft) => { draft.guarantees.splice(index, 1) })}
+              >
+                <Trash2 aria-hidden="true" />
+              </button>
+            </div>
+          )
+        })}
       </div>
 
       <div className="objective-actions">
@@ -195,10 +220,26 @@ export default function ObjectivePanel({ state, plan, patch }: Props) {
             ))}
           </div>
         )}
+
+        {explanation.exclusions.length > 0 && (
+          <div className="objective-exclusions">
+            <div className="objective-minimums-title">
+              <Ban aria-hidden="true" />
+              <span><b>Excluded production</b><small>Every recipe producing these items is banned from the solve.</small></span>
+            </div>
+            {explanation.exclusions.map((excluded: { key: string; item: string; label: string }) => (
+              <div className="objective-minimum-row excluded" key={excluded.key}>
+                <img src={itemIcon(excluded.item)} alt="" />
+                <span><b>{excluded.label}</b><small>no producing recipe may be selected</small></span>
+                <strong>EXCL</strong>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <p className="micro objective-help">
-        MAX objectives share the normalized fairness solve. MIN rows are hard requirements that must be met first.
+        MAX objectives share the normalized fairness solve. MIN rows are hard requirements. EXCL rows ban every recipe producing that item.
       </p>
     </section>
   )

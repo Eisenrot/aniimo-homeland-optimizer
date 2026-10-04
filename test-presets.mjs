@@ -36,6 +36,7 @@ try {
     { item: '4001066', perHour: 20, maximize: true, enabled: true },
     { item: '4001067', perHour: 20, maximize: true, enabled: true },
     { item: '4010147', perHour: 2, maximize: false, enabled: true },
+    { item: '4010000', perHour: 0, maximize: false, enabled: false, status: 'excluded' },
   ]
 
   const snapshot = mod.snapshotPresetState(state)

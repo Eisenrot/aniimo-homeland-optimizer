@@ -14,6 +14,7 @@ export type Guarantee = {
   perHour: number
   maximize: boolean
   enabled: boolean
+  status?: 'enabled' | 'disabled' | 'excluded'
 }
 
 export type OwnedAniimo = {

@@ -16,6 +16,7 @@ import {
   rosterWorkerCanDo,
 } from './roster.js'
 import { gridPowerEfficiency, totalGeneratorPower } from '../utility-system.js'
+import { excludedObjectiveItems, isGuaranteeEnabled } from '../objective-status.js'
 
 const EPS = 1e-5
 
@@ -150,6 +151,12 @@ export function validateNextPlan(plan, state, data) {
   if (!plan || plan.infeasible) return { ok: false, errors: ['Plan is infeasible or missing.'] }
 
   const rows = plan.rows || []
+  const exclusions = excludedObjectiveItems(state)
+  for (const row of rows) {
+    if (Number(row.batchesPerHour || 0) <= EPS) continue
+    const blocked = (row.recipe?.outputs || []).find((output) => exclusions.has(String(output.item)))
+    if (blocked) errors.push(`Excluded item ${blocked.item} is still produced by recipe ${row.recipe?.id}`)
+  }
   if (state.oneRecipePerFacility) {
     for (const row of rows) {
       if (Math.abs(Number(row.units || 0) - Math.round(Number(row.units || 0))) > EPS) {
@@ -189,7 +196,7 @@ export function validateNextPlan(plan, state, data) {
   }
 
   for (const guarantee of state.guarantees || []) {
-    if (guarantee.enabled === false || guarantee.maximize) continue
+    if (!isGuaranteeEnabled(guarantee) || guarantee.maximize) continue
     const minimum = Math.max(0, Number(guarantee.perHour || 0))
     if (minimum <= 0) continue
     const rate = rows.reduce(
