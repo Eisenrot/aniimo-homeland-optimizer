@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readPlanCache, stableStringify, writePlanCache } from '../src/plan-cache.js'
+import { DEFAULT_CLIMATE_CUTS } from '../src/solver-next/climate-retry.js'
 import AppShell from './components/AppShell'
 import { optimizerClient } from './engine/optimizerClient'
 import { teamClient } from './engine/teamClient'
@@ -16,7 +17,7 @@ const PlanPage = lazy(() => import('./pages/PlanPage'))
 const TeamPage = lazy(() => import('./pages/TeamPage'))
 const LayoutPage = lazy(() => import('./pages/LayoutPage'))
 
-const RUN_OPTIONS = { solverEngine: 'highs-mip-next', timeLimitSeconds: 8, maxClimateCuts: 24, mipRelativeGap: 0 } as const
+const RUN_OPTIONS = { solverEngine: 'highs-mip-next', timeLimitSeconds: 8, maxClimateCuts: DEFAULT_CLIMATE_CUTS, mipRelativeGap: 0 } as const
 const DEPLOY_BUILD_ID = import.meta.env.VITE_BUILD_ID || (import.meta.env.DEV ? `dev-${Date.now()}` : 'local-build')
 const BUILD_ID = `modern-v11-solver-next:${DEPLOY_BUILD_ID}:${DATA.version || 'data'}`
 const TEAM_CACHE_STORE = 'aniimoModernTeamCacheV2'

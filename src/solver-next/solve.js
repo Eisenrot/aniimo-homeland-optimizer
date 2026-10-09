@@ -586,6 +586,7 @@ export async function solveNextWithHighs(highs, state, data, options = {}) {
             scenarioLabel: 'No feasible plan',
             utilityWorkers: 0,
             infeasible: true,
+            searchExhausted: String(result.status || '').startsWith('climate-'),
             climateLayout: result.climate || {
               feasible: false,
               status: result.status,
@@ -822,6 +823,7 @@ export async function solveNextWithHighs(highs, state, data, options = {}) {
         scenarioLabel: 'No feasible plan',
         utilityWorkers: 0,
         infeasible: true,
+        searchExhausted: String(finalResult?.status || '').startsWith('climate-'),
         climateLayout: finalResult?.climate || null,
         objectiveWeights: activeWeights.map((weight) => ({
           ...weight.spec,

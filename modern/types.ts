@@ -209,6 +209,7 @@ export type OptimizerPlan = {
   scenario?: Record<string, unknown>
   scenarioLabel?: string
   infeasible?: boolean
+  searchExhausted?: boolean
   climateLayout?: {
     feasible?: boolean
     status?: string

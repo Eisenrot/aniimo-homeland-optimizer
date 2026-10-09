@@ -1,0 +1,177 @@
+{
+  "homelandLevel": 14,
+  "workerSlots": 30,
+  "teamSlots": 30,
+  "abilityLevel": "auto",
+  "collectHours": 0,
+  "oneRecipePerFacility": true,
+  "preferElectricalAutomation": true,
+  "maximizeElectricalCoverage": true,
+  "generatorAvailable": true,
+  "generatorLevel": 2,
+  "utilityCounts": {
+    "cooling": 2,
+    "heat": 2,
+    "sunlamp": 2,
+    "generator": 1,
+    "powerPole": 12
+  },
+  "manualSpeeds": false,
+  "climateOptions": {
+    "cooling": true,
+    "heat": true,
+    "sunlamp": true
+  },
+  "target": "coin",
+  "guarantees": [
+    {
+      "item": "4010175",
+      "perHour": 1,
+      "maximize": true,
+      "status": "enabled",
+      "enabled": true
+    },
+    {
+      "item": "4010170",
+      "perHour": 1,
+      "maximize": true,
+      "status": "enabled",
+      "enabled": true
+    },
+    {
+      "item": "4010148",
+      "perHour": 1,
+      "maximize": true,
+      "status": "enabled",
+      "enabled": true
+    },
+    {
+      "item": "150003",
+      "perHour": 1,
+      "maximize": true,
+      "status": "enabled",
+      "enabled": true
+    },
+    {
+      "item": "110007",
+      "perHour": 1,
+      "maximize": true,
+      "status": "enabled",
+      "enabled": true
+    }
+  ],
+  "goal": "",
+  "facilities": {
+    "aniipod-maker": {
+      "count": 1,
+      "level": 3
+    },
+    "dance-pad-polisher": {
+      "count": 1,
+      "level": 3
+    },
+    "blazing-stove": {
+      "count": 1,
+      "level": 3
+    },
+    "bouncy-brew-keg": {
+      "count": 2,
+      "level": 3
+    },
+    "carousel-mill": {
+      "count": 2,
+      "level": 4
+    },
+    "chimney-kiln": {
+      "count": 3,
+      "level": 3
+    },
+    "claw-game-cooker": {
+      "count": 2,
+      "level": 5
+    },
+    "crafting-table": {
+      "count": 2,
+      "level": 5
+    },
+    "joy-wheel-loom": {
+      "count": 2,
+      "level": 2
+    },
+    "jukebox-dryer": {
+      "count": 2,
+      "level": 6
+    },
+    "phonolfactory-table": {
+      "count": 2,
+      "level": 4
+    },
+    "pickling-jar": {
+      "count": 1,
+      "level": 3
+    },
+    "simmering-pot": {
+      "count": 2,
+      "level": 4
+    },
+    "woodworking-bench": {
+      "count": 3,
+      "level": 3
+    },
+    "dewy-house": {
+      "count": 1,
+      "level": 2
+    },
+    "farmland": {
+      "count": 30,
+      "level": 6
+    },
+    "floral-windmill": {
+      "count": 0,
+      "level": 1
+    },
+    "mine": {
+      "count": 7,
+      "level": 4
+    },
+    "nimbus-bed": {
+      "count": 1,
+      "level": 2
+    },
+    "starfall-hammock": {
+      "count": 1,
+      "level": 1
+    },
+    "tidewhisper-sandcastle": {
+      "count": 2,
+      "level": 3
+    },
+    "well": {
+      "count": 3,
+      "level": 4
+    },
+    "woodland": {
+      "count": 15,
+      "level": 5
+    }
+  },
+  "modules": {
+    "ecological-module": 6,
+    "kitchen-module": 5,
+    "resource-detector": 5,
+    "crafting-module": 4
+  },
+  "speeds": {},
+  "recipeNotes": {
+    "4040042": true,
+    "4040043": true,
+    "4040044": true,
+    "4040047": true,
+    "4040114": true,
+    "4040115": true,
+    "4040116": true,
+    "4040117": false,
+    "4040118": false,
+    "4040119": false
+  }
+}

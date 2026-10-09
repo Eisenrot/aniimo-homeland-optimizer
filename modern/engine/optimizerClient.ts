@@ -1,3 +1,4 @@
+import { DEFAULT_CLIMATE_CUTS } from '../../src/solver-next/climate-retry.js'
 import type {
   OptimizerPlan,
   OptimizerState,
@@ -65,7 +66,7 @@ export class OptimizerClient {
         state,
         options: {
           timeLimitSeconds: 8,
-          maxClimateCuts: 24,
+          maxClimateCuts: DEFAULT_CLIMATE_CUTS,
           mipRelativeGap: 0,
           mipAbsoluteGap: 1e-7,
         },
